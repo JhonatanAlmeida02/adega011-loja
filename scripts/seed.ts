@@ -14,8 +14,8 @@ import {
   REGIOES_EXEMPLO,
 } from "../src/lib/dados-exemplo";
 
-config({ path: ".env.local" });
-config();
+config({ path: ".env.local", quiet: true });
+config({ quiet: true });
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;

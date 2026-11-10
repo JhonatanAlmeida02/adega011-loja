@@ -11,7 +11,8 @@
     "seed:sql": "tsx scripts/gerar-seed-sql.ts",
     "criar-admin": "tsx scripts/criar-admin.ts",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test --trace off"
+    "test:e2e": "playwright test --trace off",
+    "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts --trace off"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

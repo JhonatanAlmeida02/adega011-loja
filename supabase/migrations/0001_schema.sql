@@ -192,7 +192,11 @@ drop policy if exists "pedidos_admin_remove" on public.pedidos;
 create policy "pedidos_admin_remove" on public.pedidos
   for delete to authenticated using (public.is_admin());
 
--- Permissões explícitas (o RLS acima decide o que cada um vê)
+-- Permissões explícitas (o RLS acima decide o que cada um vê).
+-- O Supabase concede ALL por padrão às roles da API; removemos o que não é usado
+-- (defesa em profundidade: mesmo sem RLS, o visitante anônimo só consegue ler).
+revoke all on public.configuracoes, public.categorias, public.produtos, public.regioes_entrega,
+  public.pedidos, public.admins from anon, authenticated;
 grant usage on schema public to anon, authenticated;
 grant select on public.configuracoes, public.categorias, public.produtos, public.regioes_entrega to anon, authenticated;
 grant update on public.configuracoes to authenticated;

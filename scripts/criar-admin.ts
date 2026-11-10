@@ -10,8 +10,8 @@
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
-config({ path: ".env.local" });
-config();
+config({ path: ".env.local", quiet: true });
+config({ quiet: true });
 
 const [email, senha] = process.argv.slice(2);
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
