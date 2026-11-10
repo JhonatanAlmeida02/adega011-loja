@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useConfiguracoes } from "@/lib/admin/config";
-import { removerImagem } from "@/lib/admin/imagens";
+import { removerImagem, useUploadsPendentes } from "@/lib/admin/imagens";
 import type { Configuracoes } from "@/lib/tipos";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Textarea } from "@/components/ui/campos";
@@ -35,6 +35,7 @@ function FormBanner({
     banner_imagem_url: config.banner_imagem_url,
   });
   const [salvando, setSalvando] = useState(false);
+  const uploads = useUploadsPendentes();
   const set = <K extends keyof CamposBanner>(k: K, v: CamposBanner[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const enviar = async (e: React.FormEvent) => {
@@ -46,7 +47,11 @@ function FormBanner({
       "Banner atualizado na loja",
     );
     setSalvando(false);
-    if (ok && anterior && anterior !== f.banner_imagem_url) void removerImagem(anterior);
+    if (ok) {
+      // Apaga a imagem antiga e as enviadas que não ficaram no banner salvo.
+      if (anterior && anterior !== f.banner_imagem_url) void removerImagem(anterior);
+      uploads.concluir(f.banner_imagem_url);
+    }
   };
 
   return (
@@ -72,7 +77,10 @@ function FormBanner({
             <UploadImagem
               rotulo="Imagem (opcional, horizontal)"
               valor={f.banner_imagem_url}
-              onChange={(url) => set("banner_imagem_url", url)}
+              onChange={(url) => {
+                uploads.registrar(url);
+                set("banner_imagem_url", url);
+              }}
               pasta="banner"
               proporcao="aspect-[16/9]"
             />

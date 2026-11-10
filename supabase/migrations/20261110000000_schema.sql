@@ -374,12 +374,18 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- Storage: bucket público "produtos" (fotos de produtos e banner)
--- Leitura pública pela URL; somente admin envia/altera/remove.
+-- Leitura pública pela URL; somente admin lista/envia/altera/remove.
 -- ---------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('produtos', 'produtos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
 on conflict (id) do update set public = true;
 
+-- O Storage só apaga/substitui objetos que o usuário consegue "ver" (SELECT);
+-- sem esta política o remove() do admin não remove nada. O público continua lendo
+-- pela URL pública do bucket, sem precisar de política.
+drop policy if exists "fotos_admin_le" on storage.objects;
+create policy "fotos_admin_le" on storage.objects
+  for select to authenticated using (bucket_id = 'produtos' and public.is_admin());
 drop policy if exists "fotos_admin_insere" on storage.objects;
 create policy "fotos_admin_insere" on storage.objects
   for insert to authenticated with check (bucket_id = 'produtos' and public.is_admin());

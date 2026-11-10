@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { combina } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
-import { removerImagem } from "@/lib/admin/imagens";
+import { removerImagem, useUploadsPendentes } from "@/lib/admin/imagens";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import type { Categoria, Produto } from "@/lib/tipos";
 import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
@@ -35,6 +35,7 @@ export function PaginaProdutos() {
   const [filtro, setFiltro] = useState<string>("todas");
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState<Rascunho | null>(null);
+  const uploads = useUploadsPendentes();
 
   const nomeCat = useMemo(() => new Map(categorias.dados.map((c) => [c.id, c.nome])), [categorias.dados]);
 
@@ -182,8 +183,13 @@ export function PaginaProdutos() {
       <FormProduto
         rascunho={editando}
         categorias={categorias.dados}
-        onFechar={() => setEditando(null)}
+        uploads={uploads}
+        onFechar={() => {
+          uploads.concluir(null); // fechou sem salvar: descarta as fotos enviadas
+          setEditando(null);
+        }}
         onSalvo={(p, novo) => {
+          uploads.concluir(p.foto_url);
           produtos.setDados((lista) => (novo ? [...lista, p] : lista.map((x) => (x.id === p.id ? p : x))));
           setEditando(null);
         }}
@@ -208,9 +214,11 @@ function FormProduto({
   categorias,
   onFechar,
   onSalvo,
+  uploads,
 }: {
   rascunho: Rascunho | null;
   categorias: Categoria[];
+  uploads: ReturnType<typeof useUploadsPendentes>;
   onFechar: () => void;
   onSalvo: (p: Produto, novo: boolean) => void;
 }) {
@@ -218,7 +226,13 @@ function FormProduto({
     <Sheet open={!!rascunho} onOpenChange={(v) => !v && onFechar()}>
       <SheetContent className="overflow-y-auto" rotuloFechar="Fechar formulário">
         {rascunho && (
-          <ConteudoForm key={rascunho.id ?? "novo"} inicial={rascunho} categorias={categorias} onSalvo={onSalvo} />
+          <ConteudoForm
+            key={rascunho.id ?? "novo"}
+            inicial={rascunho}
+            categorias={categorias}
+            onSalvo={onSalvo}
+            onUpload={uploads.registrar}
+          />
         )}
       </SheetContent>
     </Sheet>
@@ -229,10 +243,12 @@ function ConteudoForm({
   inicial,
   categorias,
   onSalvo,
+  onUpload,
 }: {
   inicial: Rascunho;
   categorias: Categoria[];
   onSalvo: (p: Produto, novo: boolean) => void;
+  onUpload: (url: string | null) => void;
 }) {
   const [f, setF] = useState<Rascunho>(inicial);
   const [erros, setErros] = useState<{ nome?: string; preco?: string }>({});
@@ -280,7 +296,15 @@ function ConteudoForm({
         <SheetDescription className="sr-only">Preencha os dados do produto</SheetDescription>
       </div>
       <div className="flex-1 space-y-5 px-5 py-5 md:px-6">
-        <UploadImagem valor={f.foto_url} onChange={(url) => set("foto_url", url)} pasta="produtos" proporcao="aspect-[4/3]" />
+        <UploadImagem
+          valor={f.foto_url}
+          onChange={(url) => {
+            onUpload(url);
+            set("foto_url", url);
+          }}
+          pasta="produtos"
+          proporcao="aspect-[4/3]"
+        />
         <Campo label="Nome" htmlFor="p-nome" erro={erros.nome}>
           <Input id="p-nome" value={f.nome} onChange={(e) => set("nome", e.target.value)} maxLength={100} aria-invalid={!!erros.nome} />
         </Campo>

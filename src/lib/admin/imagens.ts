@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useRef } from "react";
 import { BUCKET_FOTOS } from "@/lib/supabase/config";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 
@@ -58,5 +59,30 @@ export async function removerImagem(url: string | null | undefined) {
   const marcador = `/storage/v1/object/public/${BUCKET_FOTOS}/`;
   const i = url.indexOf(marcador);
   if (i === -1) return;
-  await supabaseNavegador().storage.from(BUCKET_FOTOS).remove([url.slice(i + marcador.length)]);
+  const { data, error } = await supabaseNavegador()
+    .storage.from(BUCKET_FOTOS)
+    .remove([url.slice(i + marcador.length)]);
+  if (error || !data?.length) console.warn("[fotos] imagem não removida do Storage:", error?.message ?? url);
+}
+
+/**
+ * Guarda as imagens enviadas enquanto um formulário está aberto.
+ * - concluir(urlSalva): apaga as enviadas que não ficaram no registro salvo.
+ * - concluir(null): formulário cancelado, apaga todas.
+ * Evita fotos "órfãs" ocupando o Storage.
+ */
+export function useUploadsPendentes() {
+  const enviadas = useRef(new Set<string>());
+  return useMemo(
+    () => ({
+      registrar(url: string | null) {
+        if (url) enviadas.current.add(url);
+      },
+      concluir(manter: string | null) {
+        for (const url of enviadas.current) if (url !== manter) void removerImagem(url);
+        enviadas.current.clear();
+      },
+    }),
+    [],
+  );
 }
