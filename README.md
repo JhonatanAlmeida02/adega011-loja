@@ -24,7 +24,7 @@ Loja virtual / cardápio digital da **Adega011**: o cliente monta o pedido pelo 
 **Painel (`/admin`)**
 - Login com e-mail e senha, só para o dono, com **“Esqueci minha senha”** (link por e-mail).
 - **Pedidos** em tempo real, com aviso sonoro, status (novo → confirmado → saiu para entrega → concluído/cancelado) e atalho para o WhatsApp do cliente.
-- **Produtos**: criar, editar e excluir, upload de foto (reduzida para WebP no próprio celular), destaque, esgotado, visível e ordem por arrastar. Fotos trocadas, descartadas ou de produtos excluídos são apagadas do Storage.
+- **Produtos**: criar, editar e excluir, foto por upload (reduzida para WebP no próprio celular) ou **colando o link de uma imagem** (o servidor baixa, reduz e guarda no Storage), destaque, esgotado, visível e ordem por arrastar. Fotos trocadas, descartadas ou de produtos excluídos são apagadas do Storage.
 - **Categorias**: criar, renomear, ocultar e reordenar arrastando (mouse, toque ou teclado).
 - **Banner**: título, texto, botão, link e imagem, com pré-visualização.
 - **Entrega**: regiões com taxa, pedido mínimo, tempo de entrega e liga/desliga de entrega e retirada.
