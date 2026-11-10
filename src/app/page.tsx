@@ -1,6 +1,7 @@
 import { carregarLoja } from "@/lib/loja";
 import { Banner } from "@/components/loja/banner";
 import { Cabecalho } from "@/components/loja/cabecalho";
+import { Carrinho } from "@/components/loja/carrinho";
 import { Catalogo } from "@/components/loja/catalogo";
 import { IniciarCarrinho } from "@/components/loja/iniciar-carrinho";
 import { Rodape } from "@/components/loja/rodape";
@@ -30,6 +31,7 @@ export default async function Home() {
         <Catalogo loja={loja} />
       </main>
       <Rodape config={loja.config} />
+      <Carrinho loja={loja} />
     </>
   );
 }
