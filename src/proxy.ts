@@ -27,8 +27,11 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const naLogin = request.nextUrl.pathname.startsWith("/admin/login");
-  if (!user && !naLogin) {
+  const caminho = request.nextUrl.pathname;
+  const naLogin = caminho.startsWith("/admin/login");
+  // Telas que precisam abrir sem sessão: login, recuperar senha e retorno do link do e-mail.
+  const publica = naLogin || caminho.startsWith("/admin/recuperar") || caminho.startsWith("/admin/auth/");
+  if (!user && !publica) {
     const destino = request.nextUrl.clone();
     destino.pathname = "/admin/login";
     destino.search = "";
