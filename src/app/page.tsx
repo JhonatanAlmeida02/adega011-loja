@@ -1,27 +1,35 @@
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { DivisorRua, LinhasRuaBanner, Padrao011 } from "@/components/marca/grafismos";
+import { carregarLoja } from "@/lib/loja";
+import { Banner } from "@/components/loja/banner";
+import { Cabecalho } from "@/components/loja/cabecalho";
+import { Catalogo } from "@/components/loja/catalogo";
+import { IniciarCarrinho } from "@/components/loja/iniciar-carrinho";
+import { Rodape } from "@/components/loja/rodape";
+import { VerificacaoIdade } from "@/components/loja/verificacao-idade";
 
-// Página provisória para conferir o tema; a vitrine entra na próxima etapa.
-export default function Home() {
+export default async function Home() {
+  const loja = await carregarLoja();
+
   return (
-    <main className="relative mx-auto w-full max-w-5xl flex-1 px-4 py-10">
-      <div className="absolute inset-0 -z-10">
-        <Padrao011 />
-      </div>
-      <Image src="/logo-selo.svg" alt="Adega011" width={96} height={96} priority />
-      <h1 className="titulo mt-6 text-6xl">São Paulo no copo</h1>
-      <p className="mt-3 max-w-md text-suave">Tema base da Adega011.</p>
-      <p className="preco mt-4 text-2xl">R$ 49,90</p>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button>Adicionar</Button>
-        <Button variant="contorno">Ver cardápio</Button>
-        <Button variant="destaque">Destaque</Button>
-      </div>
-      <DivisorRua className="my-8" />
-      <div className="relative h-72 overflow-hidden rounded-card bg-superficie">
-        <LinhasRuaBanner className="absolute inset-0 h-full w-full" />
-      </div>
-    </main>
+    <>
+      <a
+        href="#cardapio"
+        className="sr-only z-[70] rounded-full bg-amarelo px-5 py-3 font-bold text-preto focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Pular para o cardápio
+      </a>
+      {loja.modoDemo && (
+        <p className="rotulo bg-amarelo px-4 py-2 text-center text-[0.68rem] font-bold text-preto">
+          Modo demonstração · configure o Supabase para editar pelo painel
+        </p>
+      )}
+      <IniciarCarrinho />
+      <VerificacaoIdade />
+      <Cabecalho config={loja.config} />
+      <main className="flex-1">
+        <Banner config={loja.config} />
+        <Catalogo loja={loja} />
+      </main>
+      <Rodape config={loja.config} />
+    </>
   );
 }
