@@ -322,3 +322,36 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   await expect(page.getByText("Produto excluído")).toBeVisible();
   await expect.poll(() => existe(segunda)).toBe(false);
 });
+
+test("importar foto por link (e recusar link que não é imagem)", async ({ page, request }) => {
+  // Precisa de internet. Imagem pública e estável usada só para o teste.
+  const LINK = process.env.LINK_IMAGEM_TESTE ?? "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png";
+  await entrar(page);
+  await page.getByRole("link", { name: "Produtos", exact: true }).click();
+  await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
+  const form = page.getByRole("dialog", { name: "Editar produto" });
+
+  await form.getByRole("button", { name: "Colar link" }).click();
+  const campo = form.getByLabel("Link da imagem");
+
+  // Link de página: mensagem de ajuda, sem enviar o formulário do produto
+  await campo.fill("https://www.google.com/");
+  await campo.press("Enter");
+  await expect(form.getByRole("alert")).toContainText("não de uma imagem");
+  await expect(form).toBeVisible();
+
+  // Link de imagem: baixa, converte e mostra a prévia vinda do Supabase
+  await campo.fill(LINK);
+  await form.getByRole("button", { name: "Importar" }).click();
+  await expect(page.getByText("Imagem importada")).toBeVisible({ timeout: 20_000 });
+  const src = await form.getByAltText("Pré-visualização").getAttribute("src");
+  const original = decodeURIComponent(new URL(src!, "http://x").searchParams.get("url")!);
+  expect(original).toContain("/storage/v1/object/public/produtos/produtos/");
+  expect(original).toMatch(/\.webp$/);
+  const img = await request.get(original);
+  expect(img.headers()["content-type"]).toBe("image/webp");
+
+  // Fecha sem salvar: a imagem importada é descartada do Storage
+  await page.getByRole("button", { name: "Fechar formulário" }).click();
+  await expect.poll(async () => (await request.get(original)).status()).not.toBe(200);
+});
