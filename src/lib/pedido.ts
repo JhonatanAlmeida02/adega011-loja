@@ -84,7 +84,8 @@ export function validarCheckout(
     else if (troco < totais.total) erros.troco = `O troco precisa ser para ${formatarPreco(totais.total)} ou mais.`;
   }
 
-  if (totais.subtotal <= 0) erros.geral = "Seu carrinho está vazio.";
+  if (apenasDigitos(config.whatsapp).length < 12) erros.geral = "A loja ainda não configurou o WhatsApp de pedidos.";
+  else if (totais.subtotal <= 0) erros.geral = "Seu carrinho está vazio.";
   else if (totais.subtotal < config.pedido_minimo)
     erros.geral = `O pedido mínimo é de ${formatarPreco(config.pedido_minimo)}.`;
 

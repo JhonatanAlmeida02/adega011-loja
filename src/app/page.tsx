@@ -3,6 +3,7 @@ import { Banner } from "@/components/loja/banner";
 import { Cabecalho } from "@/components/loja/cabecalho";
 import { Carrinho } from "@/components/loja/carrinho";
 import { Catalogo } from "@/components/loja/catalogo";
+import { DadosEstruturados } from "@/components/loja/dados-estruturados";
 import { IniciarCarrinho } from "@/components/loja/iniciar-carrinho";
 import { Rodape } from "@/components/loja/rodape";
 import { VerificacaoIdade } from "@/components/loja/verificacao-idade";
@@ -23,6 +24,7 @@ export default async function Home() {
           Modo demonstração · configure o Supabase para editar pelo painel
         </p>
       )}
+      <DadosEstruturados config={loja.config} />
       <IniciarCarrinho />
       <VerificacaoIdade />
       <Cabecalho config={loja.config} />

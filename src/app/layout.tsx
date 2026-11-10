@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, DM_Sans, Space_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { RegistrarSW } from "@/components/registrar-sw";
 import "./globals.css";
 
 const anton = Anton({
@@ -43,6 +44,7 @@ export const metadata: Metadata = {
     description: "Vinhos, destilados, cervejas e combos. Peça pelo WhatsApp.",
   },
   twitter: { card: "summary_large_image" },
+  alternates: { canonical: "/" },
   appleWebApp: { capable: true, title: "Adega011", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
 };
@@ -63,6 +65,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         {children}
+        <RegistrarSW />
         <Toaster
           theme="dark"
           position="top-center"
