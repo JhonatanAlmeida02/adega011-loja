@@ -33,9 +33,9 @@ export const metadata: Metadata = {
     template: "%s · Adega011",
   },
   description:
-    "Vinhos, destilados, cervejas e combos com entrega rápida em São Paulo. Monte seu pedido pelo celular e envie pelo WhatsApp.",
+    "Vinhos, destilados, cervejas e combos com entrega rápida em Itatiba e região. Monte seu pedido pelo celular e envie pelo WhatsApp.",
   applicationName: "Adega011",
-  keywords: ["adega", "delivery de bebidas", "vinhos", "destilados", "cervejas", "combos", "São Paulo"],
+  keywords: ["adega", "adega em Itatiba", "delivery de bebidas", "Itatiba", "vinhos", "destilados", "cervejas", "combos"],
   openGraph: {
     type: "website",
     locale: "pt_BR",

@@ -87,7 +87,7 @@ test("fluxo completo: carrinho, taxa por região e link do WhatsApp", async ({ p
   await page.getByLabel("Observações (opcional)").fill("Bem gelada!");
 
   await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
-  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/5511900000000?text=");
+  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/5511941522867?text=");
 
   const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
   expect(texto).toContain("2x IPA 473 ml — R$ 29,80");

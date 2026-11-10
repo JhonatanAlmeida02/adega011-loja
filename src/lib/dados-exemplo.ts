@@ -11,9 +11,9 @@ import type { Categoria, Configuracoes, Produto, RegiaoEntrega } from "./tipos";
 export const CONFIG_EXEMPLO: Configuracoes = {
   nome: "Adega011",
   slogan: "São Paulo no copo",
-  whatsapp: "5511900000000",
-  endereco: "Rua Exemplo, 011 · Vila Madalena, São Paulo - SP",
-  instagram: "adega011",
+  whatsapp: "5511941522867",
+  endereco: "Travessa Sebastião I de Camargo, 72 · Jardim Galetto, Itatiba - SP",
+  instagram: "_adega.011",
   horarios: {
     "0": [{ abre: "14:00", fecha: "22:00" }],
     "1": [{ abre: "16:00", fecha: "00:00" }],
