@@ -1,0 +1,1 @@
+# adega011-loja
