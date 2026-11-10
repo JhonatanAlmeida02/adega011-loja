@@ -10,7 +10,7 @@
     "seed": "tsx scripts/seed.ts",
     "seed:sql": "tsx scripts/gerar-seed-sql.ts",
     "criar-admin": "tsx scripts/criar-admin.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test --trace off",
     "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts --trace off"
   },
