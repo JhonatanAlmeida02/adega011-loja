@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/*
+ * Identidade visual Adega011
+ * Proporção de uso: preto 60% · rosa 25% · branco 10% · amarelo 5%.
+ * Contraste sobre o preto: rosa 6,7:1 · amarelo 12,3:1 · branco 19,7:1.
+ * Evite rosa sobre branco (2,9:1) e texto branco sobre rosa.
+ */
+:root {
+  --adega-preto: #0b0b0b;
+  --adega-rosa: #ff5c8a;
+  --adega-branco: #ffffff;
+  --adega-amarelo: #ffc400;
+}
+
+@theme {
+  --color-preto: #0b0b0b;
+  --color-rosa: #ff5c8a;
+  --color-rosa-escuro: #e0406f;
+  --color-branco: #ffffff;
+  --color-amarelo: #ffc400;
+
+  /* Superfícies e textos auxiliares (todos com contraste >= 4,5:1 sobre o preto) */
+  --color-superficie: #141414;
+  --color-superficie-2: #1c1c1c;
+  --color-superficie-3: #262626;
+  --color-borda: #2e2e2e;
+  --color-suave: #b5b5b5;
+  --color-perigo: #ff6b6b;
+  --color-sucesso: #4ade80;
+
+  --radius-card: 1.25rem;
+
+  --animate-entrar: entrar 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pulsar: pulsar 0.4s ease-out;
+
+  @keyframes entrar {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes pulsar {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+}
+
+@theme inline {
+  --font-titulo: var(--font-anton), Impact, "Arial Narrow", sans-serif;
+  --font-sans: var(--font-dm-sans), Arial, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+  scroll-padding-top: 9rem;
+}
+
+body {
+  background: var(--color-preto);
+  color: var(--color-branco);
+  font-family: var(--font-sans);
+}
+
+/* Foco sempre visível para navegação por teclado */
+:focus-visible {
+  outline: 3px solid var(--color-amarelo);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--color-rosa);
+  color: var(--color-preto);
+}
+
+@layer utilities {
+  .titulo {
+    font-family: var(--font-titulo);
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    line-height: 0.95;
+  }
+
+  .rotulo {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+  }
+
+  .preco {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--color-amarelo);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sem-barra {
+    scrollbar-width: none;
+  }
+  .sem-barra::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pb-seguro {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes sobe {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes desce {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes entra-direita {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes sai-direita {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes desenhar {
+  from { stroke-dashoffset: var(--comprimento, 2000); }
+  to { stroke-dashoffset: 0; }
+}
