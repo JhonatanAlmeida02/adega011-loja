@@ -22,9 +22,9 @@ Loja virtual / cardápio digital da **Adega011**: o cliente monta o pedido pelo 
 - Verificação de idade (+18), SEO (meta tags, Open Graph, sitemap, JSON-LD `LiquorStore`) e PWA instalável com página offline.
 
 **Painel (`/admin`)**
-- Login com e-mail e senha, só para o dono.
+- Login com e-mail e senha, só para o dono, com **“Esqueci minha senha”** (link por e-mail).
 - **Pedidos** em tempo real, com aviso sonoro, status (novo → confirmado → saiu para entrega → concluído/cancelado) e atalho para o WhatsApp do cliente.
-- **Produtos**: criar, editar e excluir, upload de foto (reduzida para WebP no próprio celular), destaque, esgotado, visível e ordem por arrastar.
+- **Produtos**: criar, editar e excluir, upload de foto (reduzida para WebP no próprio celular), destaque, esgotado, visível e ordem por arrastar. Fotos trocadas, descartadas ou de produtos excluídos são apagadas do Storage.
 - **Categorias**: criar, renomear, ocultar e reordenar arrastando (mouse, toque ou teclado).
 - **Banner**: título, texto, botão, link e imagem, com pré-visualização.
 - **Entrega**: regiões com taxa, pedido mínimo, tempo de entrega e liga/desliga de entrega e retirada.
@@ -111,7 +111,9 @@ npm run criar-admin -- voce@adega011.com.br "UmaSenhaForte123"
    select id from auth.users where email = 'voce@adega011.com.br';
    ```
 
-Depois é só entrar em `/admin/login`. Um usuário que faz login mas não está na tabela `admins` vê “Acesso negado” e não consegue ler nem alterar nada, porque o RLS bloqueia no banco.
+Depois é só entrar em `/admin/login`. Se esquecer a senha, use **“Esqueci minha senha”** na tela de login: o link chega por e-mail e deve ser aberto no mesmo navegador em que foi pedido.
+
+> O e-mail padrão do Supabase tem limite baixo de envios por hora. Para produção, configure um SMTP próprio em **Authentication → Emails → SMTP Settings** (ex.: Resend, Brevo, Amazon SES). Um usuário que faz login mas não está na tabela `admins` vê “Acesso negado” e não consegue ler nem alterar nada, porque o RLS bloqueia no banco.
 
 ## 5. Deploy
 
@@ -120,7 +122,9 @@ Depois é só entrar em `/admin/login`. Um usuário que faz login mas não está
 1. Em [vercel.com/new](https://vercel.com/new), importe o repositório `adega011-loja`. O Framework Preset “Next.js” é detectado sozinho.
 2. Em **Environment Variables**, adicione `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `NEXT_PUBLIC_SITE_URL`.
 3. Clique em **Deploy**. Para usar seu domínio, configure em **Settings → Domains**.
-4. No Supabase, vá em **Authentication → URL Configuration** e coloque o endereço do site em **Site URL**.
+4. No Supabase, vá em **Authentication → URL Configuration**:
+   - **Site URL**: o endereço do site (ex.: `https://adega011.com.br`);
+   - **Redirect URLs**: adicione `https://adega011.com.br/admin/auth/confirmar` (e, para testar no computador, `http://localhost:3000/admin/auth/confirmar`). Sem isso, o link de “Esqueci minha senha” não funciona.
 
 ### Netlify
 
@@ -158,7 +162,7 @@ Testes de integração com um Supabase **local**. Precisa do Docker e usa `supab
 npm run test:e2e:supabase
 ```
 
-Esses testes cobrem login, pedido em tempo real, edição, upload, reordenação, taxa, banner, loja fechada e RLS. Eles alteram dados, então use um banco de testes e rode `npx supabase db reset` antes.
+Esses testes cobrem login, recuperação de senha (lendo o e-mail no Mailpit do `supabase start`), pedido em tempo real, edição, upload e limpeza de fotos, reordenação, taxa, banner, loja fechada e RLS. No `supabase/config.toml` local, use `site_url = "http://localhost:3200"` e `additional_redirect_urls = ["http://localhost:3200/**"]`. Eles alteram dados, então use um banco de testes e rode `npx supabase db reset` antes.
 
 ## Estrutura
 
@@ -166,7 +170,8 @@ Esses testes cobrem login, pedido em tempo real, edição, upload, reordenação
 src/
   app/
     page.tsx              vitrine
-    admin/                login e painel (pedidos, produtos, categorias, banner, entrega, loja)
+    admin/                login, recuperar/nova senha e painel (pedidos, produtos, categorias, banner, entrega, loja)
+    admin/auth/confirmar  recebe o link do e-mail e cria a sessão
     admin/acoes.ts        Server Action que revalida a vitrine (confere se é admin)
     manifest.ts, robots.ts, sitemap.ts, opengraph-image.png
   components/
@@ -191,5 +196,6 @@ tests/                    Playwright (demo e integração com Supabase)
 
 - **RLS em todas as tabelas.** O visitante só **lê** o catálogo ativo e as configurações. Só quem está na tabela `admins` escreve.
 - **Pedidos** não podem ser lidos nem inseridos diretamente pelo público. Eles passam pela função `criar_pedido()`, que **recalcula** preços, taxa, pedido mínimo e troco no servidor, recusa itens esgotados e limita a 5 pedidos por telefone a cada 10 minutos.
-- **Fotos**: o bucket é público para leitura; só o admin envia, troca ou apaga.
+- **Fotos**: o bucket é público para leitura pela URL; só o admin lista, envia, troca ou apaga.
+- **Recuperação de senha**: a rota de retorno só redireciona para dentro de `/admin` (sem redirecionamento aberto) e a tela não revela se um e-mail tem conta.
 - A atualização da vitrine (`revalidarLoja`) confere a sessão e a permissão de admin no servidor.

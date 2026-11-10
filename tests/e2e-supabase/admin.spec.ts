@@ -194,4 +194,131 @@ test("RLS: visitante anônimo não lê pedidos nem altera produtos", async ({ re
   const produtos = await request.get(`${url}/rest/v1/produtos?select=nome,preco&nome=eq.IPA%20473%20ml`, { headers: h });
   expect(produtos.ok()).toBeTruthy();
   expect((await produtos.json())[0].preco).toBe(1490);
+  // Visitante não lista os arquivos do bucket (só acessa pela URL pública)
+  const lista = await request.post(`${url}/storage/v1/object/list/produtos`, {
+    headers: h,
+    data: { prefix: "produtos", limit: 10 },
+  });
+  expect(lista.ok() ? await lista.json() : []).toEqual([]);
+});
+
+// Servidor de e-mail de teste do `supabase start` (Mailpit).
+const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
+
+async function ultimoLinkDeEmail(request: import("@playwright/test").APIRequestContext, para: string, depois: number) {
+  let link = "";
+  await expect
+    .poll(
+      async () => {
+        const lista = await (await request.get(`${MAILPIT}/api/v1/messages`)).json();
+        const msg = lista.messages?.find(
+          (m: { To: { Address: string }[]; Created: string }) =>
+            m.To.some((t) => t.Address === para) && new Date(m.Created).getTime() >= depois,
+        );
+        if (!msg) return "";
+        const corpo = await (await request.get(`${MAILPIT}/api/v1/message/${msg.ID}`)).json();
+        link = (corpo.HTML as string).match(/href="([^"]+verify[^"]+)"/)?.[1]?.replace(/&amp;/g, "&") ?? "";
+        return link;
+      },
+      { timeout: 20_000 },
+    )
+    .toContain("type=recovery");
+  return link;
+}
+
+test("recuperar senha por e-mail e entrar com a nova senha", async ({ page, request }) => {
+  const NOVA = "NovaSenha456";
+  const inicio = Date.now() - 2000;
+
+  await page.goto("/admin/login");
+  await page.getByRole("link", { name: "Esqueci minha senha" }).click();
+  await expect(page.getByRole("heading", { name: "Recuperar senha" })).toBeVisible();
+  await page.locator("#recuperar-email").fill(EMAIL);
+  await page.getByRole("button", { name: "Enviar link" }).click();
+  await expect(page.getByRole("heading", { name: "Confira seu e-mail" })).toBeVisible();
+
+  // Abre o link do e-mail no mesmo navegador
+  await page.goto(await ultimoLinkDeEmail(request, EMAIL, inicio));
+  await expect(page).toHaveURL(/\/admin\/nova-senha$/);
+
+  await page.locator("#nova-senha").fill(NOVA);
+  await page.locator("#nova-senha-confirmacao").fill("outra-coisa");
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByText("As senhas não são iguais.")).toBeVisible();
+  await page.locator("#nova-senha-confirmacao").fill(NOVA);
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByRole("heading", { name: "Pedidos" })).toBeVisible();
+
+  // Sai e entra com a senha nova
+  await page.getByRole("button", { name: "Sair" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  await page.locator("#login-email").fill(EMAIL);
+  await page.locator("#login-senha").fill(NOVA);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByRole("heading", { name: "Pedidos" })).toBeVisible();
+
+  // Volta a senha original (logado, a tela de nova senha também serve para trocar)
+  await page.goto("/admin/nova-senha");
+  await page.locator("#nova-senha").fill(SENHA);
+  await page.locator("#nova-senha-confirmacao").fill(SENHA);
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByRole("heading", { name: "Pedidos" })).toBeVisible();
+});
+
+test("link de recuperação inválido volta com aviso; nova senha exige login", async ({ page }) => {
+  await page.goto("/admin/auth/confirmar?code=codigo-invalido&proximo=/admin/nova-senha");
+  await expect(page).toHaveURL(/\/admin\/recuperar\?erro=link$/);
+  await expect(page.getByRole("alert").filter({ hasText: "expirou" })).toBeVisible();
+  await page.goto("/admin/nova-senha");
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  // Não aceita redirecionar para fora do painel
+  await page.goto("/admin/auth/confirmar?proximo=https://exemplo.com");
+  await expect(page).toHaveURL(/\/admin\/recuperar\?erro=link$/);
+});
+
+test("foto enviada e descartada (ou substituída) é apagada do Storage", async ({ page, request }) => {
+  await entrar(page);
+  await page.getByRole("link", { name: "Produtos", exact: true }).click();
+
+  const urlOriginal = async () => {
+    const img = page.getByRole("dialog").getByAltText("Pré-visualização");
+    if (!(await img.count())) return "";
+    const src = await img.getAttribute("src");
+    return decodeURIComponent(new URL(src!, "http://x").searchParams.get("url")!);
+  };
+  const enviar = async (arquivo: string) => {
+    const antes = await urlOriginal();
+    await page.getByRole("dialog").locator('input[type="file"]').setInputFiles(arquivo);
+    // Espera a pré-visualização trocar para a imagem recém-enviada
+    await expect.poll(urlOriginal, { timeout: 15_000 }).not.toBe(antes);
+    return urlOriginal();
+  };
+  const existe = async (url: string) => (await request.get(url)).status() === 200;
+
+  // 1) Envia e fecha sem salvar => apaga
+  await page.getByRole("button", { name: "Novo produto" }).first().click();
+  const descartada = await enviar("public/icons/icon-192.png");
+  expect(await existe(descartada)).toBe(true);
+  await page.getByRole("button", { name: "Fechar formulário" }).click();
+  await expect.poll(() => existe(descartada)).toBe(false);
+
+  // 2) Envia duas, salva com a segunda => a primeira some, a segunda fica
+  const nome = `Teste foto ${Date.now().toString(36)}`;
+  await page.getByRole("button", { name: "Novo produto" }).first().click();
+  const primeira = await enviar("public/icons/icon-192.png");
+  const segunda = await enviar("public/icons/icon-512.png");
+  expect(primeira).not.toBe(segunda);
+  const form = page.getByRole("dialog", { name: "Novo produto" });
+  await form.getByLabel("Nome", { exact: true }).fill(nome);
+  await form.getByLabel("Preço (R$)").fill("9,90");
+  await form.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+  await expect.poll(() => existe(primeira)).toBe(false);
+  expect(await existe(segunda)).toBe(true);
+
+  // 3) Excluir o produto apaga a foto
+  await page.getByRole("button", { name: `Excluir ${nome}` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Excluir" }).click();
+  await expect(page.getByText("Produto excluído")).toBeVisible();
+  await expect.poll(() => existe(segunda)).toBe(false);
 });
