@@ -51,7 +51,7 @@ export function CardProduto({
   return (
     <article
       className={cn(
-        "group relative flex animate-entrar flex-col overflow-hidden rounded-card border border-borda bg-superficie transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-rosa/60",
+        "group relative flex animate-entrar flex-col overflow-hidden rounded-xl border border-borda bg-superficie transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-rosa/60",
         noCarrinho > 0 && "border-rosa/70",
       )}
       aria-label={produto.nome}
@@ -67,8 +67,8 @@ export function CardProduto({
           alt={produto.nome}
           esgotado={esgotado}
           carregarJa={carregarJa}
-          sizes="(min-width: 1280px) 280px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-          className="aspect-square w-full"
+          sizes="(min-width: 1280px) 210px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+          className="aspect-[6/5] w-full"
         />
         <div className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1.5">
           {produto.destaque && <SeloProduto tipo="destaque" />}
@@ -82,23 +82,23 @@ export function CardProduto({
         )}
       </button>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="text-sm font-bold leading-snug">{produto.nome}</h3>
         {temVariacoes && <p className="text-xs text-rosa">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
         {produto.descricao && (
           <p className="line-clamp-2 text-[0.82rem] leading-snug text-suave sm:text-sm">{produto.descricao}</p>
         )}
         <div className="mt-auto pt-2">
-          <p className="preco mb-2.5 text-lg">
+          <p className="preco mb-2 text-base">
             {temOpcoes && <span className="mr-1 text-xs font-normal text-suave">a partir de</span>}
             {formatarPreco(produto.preco)}
           </p>
           {esgotado ? (
-            <Button variant="suave" size="sm" disabled className="h-10 w-full">
+            <Button variant="suave" size="sm" disabled className="h-9 w-full">
               Esgotado
             </Button>
           ) : temOpcoes ? (
-            <Button size="sm" className="h-10 w-full" onClick={() => onAbrir(produto)} aria-label={`Escolher ${produto.nome}`}>
+            <Button size="sm" className="h-9 w-full" onClick={() => onAbrir(produto)} aria-label={`Escolher ${produto.nome}`}>
               <SlidersHorizontal /> Escolher
             </Button>
           ) : quantidadeSimples > 0 ? (
@@ -110,7 +110,7 @@ export function CardProduto({
               onMenos={() => remover(chave)}
             />
           ) : (
-            <Button size="sm" className="h-10 w-full" onClick={() => adicionar(produto.id)} aria-label={`Adicionar ${produto.nome}`}>
+            <Button size="sm" className="h-9 w-full" onClick={() => adicionar(produto.id)} aria-label={`Adicionar ${produto.nome}`}>
               <Plus /> Adicionar
             </Button>
           )}

@@ -42,6 +42,21 @@ begin
   -- Inactive options retain stock and links; no destructive deletion needed.
   perform public.salvar_produto_variacoes(familia,dados,'Tamanho',jsonb_build_array((lista->0)||'{"ativo":false}',lista->1));
   if (select ativo from public.produtos where id=a) or (select estoque from public.produtos where id=a)<>31 then raise exception 'FAIL deactivation erased stock';end if;
+  -- Per-SKU photos survive unrelated edits; explicit null only clears that SKU.
+  perform public.salvar_produto_variacoes(familia,dados,'Tamanho',jsonb_build_array((lista->0)||'{"foto_url":"https://example.com/269.jpg"}',(lista->1)||'{"foto_url":"https://example.com/350.jpg"}'));
+  if (select foto_url from public.produtos where id=a) is distinct from 'https://example.com/269.jpg'
+    or (select foto_url from public.produtos where id=b) is distinct from 'https://example.com/350.jpg' then raise exception 'FAIL distinct photos not saved';end if;
+  perform public.salvar_produto_variacoes(familia,dados||'{"foto_url":"https://example.com/common.jpg"}','Tamanho',lista);
+  if (select foto_url from public.produtos where id=a) is distinct from 'https://example.com/269.jpg'
+    or (select foto_url from public.produtos where id=b) is distinct from 'https://example.com/350.jpg' then raise exception 'FAIL legacy edit overwrote SKU photos';end if;
+  perform public.salvar_produto_variacoes(familia,dados,'Tamanho',jsonb_build_array((lista->0)||'{"foto_url":null}',lista->1));
+  if (select foto_url from public.produtos where id=a) is not null
+    or (select foto_url from public.produtos where id=b) is distinct from 'https://example.com/350.jpg' then raise exception 'FAIL clearing one photo changed another';end if;
+  begin
+    perform public.salvar_produto_variacoes(familia,dados,'Tamanho',jsonb_build_array((lista->0)||'{"foto_url":"https://example.com/rollback.jpg"}',(lista->1)||'{"preco":-1}'));
+    raise exception using errcode='XX000',message='FAIL invalid photo transaction accepted';
+  exception when check_violation then null;end;
+  if (select foto_url from public.produtos where id=a) is not null then raise exception 'FAIL photos not atomic';end if;
   perform set_config('request.jwt.claim.sub','',true);
   perform set_config('request.jwt.claims','{"role":"anon"}',true);
   begin
@@ -50,4 +65,4 @@ begin
   exception when sqlstate 'P0001' then null;end;
 end;$$;
 rollback;
-select 'PASS: atomic variations, retry, preserved SKU/stock/kit, isolated consumption, duplicate validation, stale edit protection, deactivation and admin authorization. Fixtures rolled back.' as resultado;
+select 'PASS: atomic variations, retry, preserved SKU/stock/kit, isolated consumption, duplicate validation, stale edit protection, deactivation, per-SKU photos and admin authorization. Fixtures rolled back.' as resultado;
