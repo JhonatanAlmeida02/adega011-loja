@@ -71,6 +71,7 @@ Abra http://localhost:3000. Sem `.env.local`, a loja roda em modo demonstração
    1. `20261110000000_schema.sql`: tabelas, regras de segurança (RLS), função de pedidos, bucket de fotos e Realtime;
    2. `20261111000100_adicionais_estoque.sql`: adicionais e estoque;
    3. `20261111000200_frete_pedidos_pdv.sql`: frete por km, pedido v2, PDV/caixa e relatórios.
+   4. `20261111000300_permissoes_servico.sql`: permissões da função de frete (cotar-frete).
 
    Com a [CLI do Supabase](https://supabase.com/docs/guides/cli) dá para aplicar tudo com `npx supabase db push`.
 3. Coloque os dados de exemplo usando **uma** destas opções:

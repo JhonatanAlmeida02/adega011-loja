@@ -24,21 +24,36 @@ const limpar = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/
 
 type Ponto = { lat: number; lng: number; formatado: string };
 
+/** Chave secreta do projeto: a nova (SUPABASE_SECRET_KEYS) ou, se não houver, a antiga. */
+function chaveDeServico(): string {
+  try {
+    const chaves = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
+    if (typeof chaves.default === "string" && chaves.default) return chaves.default;
+  } catch {
+    /* segue para as outras */
+  }
+  return Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+}
+
 /** Chamada à API REST do próprio projeto com a chave de serviço (ignora RLS). */
 function criarBanco() {
   const url = Deno.env.get("SUPABASE_URL")!;
-  const chave = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const chave = chaveDeServico();
+  // Chaves novas (sb_secret_...) não são JWT: vão só no cabeçalho apikey.
+  // A chave antiga (service_role, um JWT) também vai em Authorization.
+  const auth: Record<string, string> = chave.startsWith("eyJ") ? { Authorization: `Bearer ${chave}` } : {};
   return async (caminho: string, init: RequestInit = {}) => {
     const r = await fetch(`${url}/rest/v1/${caminho}`, {
       ...init,
       headers: {
         apikey: chave,
-        Authorization: `Bearer ${chave}`,
+        ...auth,
         "Content-Type": "application/json",
         ...(init.headers ?? {}),
       },
     });
     const texto = await r.text();
+    if (!r.ok) console.error("[cotar-frete] banco", init.method ?? "GET", caminho.split("?")[0], r.status, texto.slice(0, 300));
     return { ok: r.ok, status: r.status, headers: r.headers, dados: texto ? JSON.parse(texto) : null };
   };
 }
