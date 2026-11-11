@@ -213,3 +213,43 @@ test("tema: alterna claro/escuro e lembra a escolha", async ({ page }) => {
   await expect(page.locator("body")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(page.locator("body")).not.toHaveCSS("color", "rgb(11, 11, 11)");
 });
+
+test("CEP preenche o endereço e vai na mensagem do pedido", async ({ page }) => {
+  await abrirLoja(page);
+  const whatsapp = await capturarWhatsApp(page);
+  // Busca de CEP simulada (sem depender do ViaCEP de verdade)
+  await page.context().route(/^https:\/\/viacep\.com\.br\/ws\/(\d{8})\/json\/$/, (route) => {
+    const cep = route.request().url().match(/ws\/(\d{8})/)![1];
+    const corpo =
+      cep === "13250000"
+        ? { cep: "13250-000", logradouro: "Rua Coronel Camilo Pires", bairro: "Centro", localidade: "Itatiba", uf: "SP" }
+        : { erro: true };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(corpo) });
+  });
+
+  await page.getByRole("button", { name: "Adicionar Tinto Malbec 750 ml" }).click();
+  await page.getByRole("button", { name: /Ver carrinho/ }).click();
+  await page.getByRole("button", { name: "Finalizar pedido" }).click();
+
+  // CEP que não existe: avisa e deixa preencher à mão
+  const cep = page.getByRole("textbox", { name: "CEP", exact: true });
+  await cep.fill("99999999");
+  await expect(page.getByText("CEP não encontrado.", { exact: false })).toBeVisible();
+
+  await cep.fill("13250000");
+  await expect(cep).toHaveValue("13250-000");
+  await expect(page.getByText("Rua Coronel Camilo Pires, Centro · Itatiba/SP", { exact: false })).toBeVisible();
+  const rua = page.getByLabel("Endereço (rua e número)");
+  await expect(rua).toHaveValue("Rua Coronel Camilo Pires, ");
+  await expect(rua).toBeFocused();
+  await page.keyboard.type("100");
+
+  await page.getByLabel("Nome").fill("Cliente CEP");
+  await page.getByLabel("WhatsApp / telefone").fill("11912345678");
+  await page.getByLabel("Região / bairro").selectOption({ label: "Região A · até 3 km — R$ 5,00" });
+  await page.getByRole("dialog").getByRole("radio", { name: "Pix" }).check({ force: true });
+  await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/");
+  const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
+  expect(texto).toContain("Endereço: Rua Coronel Camilo Pires, 100 · CEP 13250-000");
+});

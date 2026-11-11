@@ -27,6 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { IconeWhatsApp } from "@/components/marca/icones";
+import { cidadeComUf, type EnderecoCep } from "@/lib/cep";
+import { CampoCep } from "./campo-cep";
 import { SeletorQuantidade } from "./seletor-quantidade";
 import { useStatusLoja } from "./use-status-loja";
 
@@ -44,6 +46,7 @@ function dadosIniciais(loja: DadosLoja): DadosCheckout {
     bairro: "",
     cidade: loja.config.cidade_padrao,
     complemento: "",
+    cep: "",
     pagamento: loja.config.pagamentos.length === 1 ? loja.config.pagamentos[0] : "",
     troco: "",
     observacoes: "",
@@ -353,6 +356,29 @@ function EtapaCheckout({
     if (erros[k]) setErros((e) => ({ ...e, [k]: undefined }));
   };
 
+  // CEP encontrado: preenche rua, bairro e cidade e leva o cursor para o número
+  const aoAcharCep = (e: EnderecoCep) => {
+    setDados((d) => {
+      const mesmaRua = !!e.rua && d.endereco.toLowerCase().startsWith(e.rua.toLowerCase());
+      return {
+        ...d,
+        cep: e.cep,
+        endereco: e.rua && !mesmaRua ? `${e.rua}, ` : d.endereco,
+        bairro: e.bairro || (e.rua ? "" : d.bairro),
+        cidade: cidadeComUf(e),
+      };
+    });
+    setErros((x) => ({ ...x, endereco: undefined, bairro: undefined, frete: undefined }));
+    if (e.rua) {
+      requestAnimationFrame(() => {
+        const campo = document.getElementById("endereco") as HTMLInputElement | null;
+        if (!campo) return;
+        campo.focus();
+        campo.setSelectionRange(campo.value.length, campo.value.length);
+      });
+    }
+  };
+
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (enviando) return;
@@ -392,10 +418,10 @@ function EtapaCheckout({
     const url = linkWhatsApp(config.whatsapp, mensagem);
 
     try {
-      const { nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento } = dados;
+      const { nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento, cep } = dados;
       localStorage.setItem(
         CHAVE_CLIENTE,
-        JSON.stringify({ nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento }),
+        JSON.stringify({ nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento, cep }),
       );
     } catch {
       /* sem armazenamento disponível */
@@ -492,6 +518,7 @@ function EtapaCheckout({
 
           {dados.tipo === "entrega" ? (
             <div className="space-y-4 pt-1">
+              <CampoCep valor={dados.cep ?? ""} onValor={(v) => set("cep", v)} onEncontrado={aoAcharCep} />
               {porDistancia ? (
                 <>
                   <Campo label="Rua e número" htmlFor="endereco" erro={erros.endereco}>
