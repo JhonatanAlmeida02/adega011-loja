@@ -5,20 +5,20 @@ const baseCampo =
   "w-full rounded-xl border border-borda bg-superficie-2 px-4 text-base text-branco placeholder:text-[#8f8f8f] transition-colors focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 aria-[invalid=true]:border-perigo disabled:opacity-60";
 
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(baseCampo, "h-12", className)} {...props} />;
+  return <input data-slot="input" className={cn(baseCampo, "h-12", className)} {...props} />;
 }
 
 export function Textarea({
   className,
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn(baseCampo, "min-h-24 py-3", className)} {...props} />;
+  return <textarea data-slot="textarea" className={cn(baseCampo, "min-h-24 py-3", className)} {...props} />;
 }
 
 export function Select({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="relative">
-      <select className={cn(baseCampo, "h-12 appearance-none pr-10", className)} {...props}>
+      <select data-slot="select" className={cn(baseCampo, "h-12 appearance-none pr-10", className)} {...props}>
         {children}
       </select>
       <svg

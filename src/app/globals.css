@@ -64,7 +64,10 @@
   --font-mono: var(--font-space-mono), ui-monospace, monospace;
 }
 
+/* Slightly denser app-wide rem scale: 16px -> 15px with default browser settings.
+ * Applies consistently to the storefront, admin, dialogs and POS. */
 html {
+  font-size: 93.75%;
   color-scheme: dark;
   -webkit-tap-highlight-color: transparent;
   scroll-padding-top: 9rem;
@@ -191,4 +194,70 @@ body {
   body {
     background: #fff !important;
   }
+}
+
+
+/* Compact product registration. Storefront and PDV retain their own density. */
+.cadastro-erp [data-slot="input"],
+.cadastro-erp [data-slot="select"] {
+  height: 2.5rem;
+  border-radius: .5rem;
+  padding-inline: .75rem;
+  font-size: .875rem;
+}
+.cadastro-erp [data-slot="select"] { padding-right: 2.25rem; }
+.cadastro-erp input[type="search"] { padding-left: 2.5rem; }
+.cadastro-erp [data-slot="textarea"] {
+  min-height: 5.5rem;
+  border-radius: .5rem;
+  padding: .625rem .75rem;
+  font-size: .875rem;
+}
+.cadastro-erp [data-slot="button"] {
+  min-height: 2.25rem;
+  border-radius: .5rem;
+  font-size: .8125rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+.cadastro-erp [data-slot="button"] svg { width: 1rem; height: 1rem; }
+.cadastro-erp .rotulo {
+  font-family: inherit;
+  font-size: .75rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.cadastro-erp label { font-size: .75rem; }
+.cadastro-erp .cadastro-painel { outline: none; }
+@media (min-width: 768px) {
+  .cadastro-erp [data-slot="input"],
+  .cadastro-erp [data-slot="select"] { height: 2.25rem; font-size: .8125rem; }
+}
+@media (pointer: coarse) {
+  .cadastro-erp [data-slot="input"],
+  .cadastro-erp [data-slot="select"],
+  .cadastro-erp [data-slot="button"] { min-height: 2.75rem; }
+  .cadastro-erp label:has(> input[type="checkbox"]) { min-height: 2.75rem; }
+  .cadastro-erp [data-slot="input"], .cadastro-erp [data-slot="select"], .cadastro-erp [data-slot="textarea"] { font-size: 1rem; }
+}
+
+
+/* Keep POS controls compact while preserving space for the sale items. */
+.pdv-shell [data-slot="input"], .pdv-shell [data-slot="select"] {
+  height: 2.5rem;
+  border-radius: .5rem;
+  font-size: .875rem;
+}
+.pdv-shell [data-slot="button"] { box-shadow: none; }
+.pdv-shell [data-slot="button"] svg { width: 1rem; height: 1rem; }
+@media (pointer: coarse) {
+  .pdv-shell [data-slot="button"], .pdv-shell [data-slot="input"], .pdv-shell [data-slot="select"] { min-height: 2.75rem; }
+  .pdv-shell [data-slot="input"], .pdv-shell [data-slot="select"] { font-size: 1rem; }
+}
+
+
+/* Keep the original reading and touch sizes on phones and touchscreens. */
+@media (pointer: coarse) {
+  html { font-size: 100%; }
 }

@@ -126,9 +126,11 @@ test("criar produto com foto, categoria nova e reordenar", async ({ page, browse
 
   await page.getByRole("link", { name: "Produtos" }).click();
   await page.getByRole("button", { name: "Novo produto" }).first().click();
+  await page.getByRole("tab", { name: "Fotos", exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles("public/icons/icon-512.png");
   await expect(page.getByText("Imagem enviada")).toBeVisible({ timeout: 15_000 });
-  const form = page.getByRole("dialog", { name: "Novo produto" });
+  const form = page.getByTestId("cadastro-produto");
+  await form.getByRole("tab", { name: "Dados gerais", exact: true }).click();
   await form.getByLabel("Nome", { exact: true }).fill(produto);
   await form.getByLabel("Preço (R$)").fill("12,00");
   await form.getByLabel("Categoria").selectOption({ label: categoria });
@@ -289,14 +291,15 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   await page.getByRole("link", { name: "Produtos", exact: true }).click();
 
   const urlOriginal = async () => {
-    const img = page.getByRole("dialog").getByAltText("Pré-visualização");
+    const img = page.getByTestId("cadastro-produto").getByAltText("Pré-visualização");
     if (!(await img.count())) return "";
     const src = await img.getAttribute("src");
     return decodeURIComponent(new URL(src!, "http://x").searchParams.get("url")!);
   };
   const enviar = async (arquivo: string) => {
+    await page.getByRole("tab", { name: "Fotos", exact: true }).click();
     const antes = await urlOriginal();
-    await page.getByRole("dialog").locator('input[type="file"]').setInputFiles(arquivo);
+    await page.getByTestId("cadastro-produto").locator('input[type="file"]').setInputFiles(arquivo);
     // Espera a pré-visualização trocar para a imagem recém-enviada
     await expect.poll(urlOriginal, { timeout: 15_000 }).not.toBe(antes);
     return urlOriginal();
@@ -307,7 +310,7 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   await page.getByRole("button", { name: "Novo produto" }).first().click();
   const descartada = await enviar("public/icons/icon-192.png");
   expect(await existe(descartada)).toBe(true);
-  await page.getByRole("button", { name: "Fechar formulário" }).click();
+  await page.getByRole("button", { name: "Voltar para produtos" }).click();
   await expect.poll(() => existe(descartada)).toBe(false);
 
   // 2) Envia duas, salva com a segunda => a primeira some, a segunda fica
@@ -316,7 +319,8 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   const primeira = await enviar("public/icons/icon-192.png");
   const segunda = await enviar("public/icons/icon-512.png");
   expect(primeira).not.toBe(segunda);
-  const form = page.getByRole("dialog", { name: "Novo produto" });
+  const form = page.getByTestId("cadastro-produto");
+  await form.getByRole("tab", { name: "Dados gerais", exact: true }).click();
   await form.getByLabel("Nome", { exact: true }).fill(nome);
   await form.getByLabel("Preço (R$)").fill("9,90");
   await form.getByRole("button", { name: "Salvar produto" }).click();
@@ -337,8 +341,9 @@ test("importar foto por link (e recusar link que não é imagem)", async ({ page
   await entrar(page);
   await page.getByRole("link", { name: "Produtos", exact: true }).click();
   await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
-  const form = page.getByRole("dialog", { name: "Editar produto" });
+  const form = page.getByTestId("cadastro-produto");
 
+  await form.getByRole("tab", { name: "Fotos", exact: true }).click();
   await form.getByRole("button", { name: "Colar link" }).click();
   const campo = form.getByLabel("Link da imagem");
 
@@ -360,7 +365,7 @@ test("importar foto por link (e recusar link que não é imagem)", async ({ page
   expect(img.headers()["content-type"]).toBe("image/webp");
 
   // Fecha sem salvar: a imagem importada é descartada do Storage
-  await page.getByRole("button", { name: "Fechar formulário" }).click();
+  await page.getByRole("button", { name: "Voltar para produtos" }).click();
   await expect.poll(async () => (await request.get(original)).status()).not.toBe(200);
 });
 
@@ -427,6 +432,8 @@ test("PDV: abre caixa, vende com adicional e desconto, imprime cupom e fecha", a
 
   const venda = page.getByRole("complementary");
   await expect(venda.getByTestId("pdv-total")).toHaveText("R$ 42,80");
+  await venda.getByRole("button", { name: "Ir para pagamento", exact: true }).click();
+  await venda.locator("summary").filter({ hasText: "Desconto e identificação do cliente" }).click();
   await venda.getByLabel("Desconto", { exact: true }).fill("2,80");
   await expect(venda.getByTestId("pdv-total")).toHaveText("R$ 40,00");
   await venda.getByLabel("Recebido", { exact: true }).fill("50");

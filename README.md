@@ -227,3 +227,135 @@ tests/                    Playwright (demo e integração com Supabase)
 - **Fotos**: o bucket é público para leitura pela URL; só o admin lista, envia, troca ou apaga.
 - **Recuperação de senha**: a rota de retorno só redireciona para dentro de `/admin` (sem redirecionamento aberto) e a tela não revela se um e-mail tem conta.
 - A atualização da vitrine (`revalidarLoja`) confere a sessão e a permissão de admin no servidor.
+
+
+## Kits, fardos e estoque em ml
+
+Em **Produtos**, escolha produto simples ou kit. Um kit não recebe saldo próprio:
+sua composição define quanto de cada produto base é consumido por venda.
+O cadastro e a edição abrem em uma página própria. Ao escolher kit, selecione
+os componentes em **Composição do kit** e salve uma única vez. Produto e
+composição são gravados juntos; erros não deixam um cadastro incompleto.
+
+- **Fardo Skol 15 un**: 15 unidades do produto simples Skol lata 269 ml.
+- **Copão de Askov**: 100 ml do produto simples Askov 900 ml.
+- **Askov 900 ml**: unidade de estoque `ml`, volume por garrafa `900`.
+  Uma garrafa inteira vendida desconta 900 ml; cada copão desconta 100 ml.
+
+Em **Estoque**, lance as latas no produto avulso. Para bebidas em ml, a entrada
+pode ser feita em garrafas inteiras (conversão automática) ou diretamente em ml.
+O ajuste de contagem é sempre na unidade base. Nove copões consomem 900 ml.
+Os dois canais (site e PDV) dividem o saldo. Se faltar qualquer componente,
+o banco recusa a venda inteira. O histórico registra cada baixa em un ou ml.
+Cancelamento, reativação e exclusão usam o consumo gravado na venda original,
+mesmo se a receita do kit mudar depois. Kits aninhados não são permitidos.
+Unidades de produtos com histórico não podem ser trocadas, para não misturar
+unidades com ml no histórico; nesses casos, cadastre um novo produto base.
+
+As composições ficam restritas ao administrador. A vitrine recebe somente o
+número de unidades/garrafas/kits que podem ser vendidos. A migration
+`20261111031052_kits_estoque_ml.sql` precisa estar aplicada antes do frontend.
+
+Verificação: `npm run test:unit`. O arquivo `tests/sql/kits_estoque.sql` pode ser
+executado no SQL Editor: verifica os dois canais, baixa compartilhada,
+cancelamento, reativação, falta de estoque e permissões. Os dados de teste
+são revertidos com `ROLLBACK` (a numeração sequencial pode apresentar lacunas).
+
+
+O formulário fica em `/admin/produtos/novo` e a edição em
+`/admin/produtos/[id]`. Fotos descartadas ao sair são removidas do Storage.
+O RPC `salvar_produto_com_kit` exige admin, aceita somente os campos do
+cadastro e mantém o saldo de estoque protegido. O identificador do rascunho
+é reutilizado em tentativas de salvar, evitando duplicação após falha de rede.
+O teste `tests/sql/cadastro_produto_com_kit.sql` valida criação em uma etapa,
+repetição de salvamento, reversão de cadastro com receita inválida e permissões.
+
+
+## Variações de produtos
+
+Em **Produtos → Novo produto**, escolha **Produto com variações**. Preencha o
+nome base (ex.: Energético Baly), o tipo da variação (Sabor ou Tamanho) e cada
+opção com seu preço. Exemplos: Melancia, Morango, Pêssego; ou 269 ml e 350 ml.
+Uma opção também pode combinar atributos: Melancia / 2 L. Salve uma única vez.
+Para incluir tamanhos em um produto simples existente, edite-o, mude o tipo e
+use a primeira linha para a opção atual: seu identificador, saldo e vínculos
+com kits são preservados. Kits existentes não podem virar variações.
+
+Cada variação é um SKU real em `produtos`, com preço, saldo, disponibilidade e
+visibilidade próprios. Faça entradas na tela Estoque selecionando a variação
+exata. Para estoque em ml, configure o volume de cada garrafa. Kits usam o SKU
+específico, por exemplo Skol · 269 ml; nunca o agrupamento. Adicionais também
+continuam específicos de cada variação, acessíveis em seu cadastro salvo.
+Opções existentes podem ser desativadas sem apagar seu histórico ou saldo.
+
+O catálogo e o PDV agrupam os SKUs somente para exibição. Ao vender, selecionar
+uma opção usa seu ID, preço e saldo próprios no carrinho, pedido e cupom.
+A busca também encontra o nome das variações. O RPC `salvar_produto_variacoes`
+exige admin, grava todo o grupo atomicamente e reutiliza IDs em novas tentativas.
+Não há saldo nem produto pai vendável. O saldo não é aceito pelo cadastro.
+`npm run test:unit` verifica agrupamento e seleção; `tests/sql/variacoes.sql`
+valida gravação atômica, duplicação, preservação de kits/saldo, permissões e
+consumo separado por SKU em uma transação revertida com `ROLLBACK`.
+
+
+O cadastro usa abas Dados gerais, Variações ou Composição, Fotos e
+Adicionais. Os campos de controle de estoque ficam em Dados gerais. Campos compactos no desktop e a grade em tabela tornam a tela mais
+compacta. Em telas de toque os controles mantêm alvos de pelo menos 44 px.
+Trocar de aba preserva o rascunho; a validação abre a seção com campos pendentes.
+Os ajustes visuais ficam restritos ao formulário de produto.
+
+
+## Entrada de estoque por pacotes
+
+Em Produtos → Dados gerais → Controle de estoque, selecione UN e informe
+Unidades por pacote (ex.: 50 folhas). O padrão 1 mantém as entradas avulsas.
+Em Estoque → Entrada, escolha Pacotes de 50 UN e informe a quantidade de
+pacotes: 10 × 50 = 500 UN. Unidades avulsas continuam disponíveis na mesma
+entrada. A venda avulsa desconta 1 UN; a embalagem não altera preço, composição
+ou saldo vendável. Variações podem ter quantidades por pacote diferentes.
+
+Garrafas usam o volume em ml existente. Ajuste de contagem sempre usa a unidade
+base. Alterar o tamanho do pacote afeta somente novas entradas; não reinterpreta
+o saldo nem as movimentações anteriores. A entrada por embalagem registra a
+conversão na observação do histórico.
+
+O RPC registrar_entrada_estoque exige admin e converte no servidor sob a mesma
+trava transacional de vendas e estoque. Confere o fator apresentado na tela,
+recusando entradas se a embalagem tiver mudado em outro cadastro. Os RPCs de
+cadastro gravam unidades_pacote sem aceitar alterações diretas de saldo.
+O teste tests/sql/entrada_por_pacotes.sql verifica conversão, venda avulsa,
+kits, garrafas, contagem, histórico, limites, fatores por variação e permissões,
+revertendo os dados com ROLLBACK.
+
+
+## Venda por pacote completo ou volume
+
+Em Dados gerais → Unidade de venda, escolha UN (avulsa) ou PCT (pacote completo).
+Em PCT, uma venda consome o número cadastrado em Unidades por pacote; em UN,
+uma venda consome 1. O preço corresponde a uma venda da opção escolhida.
+O estoque permanece em unidades base, sem recontagem ao mudar a configuração.
+Para líquidos, Volume por venda (ml) define o consumo: 1 litro = 1.000 ml.
+
+O campo vende_pacote controla a venda de produtos com estoque UN. O gatilho
+calcula volume_unidade como fator de consumo por venda (50 UN no pacote de 50,
+1 UN no avulso). Para líquidos, mantém o volume em ml. Os cálculos existentes de
+saldo vendável e baixa usam esse fator no site e no PDV. Componentes de kits
+continuam expressos em quantidades base, então uma seda solta composta por
+1 UN do produto-pacote continua baixando uma única folha do estoque compartilhado.
+Cancelamentos usam o consumo original da venda, mesmo após alteração do pacote.
+
+Apenas configurar unidades_pacote não muda a venda: também selecione PCT para
+produtos vendidos como pacote completo. Teste SQL: tests/sql/venda_por_embalagem.sql
+(valida os dois canais, preço, falta de estoque conjunta, cancelamento e litros).
+
+
+## PDV: itens e pagamento em etapas
+
+A tela principal prioriza busca e lista de itens, com total e Ir para pagamento
+no rodapé. O filtro de categorias fica no botão ao lado da busca; a seleção
+continua aplicada ao recolher o filtro. As linhas de produto mostram detalhes
+quando relevantes (variação, adicionais, estoque baixo ou quantidade na venda).
+Pagamento, recebido, troco, desconto e cliente aparecem somente ao avançar.
+Voltar aos itens preserva os dados do pagamento; Limpar venda os descarta.
+A conclusão continua no RPC existente, gerando cupom e iniciando uma nova venda.
+Referências de fluxo: Olist e GestãoClick (pagamento após montagem da venda).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { History, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { supabaseNavegador } from "@/lib/supabase/navegador";
 import type { Produto } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Campo, Input, Interruptor } from "@/components/ui/campos";
+import { Campo, Input, Interruptor, Select } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CabecalhoPagina, Carregando, Vazio } from "../ui";
 
@@ -21,6 +21,7 @@ interface Movimento {
   id: string;
   quantidade: number;
   saldo: number;
+  unidade?: string;
   motivo: string;
   observacao: string | null;
   criado_em: string;
@@ -51,8 +52,8 @@ export function PaginaEstoque() {
 
   const lista = useMemo(() => {
     let l = [...produtos.dados].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-    if (filtro === "controlados") l = l.filter((p) => p.controla_estoque);
-    if (filtro === "baixo") l = l.filter((p) => p.controla_estoque && p.estoque <= 5);
+    if (filtro === "controlados") l = l.filter((p) => p.controla_estoque || p.eh_kit);
+    if (filtro === "baixo") l = l.filter((p) => !p.eh_kit && p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5);
     if (busca.trim()) l = l.filter((p) => combina(p.nome, busca));
     return l;
   }, [produtos.dados, filtro, busca]);
@@ -69,7 +70,7 @@ export function PaginaEstoque() {
     if (!ok) atualizar(p.id, { controla_estoque: p.controla_estoque });
   };
 
-  const baixos = produtos.dados.filter((p) => p.controla_estoque && p.estoque <= 5).length;
+  const baixos = produtos.dados.filter((p) => !p.eh_kit && p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5).length;
 
   if (produtos.carregando) return <Carregando />;
 
@@ -133,22 +134,22 @@ export function PaginaEstoque() {
               </div>
               <div className="min-w-0 flex-1 basis-36">
                 <p className="font-bold leading-snug">{p.nome}</p>
-                {p.controla_estoque ? (
+                {p.eh_kit ? <p className="text-sm text-rosa">Kit · saldo calculado pelos componentes</p> : p.controla_estoque ? (
                   <p
                     className={cn(
                       "font-mono text-sm",
                       p.estoque <= 0 ? "text-perigo" : p.estoque <= 5 ? "text-amarelo" : "text-suave",
                     )}
                   >
-                    {p.estoque <= 0 ? "Esgotado · 0" : `${p.estoque} em estoque`}
+                    {p.estoque <= 0 ? "Esgotado · 0" : `${p.estoque} ${p.unidade_estoque ?? "un"} em estoque${p.unidade_estoque === "ml" ? ` · ${(p.estoque / (p.volume_unidade ?? 1)).toFixed(2)} garrafas equivalentes` : ""}`}
                   </p>
                 ) : (
                   <p className="text-sm text-suave">Sem controle de estoque</p>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Interruptor checked={p.controla_estoque} onCheckedChange={() => alternarControle(p)} label={`Controlar estoque de ${p.nome}`} />
-                {p.controla_estoque && (
+                <Interruptor disabled={!!p.eh_kit} checked={p.controla_estoque || !!p.eh_kit} onCheckedChange={() => alternarControle(p)} label={`Controlar estoque de ${p.nome}`} />
+                {!p.eh_kit && p.controla_estoque && (
                   <>
                     <Button size="sm" onClick={() => setAcao({ produto: p, modo: "entrada" })} aria-label={`Entrada de ${p.nome}`}>
                       <PackagePlus /> <span className="hidden sm:inline">Entrada</span>
@@ -199,25 +200,33 @@ function FormMovimento({
   const [qtd, setQtd] = useState(modo === "ajuste" ? String(produto.estoque) : "");
   const [obs, setObs] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const n = Number(qtd);
-  const valido = qtd.trim() !== "" && Number.isInteger(n) && n >= 0 && (modo === "ajuste" || n > 0);
+  const ml = produto.unidade_estoque === "ml";
+  const fatorEmbalagem = ml ? produto.volume_unidade ?? 1 : produto.unidades_pacote ?? 1;
+  const temEmbalagem = ml || fatorEmbalagem > 1;
+  const [emEmbalagem, setEmEmbalagem] = useState(modo === "entrada" && temEmbalagem);
+  const formato = emEmbalagem ? ml ? "garrafa" : "pacote" : "base";
+  const fator = emEmbalagem ? fatorEmbalagem : 1;
+  const n = Number(qtd) * fator;
+  const emSalvar = useRef(false);
+  const valido = qtd.trim() !== "" && Number.isInteger(Number(qtd)) && Number.isInteger(n) && n <= 1000000000 && n >= 0 && (modo === "ajuste" || n > 0);
   const saldoFinal = modo === "entrada" ? produto.estoque + (valido ? n : 0) : valido ? n : produto.estoque;
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valido) return;
-    setSalvando(true);
-    const { data, error } = await supabaseNavegador().rpc("ajustar_estoque", {
-      p_produto: produto.id,
-      p_modo: modo,
-      p_quantidade: n,
-      p_observacao: obs.trim() || null,
-    });
-    setSalvando(false);
-    if (error) return toast.error(error.message);
-    await revalidarLoja().catch(() => null);
-    toast.success(`${produto.nome}: ${data} em estoque`);
-    onFeito(data as number);
+    if (!valido || emSalvar.current) return;
+    emSalvar.current = true; setSalvando(true);
+    try {
+      const sb = supabaseNavegador();
+      const { data, error } = modo === "entrada"
+        ? await sb.rpc("registrar_entrada_estoque", { p_produto: produto.id, p_quantidade: Number(qtd), p_formato: formato, p_fator_esperado: fator, p_observacao: obs.trim() || null })
+        : await sb.rpc("ajustar_estoque", { p_produto: produto.id, p_modo: modo, p_quantidade: n, p_observacao: obs.trim() || null });
+      if (error) return toast.error(error.message);
+      await revalidarLoja().catch(() => null);
+      toast.success(`${produto.nome}: ${data} ${produto.unidade_estoque ?? "un"} em estoque`);
+      onFeito(data as number);
+    } catch {
+      toast.error("Falha de conexão ao registrar o estoque. Confira o histórico antes de repetir a entrada.");
+    } finally { emSalvar.current = false; setSalvando(false); }
   };
 
   return (
@@ -226,16 +235,23 @@ function FormMovimento({
         <div>
           <SheetTitle className="titulo text-4xl">{modo === "entrada" ? "Entrada" : "Ajustar contagem"}</SheetTitle>
           <SheetDescription className="mt-1 text-suave">
-            {produto.nome} · hoje: <strong className="font-mono text-branco">{produto.estoque}</strong>
+            {produto.nome} · hoje: <strong className="font-mono text-branco">{produto.estoque} {produto.unidade_estoque ?? "un"}</strong>
           </SheetDescription>
         </div>
+        {temEmbalagem && modo === "entrada" && <Campo label="Forma de entrada" htmlFor="mov-formato">
+          <Select id="mov-formato" disabled={salvando} value={emEmbalagem ? "embalagem" : "base"} onChange={(e) => setEmEmbalagem(e.target.value === "embalagem")}>
+            <option value="embalagem">{ml ? `Garrafas de ${fatorEmbalagem} ml` : `Pacotes de ${fatorEmbalagem} UN`}</option>
+            <option value="base">{ml ? "Mililitros (ml)" : "Unidades avulsas (UN)"}</option>
+          </Select>
+        </Campo>}
         <Campo
-          label={modo === "entrada" ? "Quantas unidades chegaram?" : "Quantas unidades você contou?"}
+          label={emEmbalagem ? ml ? "Quantas garrafas chegaram?" : "Quantos pacotes chegaram?" : ml ? "Quantidade em ml" : modo === "entrada" ? "Quantas unidades chegaram?" : "Quantas unidades você contou?"}
           htmlFor="mov-qtd"
-          ajuda={`Vai ficar com ${saldoFinal} em estoque.`}
+          ajuda={`${emEmbalagem && valido ? `${qtd} ${ml ? "garrafas" : "pacotes"} × ${fator} = ${n} ${produto.unidade_estoque ?? "un"}. ` : ""}Vai ficar com ${saldoFinal} ${produto.unidade_estoque ?? "un"} em estoque.`}
         >
           <Input
             id="mov-qtd"
+            disabled={salvando}
             type="number"
             inputMode="numeric"
             min={0}
@@ -246,7 +262,7 @@ function FormMovimento({
           />
         </Campo>
         <Campo label="Observação (opcional)" htmlFor="mov-obs">
-          <Input id="mov-obs" placeholder={modo === "entrada" ? "Ex.: nota 1234, fornecedor" : "Ex.: quebra, contagem mensal"} value={obs} onChange={(e) => setObs(e.target.value)} maxLength={200} />
+          <Input id="mov-obs" disabled={salvando} placeholder={modo === "entrada" ? "Ex.: nota 1234, fornecedor" : "Ex.: quebra, contagem mensal"} value={obs} onChange={(e) => setObs(e.target.value)} maxLength={200} />
         </Campo>
       </div>
       <div className="pb-seguro mt-auto border-t border-borda px-5 pt-4 md:px-6">
@@ -264,7 +280,7 @@ function Historico({ produto }: { produto: Produto }) {
     let ativo = true;
     supabaseNavegador()
       .from("estoque_movimentos")
-      .select("id,quantidade,saldo,motivo,observacao,criado_em")
+      .select("id,quantidade,saldo,unidade,motivo,observacao,criado_em")
       .eq("produto_id", produto.id)
       .order("criado_em", { ascending: false })
       .limit(50)
@@ -292,7 +308,7 @@ function Historico({ produto }: { produto: Produto }) {
                   m.quantidade > 0 ? "text-sucesso" : "text-rosa",
                 )}
               >
-                {m.quantidade > 0 ? `+${m.quantidade}` : m.quantidade}
+                {m.quantidade > 0 ? `+${m.quantidade}` : m.quantidade} {m.unidade ?? "un"}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-bold">{MOTIVOS[m.motivo] ?? m.motivo}</p>
@@ -301,7 +317,7 @@ function Historico({ produto }: { produto: Produto }) {
                   {m.observacao && ` · ${m.observacao}`}
                 </p>
               </div>
-              <span className="font-mono text-sm text-suave">= {m.saldo}</span>
+              <span className="font-mono text-sm text-suave">= {m.saldo} {m.unidade ?? "un"}</span>
             </li>
           ))}
         </ul>

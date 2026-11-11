@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { chaveDe, useCarrinho } from "@/lib/carrinho";
-import { produtoDisponivel, type Produto } from "@/lib/tipos";
+import { produtoDisponivel, controlaSaldo, saldoVendavel, type Produto } from "@/lib/tipos";
 import { formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -25,10 +25,25 @@ export function ProdutoDetalhe({
   return (
     <Sheet open={!!produto} onOpenChange={(v) => !v && onFechar()}>
       <SheetContent className="overflow-y-auto">
-        {produto && <Conteudo key={produto.id} produto={produto} categoria={categoria} onFechar={onFechar} />}
+        {produto && <DetalheVariacoes key={produto.id} produto={produto} categoria={categoria} onFechar={onFechar} />}
       </SheetContent>
     </Sheet>
   );
+}
+
+function DetalheVariacoes({ produto, categoria, onFechar }: { produto: Produto; categoria?: string; onFechar: () => void }) {
+  const variacoes = produto.variacoes ?? [];
+  const [id, setId] = useState(variacoes.find(produtoDisponivel)?.id ?? variacoes[0]?.id);
+  const sku = variacoes.find((v) => v.id === id) ?? produto;
+  return <>
+    {variacoes.length > 0 && <div className="mx-5 mt-16 rounded-xl border border-borda p-4 md:mx-6">
+      <label htmlFor="det-variacao" className="mb-2 block text-sm font-medium">{produto.familia_nome} · {produto.variacao_atributo}</label>
+      <select id="det-variacao" value={id} onChange={(e) => setId(e.target.value)} className="h-12 w-full rounded-xl border border-borda bg-superficie-2 px-3 text-base">
+        {variacoes.map((v) => <option key={v.id} value={v.id}>{v.variacao_nome} · {formatarPreco(v.preco)}{!produtoDisponivel(v) ? " · Esgotado" : ""}</option>)}
+      </select>
+    </div>}
+    <Conteudo key={sku.id} produto={sku} categoria={categoria} onFechar={onFechar} />
+  </>;
 }
 
 function Conteudo({ produto, categoria, onFechar }: { produto: Produto; categoria?: string; onFechar: () => void }) {
@@ -44,7 +59,7 @@ function Conteudo({ produto, categoria, onFechar }: { produto: Produto; categori
 
   const disponivel = produtoDisponivel(produto);
   const ultimas = avisoEstoque(produto);
-  const limite = produto.controla_estoque ? produto.estoque : 99;
+  const limite = controlaSaldo(produto) ? saldoVendavel(produto) : 99;
   const unitario = produto.preco + acrescimo(grupos, selecao);
   const falta = pendencia(grupos, selecao);
 

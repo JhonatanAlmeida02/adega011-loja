@@ -14,6 +14,8 @@ import {
   LogOut,
   Menu,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   ShoppingCart,
   Truck,
@@ -40,6 +42,7 @@ const LINKS = [
 export function Painel({ children }: { children: React.ReactNode }) {
   const sessao = useSessaoAdmin();
   const [mais, setMais] = useState(false);
+  const [recolhida, setRecolhida] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -87,43 +90,51 @@ export function Painel({ children }: { children: React.ReactNode }) {
   const ativo = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
 
   return (
-    <div className="flex min-h-dvh flex-col md:flex-row">
+    <div className="flex min-h-dvh flex-col md:flex-row" style={{ "--sidebar-width": recolhida ? "72px" : "14rem" } as React.CSSProperties}>
       {/* Barra lateral (desktop) */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto border-r border-borda bg-superficie p-5 md:flex print:hidden">
-        <Link href="/admin" className="flex items-center gap-3">
-          <Image src="/logo-selo.svg" alt="" width={48} height={48} />
-          <span>
-            <span className="titulo block text-2xl">Adega011</span>
-            <span className="rotulo text-rosa">Painel</span>
-          </span>
-        </Link>
-        <nav aria-label="Painel" className="mt-8 flex flex-col gap-1">
+      <aside id="sidebar-painel" className={cn(
+        "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-borda bg-superficie transition-[width] duration-200 motion-reduce:transition-none md:flex print:hidden",
+        recolhida ? "w-[72px]" : "w-56",
+      )}>
+        <div className={cn("flex h-20 shrink-0 items-center border-b border-borda", recolhida ? "justify-center" : "gap-2 px-4")}>
+          <Link href="/admin" aria-label="Adega011 · Painel" className={cn("flex min-w-0 flex-1 items-center justify-center gap-2", recolhida && "hidden")}>
+            {!recolhida && <Image src="/logo-selo.svg" alt="" width={36} height={36} />}
+            {!recolhida && <span className="min-w-0 flex-1"><span className="titulo block text-xl">Adega011</span><span className="text-xs text-suave">Painel da loja</span></span>}
+          </Link>
+          <button type="button" onClick={() => setRecolhida((v) => !v)}
+            aria-label={recolhida ? "Expandir menu lateral" : "Recolher menu lateral"}
+            aria-expanded={!recolhida} aria-controls="links-painel"
+            title={recolhida ? "Expandir menu" : "Recolher menu"}
+            className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg text-suave hover:bg-superficie-3 hover:text-branco"
+          >
+            {recolhida ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
+          </button>
+        </div>
+        <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
           {LINKS.map(({ href, rotulo, icone: Icone }) => (
-            <Link
-              key={href}
-              href={href}
+            <Link key={href} href={href} aria-label={rotulo} title={recolhida ? rotulo : undefined}
               aria-current={ativo(href) ? "page" : undefined}
               className={cn(
-                "flex h-12 items-center gap-3 rounded-xl px-4 font-bold transition-colors",
-                ativo(href) ? "bg-rosa text-preto" : "text-branco hover:bg-superficie-3",
+                "flex h-11 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
+                recolhida ? "justify-center" : "px-3",
+                ativo(href) ? "bg-rosa/10 text-rosa" : "text-suave hover:bg-superficie-3 hover:text-branco",
               )}
             >
-              <Icone className="size-5" aria-hidden /> {rotulo}
+              <Icone className="size-5 shrink-0" aria-hidden />
+              {!recolhida && <span>{rotulo}</span>}
             </Link>
           ))}
         </nav>
-        <div className="mt-auto space-y-2">
-          <p className="truncate px-1 text-sm text-suave" title={sessao.email}>
-            {sessao.email}
-          </p>
-          <Button asChild variant="suave" size="sm" className="w-full">
-            <a href="/" target="_blank" rel="noopener noreferrer">
-              <ExternalLink /> Ver loja
-            </a>
-          </Button>
-          <Button variant="fantasma" size="sm" className="w-full" onClick={sair}>
-            <LogOut /> Sair
-          </Button>
+        <div className="shrink-0 space-y-1 border-t border-borda p-3">
+          {!recolhida && <p className="mb-3 truncate px-2 text-xs text-suave" title={sessao.email}>{sessao.email}</p>}
+          <a href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver loja (abre em nova aba)" title="Ver loja"
+            className={cn("flex h-10 items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-branco", recolhida ? "justify-center" : "px-3")}>
+            <ExternalLink className="size-5 shrink-0" />{!recolhida && "Ver loja"}
+          </a>
+          <button type="button" onClick={sair} aria-label="Sair" title="Sair"
+            className={cn("flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-branco", recolhida ? "justify-center" : "px-3")}>
+            <LogOut className="size-5 shrink-0" />{!recolhida && "Sair"}
+          </button>
         </div>
       </aside>
 
@@ -141,7 +152,10 @@ export function Painel({ children }: { children: React.ReactNode }) {
         </Button>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-32 md:px-8 md:pt-10 md:pb-16">{children}</main>
+      <main className={cn(
+        "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
+        pathname.startsWith("/admin/pdv") ? "max-w-none md:pt-5 md:pb-5" : "max-w-5xl md:pt-10 md:pb-16",
+      )}>{children}</main>
 
       {/* Navegação inferior (celular) */}
       <nav

@@ -1,18 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import Image from "next/image";
-import { ArrowDownToLine, ArrowUpFromLine, Lock, Minus, Plus, Printer, Search, ShoppingCart, Trash2, Wallet } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Lock, Minus, Plus, Printer, Search, ShoppingCart, SlidersHorizontal, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
 import { combina } from "@/lib/busca";
 import { revalidarLoja } from "@/app/admin/acoes";
 import { useConfiguracoes } from "@/lib/admin/config";
 import { ordenarGrupos } from "@/lib/loja-ordenacao";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
-import { NOMES_ORIGEM, produtoDisponivel, type Categoria, type FormaPagamento, type Opcao, type Produto } from "@/lib/tipos";
+import { NOMES_ORIGEM, produtoDisponivel, controlaSaldo, saldoVendavel, aplicarSaldos, type Categoria, type FormaPagamento, type Opcao, type Produto } from "@/lib/tipos";
 import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Campo, Input } from "@/components/ui/campos";
+import { Campo, Input, Select } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { acrescimo, EscolhaOpcoes, opcoesEscolhidas, pendencia, type Selecao } from "@/components/loja/escolha-opcoes";
 import { Cupom, type DadosCupom } from "../cupom";
@@ -67,17 +67,19 @@ export function PaginaPdv() {
       sb
         .from("produtos")
         .select(
-          "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque," +
+          "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque,eh_kit,unidade_estoque,volume_unidade,unidades_pacote,vende_pacote,familia_id,familia_nome,variacao_atributo,variacao_nome," +
             "grupos:grupos_opcoes(id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem))",
         )
         .eq("ativo", true)
         .order("ordem"),
       sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
-    ]).then(([r, p, c]) => {
+      sb.rpc("saldos_venda"),
+    ]).then(([r, p, c, saldos]) => {
       if (!ativo) return;
       if (r.error) toast.error(r.error.message);
       setCaixa((r.data as ResumoCaixa | null) ?? null);
-      setProdutos(((p.data ?? []) as unknown as Produto[]).map(ordenarGrupos));
+      if (p.error || saldos.error) toast.error(p.error?.message ?? saldos.error!.message);
+      setProdutos(aplicarSaldos(((p.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? []));
       setCategorias((c.data ?? []) as Categoria[]);
     });
     return () => {
@@ -161,24 +163,26 @@ function Venda({
 }) {
   const [busca, setBusca] = useState("");
   const [cat, setCat] = useState("todas");
+  const [filtroAberto, setFiltroAberto] = useState(false);
   const [itens, setItens] = useState<ItemVenda[]>([]);
+  const [familia, setFamilia] = useState<Produto | null>(null);
   const [escolhendo, setEscolhendo] = useState<Produto | null>(null);
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [cupom, setCupom] = useState<DadosCupom | null>(null);
   const [painelCaixa, setPainelCaixa] = useState<"movimento" | "fechar" | null>(null);
 
   const lista = useMemo(() => {
-    let l = produtos;
+    let l = agruparVariacoes(produtos);
     if (cat !== "todas") l = l.filter((p) => p.categoria_id === cat);
-    if (busca.trim()) l = l.filter((p) => combina(p.nome, busca));
+    if (busca.trim()) l = l.filter((p) => combina(textoBuscaProduto(p), busca));
     return l;
   }, [produtos, cat, busca]);
 
   const qtdNoCarrinho = (id: string) => itens.filter((i) => i.produto.id === id).reduce((s, i) => s + i.quantidade, 0);
 
   const adicionar = (produto: Produto, opcoes: Opcao[] = [], quantidade = 1) => {
-    if (produto.controla_estoque && qtdNoCarrinho(produto.id) + quantidade > produto.estoque) {
-      return toast.error(`${produto.nome}: só tem ${produto.estoque} em estoque.`);
+    if (controlaSaldo(produto) && qtdNoCarrinho(produto.id) + quantidade > saldoVendavel(produto)) {
+      return toast.error(`${produto.nome}: só tem ${saldoVendavel(produto)} disponíveis.`);
     }
     const chave = `${produto.id}|${opcoes.map((o) => o.id).sort().join(",")}`;
     setItens((l) => {
@@ -189,6 +193,7 @@ function Venda({
   };
 
   const tocar = (p: Produto) => {
+    if (p.variacoes?.length) { setFamilia(p); return; }
     if (!produtoDisponivel(p)) return;
     if ((p.grupos?.length ?? 0) > 0) setEscolhendo(p);
     else adicionar(p);
@@ -214,8 +219,8 @@ function Venda({
           l.flatMap((i) => {
             if (i.chave !== chave) return [i];
             const q = i.quantidade + delta;
-            if (delta > 0 && i.produto.controla_estoque && qtdNoCarrinho(i.produto.id) + delta > i.produto.estoque) {
-              toast.error(`${i.produto.nome}: só tem ${i.produto.estoque} em estoque.`);
+            if (delta > 0 && controlaSaldo(i.produto) && qtdNoCarrinho(i.produto.id) + delta > saldoVendavel(i.produto)) {
+              toast.error(`${i.produto.nome}: só tem ${saldoVendavel(i.produto)} disponíveis.`);
               return [i];
             }
             return q > 0 ? [{ ...i, quantidade: q }] : [];
@@ -229,102 +234,68 @@ function Venda({
 
   return (
     <>
-      <div className="print:hidden">
-        <CabecalhoPagina
-          titulo="PDV"
-          descricao={`Caixa aberto ${hora.format(new Date(caixa.aberto_em))} · ${caixa.quantidade_vendas} vendas · ${formatarPreco(caixa.total_vendas)}`}
-          acoes={
-            <>
-              <Button variant="suave" size="sm" onClick={() => setPainelCaixa("movimento")}>
-                <ArrowDownToLine /> Sangria / suprimento
-              </Button>
-              <Button variant="contorno" size="sm" onClick={() => setPainelCaixa("fechar")}>
-                <Lock /> Fechar caixa
-              </Button>
-            </>
-          }
-        />
+      <div className="pdv-shell print:hidden">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-borda pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-9 place-items-center rounded-lg bg-rosa/10 text-rosa"><ShoppingCart className="size-5" aria-hidden /></div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight">Frente de caixa</h1>
+              <p className="mt-0.5 flex items-center gap-2 text-xs text-suave"><span className="size-1.5 rounded-full bg-sucesso" aria-hidden />Caixa aberto · {hora.format(new Date(caixa.aberto_em))}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="mr-2 hidden text-xs text-suave xl:block">{caixa.quantidade_vendas} vendas · {formatarPreco(caixa.total_vendas)}</span>
+            <Button variant="suave" size="sm" className="rounded-lg" onClick={() => setPainelCaixa("movimento")}><Wallet /> Movimentar</Button>
+            <Button variant="fantasma" size="sm" className="rounded-lg text-suave" onClick={() => setPainelCaixa("fechar")}><Lock /> Fechar caixa</Button>
+          </div>
+        </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0">
-            <div className="relative mb-3">
-              <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-suave" />
-              <Input
-                type="search"
-                aria-label="Buscar produto no PDV"
-                placeholder="Buscar produto…"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="rounded-full pl-12"
-              />
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100dvh-8rem)] lg:min-h-[520px] lg:grid-cols-[minmax(240px,0.6fr)_minmax(420px,1.4fr)]">
+          <section aria-label="Produtos para venda" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-borda bg-superficie">
+            <div className="shrink-0 space-y-3 border-b border-borda p-3">
+              <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Produtos</h2><span className="text-xs text-suave">{lista.length} encontrados</span></div>
+              <div className="flex items-center gap-2"><div className="relative min-w-0 flex-1">
+                <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
+                <Input type="search" aria-label="Buscar produto no PDV" placeholder="Buscar produto…"
+                  value={busca} onChange={(e) => setBusca(e.target.value)} className="h-10 rounded-lg pl-10 text-sm" />
+              </div><Button type="button" variant="fantasma" size="icone-sm" aria-label="Filtrar categorias" aria-expanded={filtroAberto} aria-controls="pdv-categorias" className={cn("shrink-0 rounded-lg", (filtroAberto || cat !== "todas") && "bg-rosa/10 text-rosa")} onClick={() => setFiltroAberto((v) => !v)}><SlidersHorizontal /></Button></div>
+              {filtroAberto && <Select id="pdv-categorias" aria-label="Filtrar produtos por categoria" value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-lg text-xs">
+                <option value="todas">Todas as categorias</option>
+                {categorias.filter((c) => c.ativa).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </Select>}
             </div>
-            <div className="sem-barra -mx-4 mb-4 flex gap-2 overflow-x-auto px-4">
-              {[{ id: "todas", nome: "Todas" }, ...categorias.filter((c) => c.ativa)].map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  aria-pressed={cat === c.id}
-                  onClick={() => setCat(c.id)}
-                  className={cn(
-                    "rotulo h-10 shrink-0 cursor-pointer rounded-full border px-4 font-bold",
-                    cat === c.id ? "border-rosa bg-rosa text-preto" : "border-borda hover:border-rosa/60",
-                  )}
-                >
-                  {c.nome}
-                </button>
-              ))}
-            </div>
-            <ul className="grid grid-cols-2 gap-2.5 pb-28 sm:grid-cols-3 xl:grid-cols-4 lg:pb-0">
+            <div className="flex shrink-0 justify-between border-b border-borda px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-suave"><span>Produto</span><span className="pr-12">Preço</span></div>
+            <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto pb-24 lg:pb-0">
               {lista.map((p) => {
                 const ok = produtoDisponivel(p);
-                const q = qtdNoCarrinho(p.id);
+                const q = (p.variacoes ?? [p]).reduce((s, v) => s + qtdNoCarrinho(v.id), 0);
+                const detalhe = !ok ? "Esgotado" : q > 0 ? `${q} na venda` : p.variacoes?.length ? `Escolher ${p.variacao_atributo?.toLowerCase() || "variação"}` : (p.grupos?.length ?? 0) > 0 ? "Escolher adicionais" : controlaSaldo(p) && saldoVendavel(p) <= 5 ? `${saldoVendavel(p)} disponíveis` : null;
                 return (
                   <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => tocar(p)}
-                      disabled={!ok}
-                      aria-label={`Vender ${p.nome}`}
-                      className={cn(
-                        "relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border bg-superficie text-left transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45",
-                        q > 0 ? "border-rosa" : "border-borda hover:border-rosa/60",
-                      )}
-                    >
-                      <div className="relative aspect-[4/3] w-full bg-superficie-2">
-                        {p.foto_url && <Image src={p.foto_url} alt="" fill sizes="200px" className="object-cover" />}
-                        {q > 0 && (
-                          <span className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-rosa font-mono text-sm font-bold text-preto">
-                            {q}
-                          </span>
-                        )}
-                      </div>
-                      <span className="flex flex-1 flex-col gap-1 p-2.5">
-                        <span className="text-sm font-bold leading-tight">{p.nome}</span>
-                        <span className="mt-auto flex items-baseline justify-between gap-1">
-                          <span className="preco text-sm">{formatarPreco(p.preco)}</span>
-                          {p.controla_estoque && (
-                            <span className={cn("font-mono text-[0.7rem]", p.estoque <= 5 ? "text-amarelo" : "text-suave")}>
-                              {p.estoque <= 0 ? "esgotado" : `${p.estoque} un`}
-                            </span>
-                          )}
-                        </span>
+                    <button type="button" onClick={() => tocar(p)} disabled={!ok} aria-label={`Vender ${p.nome}`}
+                      className={cn("group flex min-h-14 w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-40", q > 0 && "bg-rosa/5")}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium leading-snug">{p.nome}</span>
+                        {detalhe && <span className="mt-0.5 block text-[11px] text-suave">{detalhe}</span>}
                       </span>
+                      <span className="shrink-0 text-right font-mono text-sm tabular-nums">{p.variacoes?.length && <span className="block font-sans text-[10px] text-suave">a partir de</span>}{formatarPreco(p.preco)}</span>
+                      <span className="grid size-7 shrink-0 place-items-center rounded-md text-suave group-hover:bg-rosa/10 group-hover:text-rosa"><Plus className="size-4" aria-hidden /></span>
                     </button>
                   </li>
                 );
               })}
+              {lista.length === 0 && <li className="px-4 py-12 text-center text-sm text-suave">Nenhum produto encontrado.</li>}
             </ul>
-          </div>
+          </section>
 
-          {/* Venda: coluna fixa no computador */}
-          <aside className="hidden lg:block">
-            <div className="sticky top-6 rounded-card border border-borda bg-superficie">{painelVenda}</div>
+          <aside aria-label="Venda atual" className="hidden min-h-0 min-w-0 overflow-hidden rounded-xl border border-borda bg-superficie lg:block">
+            {painelVenda}
           </aside>
         </div>
 
         {/* Venda: barra + gaveta no celular */}
         {totalItens > 0 && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 px-4 lg:hidden">
+          <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 px-4 md:left-[var(--sidebar-width)] md:bottom-4 lg:hidden">
             <button
               type="button"
               onClick={() => setCarrinhoAberto(true)}
@@ -337,10 +308,22 @@ function Venda({
           </div>
         )}
         <Sheet open={carrinhoAberto} onOpenChange={setCarrinhoAberto}>
-          <SheetContent rotuloFechar="Fechar venda">{painelVenda}</SheetContent>
+          <SheetContent rotuloFechar="Fechar venda"><SheetTitle className="sr-only">Venda atual</SheetTitle><SheetDescription className="sr-only">Itens e pagamento da venda no balcão.</SheetDescription>{painelVenda}</SheetContent>
         </Sheet>
       </div>
 
+      <Sheet open={!!familia} onOpenChange={(v) => !v && setFamilia(null)}>
+        <SheetContent className="overflow-y-auto">
+          {familia && <div className="space-y-4 px-5 pt-16 pb-6">
+            <SheetTitle className="text-2xl font-semibold">{familia.nome}</SheetTitle>
+            <SheetDescription>Escolha {familia.variacao_atributo?.toLowerCase() || "a variação"} para adicionar à venda.</SheetDescription>
+            {familia.variacoes?.map((v) => <Button key={v.id} variant="suave" className="h-auto min-h-14 w-full justify-between rounded-xl py-3" disabled={!produtoDisponivel(v)} onClick={() => { setFamilia(null); tocar(v); }}>
+              <span className="text-left">{v.variacao_nome}<span className="mt-1 block text-xs font-normal text-suave">{!produtoDisponivel(v) ? "Esgotado" : `${saldoVendavel(v)} disponíveis`}</span></span>
+              <span className="font-mono">{formatarPreco(v.preco)}</span>
+            </Button>)}
+          </div>}
+        </SheetContent>
+      </Sheet>
       <EscolherOpcoes
         produto={escolhendo}
         onFechar={() => setEscolhendo(null)}
@@ -421,6 +404,7 @@ function PainelVenda({
   onLimpar: () => void;
   onFinalizado: (c: DadosCupom) => void;
 }) {
+  const [recebimento, setRecebimento] = useState(false);
   const [modoDesconto, setModoDesconto] = useState<"valor" | "percentual">("valor");
   const [desconto, setDesconto] = useState("");
   const [pagamento, setPagamento] = useState<FormaPagamento>("dinheiro");
@@ -444,9 +428,12 @@ function PainelVenda({
   const troco = valorRecebido != null ? valorRecebido - total : null;
   const recebidoInsuficiente = pagamento === "dinheiro" && valorRecebido != null && valorRecebido < total;
 
+  const recebidoInvalido = pagamento === "dinheiro" && recebido.trim() !== "" && valorRecebido === null;
+
   const finalizar = async () => {
-    if (!itens.length || recebidoInsuficiente) return;
+    if (!itens.length || recebidoInsuficiente || (pagamento === "dinheiro" && recebidoInvalido) || finalizando) return;
     setFinalizando(true);
+    try {
     const { data, error } = await supabaseNavegador().rpc("registrar_venda_balcao", {
       p_itens: itens.map((i) => ({ produto_id: i.produto.id, quantidade: i.quantidade, opcoes: i.opcoes.map((o) => o.id) })),
       p_pagamento: pagamento,
@@ -454,14 +441,17 @@ function PainelVenda({
       p_valor_recebido: pagamento === "dinheiro" ? valorRecebido : null,
       p_cliente_nome: cliente.trim() || null,
     });
-    setFinalizando(false);
     if (error) return toast.error(error.message);
     const r = data as Omit<DadosCupom, "pagamento">;
     toast.success(`Venda #${r.numero} registrada`);
+    setRecebimento(false);
     setDesconto("");
     setRecebido("");
     setCliente("");
     onFinalizado({ ...r, pagamento, valor_recebido: pagamento === "dinheiro" ? valorRecebido : null, cliente: cliente.trim() });
+    } catch {
+      toast.error("Falha de conexão. Confira a venda antes de tentar novamente.");
+    } finally { setFinalizando(false); }
   };
 
   // Notas rápidas para o valor recebido
@@ -470,165 +460,149 @@ function PainelVenda({
     .slice(0, 4);
 
   return (
-    <div className="flex max-h-[85dvh] flex-col lg:max-h-[calc(100dvh-6rem)]">
-      <div className="flex items-center justify-between px-4 pt-4 pr-14 lg:pr-4">
-        <SheetTitleSeguro>Venda atual</SheetTitleSeguro>
-        {itens.length > 0 && (
-          <button type="button" onClick={onLimpar} className="cursor-pointer text-sm text-suave hover:text-branco">
-            Limpar
-          </button>
-        )}
+    <div className="flex h-[78dvh] max-h-[85dvh] min-h-0 flex-col lg:h-full lg:max-h-none" data-testid="pdv-venda">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-borda px-4 pr-14 lg:pr-4">
+        <div className="flex items-baseline gap-2"><SheetTitleSeguro>{recebimento ? "Pagamento" : "Venda atual"}</SheetTitleSeguro><span className="text-xs text-suave">{itens.reduce((q, i) => q + i.quantidade, 0)} {itens.reduce((q, i) => q + i.quantidade, 0) === 1 ? "item" : "itens"}</span></div>
+        {recebimento ? <button type="button" disabled={finalizando} onClick={() => setRecebimento(false)} className="cursor-pointer text-xs text-suave hover:text-rosa">Voltar aos itens</button> : itens.length > 0 && <button type="button" onClick={() => { setDesconto(""); setRecebido(""); setCliente(""); onLimpar(); }} className="cursor-pointer text-xs text-suave hover:text-branco">Limpar venda</button>}
       </div>
 
-      {itens.length === 0 ? (
-        <p className="flex items-center gap-2 px-4 py-8 text-suave">
-          <ShoppingCart className="size-5" aria-hidden /> Toque nos produtos para vender.
-        </p>
-      ) : (
-        <ul className="mt-2 min-h-0 flex-1 divide-y divide-borda overflow-y-auto px-4">
-          {itens.map((i) => (
-            <li key={i.chave} className="flex items-center gap-2 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold leading-tight">{i.produto.nome}</p>
-                {i.opcoes.length > 0 && <p className="text-xs text-suave">+ {i.opcoes.map((o) => o.nome).join(", ")}</p>}
-                <p className="font-mono text-xs text-suave">{formatarPreco(unitario(i))} un</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="suave" size="icone-sm" onClick={() => onAlterar(i.chave, -1)} aria-label={`Menos ${i.produto.nome}`}>
-                  {i.quantidade === 1 ? <Trash2 /> : <Minus />}
-                </Button>
-                <span className="w-6 text-center font-mono font-bold">{i.quantidade}</span>
-                <Button variant="suave" size="icone-sm" onClick={() => onAlterar(i.chave, 1)} aria-label={`Mais ${i.produto.nome}`}>
-                  <Plus />
-                </Button>
-              </div>
-              <span className="w-20 text-right font-mono text-sm">{formatarPreco(unitario(i) * i.quantidade)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="space-y-3 border-t border-borda p-4">
-        <div className="flex items-center gap-2">
-          <label htmlFor={ids.desconto} className="rotulo w-20 shrink-0 text-suave">
-            Desconto
-          </label>
-          <div className="flex rounded-full border border-borda p-0.5" role="group" aria-label="Tipo de desconto">
-            {(["valor", "percentual"] as const).map((m) => (
+      {recebimento ? <fieldset disabled={finalizando} className="min-h-0 flex-1 overflow-y-auto p-5">
+        <legend className="sr-only">Recebimento da venda</legend>
+        <div className="mx-auto max-w-lg space-y-5">
+          <p className="text-sm text-suave">Escolha a forma de pagamento para concluir.</p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Forma de pagamento">
+            {PAGAMENTOS.map((p) => (
               <button
-                key={m}
+                key={p.id}
                 type="button"
-                aria-pressed={modoDesconto === m}
-                onClick={() => setModoDesconto(m)}
+                role="radio"
+                aria-checked={pagamento === p.id}
+                onClick={() => setPagamento(p.id)}
                 className={cn(
-                  "h-9 w-10 cursor-pointer rounded-full font-mono text-sm font-bold",
-                  modoDesconto === m ? "bg-rosa text-preto" : "text-suave",
+                  "h-10 cursor-pointer rounded-lg border text-sm font-medium",
+                  pagamento === p.id ? "border-rosa bg-rosa/10 text-rosa" : "border-borda",
                 )}
               >
-                {m === "valor" ? "R$" : "%"}
+                {p.rotulo}
               </button>
             ))}
           </div>
-          <Input
-            id={ids.desconto}
-            inputMode="decimal"
-            placeholder="0"
-            value={desconto}
-            onChange={(e) => setDesconto(e.target.value.replace(/[^\d,.]/g, ""))}
-            className="h-10 font-mono"
-          />
-        </div>
 
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Forma de pagamento">
-          {PAGAMENTOS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={pagamento === p.id}
-              onClick={() => setPagamento(p.id)}
-              className={cn(
-                "h-11 cursor-pointer rounded-xl border-2 text-sm font-bold",
-                pagamento === p.id ? "border-rosa bg-rosa/10 text-rosa" : "border-borda",
+          {pagamento === "dinheiro" && (
+            <div>
+              <div className="flex items-center gap-2">
+                <label htmlFor={ids.recebido} className="rotulo w-20 shrink-0 text-suave">
+                  Recebido
+                </label>
+                <Input
+                  id={ids.recebido}
+                  inputMode="decimal"
+                  placeholder={centavosParaCampo(total)}
+                  value={recebido}
+                  onChange={(e) => setRecebido(e.target.value.replace(/[^\d,.]/g, ""))}
+                  aria-invalid={recebidoInsuficiente || recebidoInvalido}
+                  className="h-10 font-mono"
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5 pl-[5.5rem]">
+                {sugestoes.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setRecebido(centavosParaCampo(v))}
+                    className="h-7 cursor-pointer rounded-md border border-borda px-2 font-mono text-[11px] text-suave hover:border-rosa"
+                  >
+                    {formatarPreco(v)}
+                  </button>
+                ))}
+              </div>
+              {troco != null && (
+                <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-amarelo")} aria-live="polite">
+                  {recebidoInsuficiente ? `Faltam ${formatarPreco(-troco)}` : `Troco: ${formatarPreco(troco)}`}
+                </p>
               )}
-            >
-              {p.rotulo}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
 
-        {pagamento === "dinheiro" && (
-          <div>
+        <details className="rounded-lg border border-borda px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-suave">Desconto e identificação do cliente{valorDesconto > 0 ? ` · − ${formatarPreco(valorDesconto)}` : ""}</summary>
+          <div className="mt-3 space-y-3">
             <div className="flex items-center gap-2">
-              <label htmlFor={ids.recebido} className="rotulo w-20 shrink-0 text-suave">
-                Recebido
+              <label htmlFor={ids.desconto} className="rotulo w-20 shrink-0 text-suave">
+                Desconto
               </label>
+              <div className="flex rounded-lg border border-borda p-0.5" role="group" aria-label="Tipo de desconto">
+                {(["valor", "percentual"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={modoDesconto === m}
+                    onClick={() => setModoDesconto(m)}
+                    className={cn(
+                      "h-8 w-9 cursor-pointer rounded-md font-mono text-xs font-bold",
+                      modoDesconto === m ? "bg-rosa text-preto" : "text-suave",
+                    )}
+                  >
+                    {m === "valor" ? "R$" : "%"}
+                  </button>
+                ))}
+              </div>
               <Input
-                id={ids.recebido}
+                id={ids.desconto}
                 inputMode="decimal"
-                placeholder={centavosParaCampo(total)}
-                value={recebido}
-                onChange={(e) => setRecebido(e.target.value.replace(/[^\d,.]/g, ""))}
-                aria-invalid={recebidoInsuficiente}
+                placeholder="0"
+                value={desconto}
+                onChange={(e) => setDesconto(e.target.value.replace(/[^\d,.]/g, ""))}
                 className="h-10 font-mono"
               />
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5 pl-[5.5rem]">
-              {sugestoes.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setRecebido(centavosParaCampo(v))}
-                  className="h-8 cursor-pointer rounded-full border border-borda px-2.5 font-mono text-xs hover:border-rosa"
-                >
-                  {formatarPreco(v)}
-                </button>
-              ))}
-            </div>
-            {troco != null && (
-              <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-amarelo")} aria-live="polite">
-                {recebidoInsuficiente ? `Faltam ${formatarPreco(-troco)}` : `Troco: ${formatarPreco(troco)}`}
-              </p>
-            )}
-          </div>
-        )}
 
-        <div className="flex items-center gap-2">
-          <label htmlFor={ids.cliente} className="rotulo w-20 shrink-0 text-suave">
-            Cliente
-          </label>
-          <Input id={ids.cliente} placeholder="Opcional" value={cliente} onChange={(e) => setCliente(e.target.value)} className="h-10" maxLength={80} />
+            <div className="flex items-center gap-2">
+              <label htmlFor={ids.cliente} className="rotulo w-20 shrink-0 text-suave">
+                Cliente
+              </label>
+              <Input id={ids.cliente} placeholder="Opcional" value={cliente} onChange={(e) => setCliente(e.target.value)} className="h-10" maxLength={80} />
+            </div>
+
+          </div>
+        </details>
+
+
         </div>
-
-        <dl className="space-y-0.5 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-suave">Subtotal</dt>
-            <dd className="font-mono">{formatarPreco(subtotal)}</dd>
-          </div>
-          {valorDesconto > 0 && (
-            <div className="flex justify-between">
-              <dt className="text-suave">Desconto</dt>
-              <dd className="font-mono text-sucesso">− {formatarPreco(valorDesconto)}</dd>
+      </fieldset> : itens.length === 0 ? <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-suave">
+        <div className="grid size-12 place-items-center rounded-full bg-superficie-2"><ShoppingCart className="size-5" aria-hidden /></div>
+        <div><p className="text-sm font-medium text-branco">Sua venda começa aqui</p><p className="mt-1 text-xs">Busque um produto e adicione à venda.</p></div>
+      </div> : <div className="flex min-h-0 flex-1 flex-col">
+        <div aria-hidden className="flex shrink-0 items-center gap-3 border-b border-borda px-4 py-2 text-[11px] text-suave"><span className="flex-1">Produto</span><span className="w-[100px] text-center">Quantidade</span><span className="w-20 text-right">Total</span></div>
+        <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto px-4">
+          {itens.map((i) => <li key={i.chave} className="flex min-h-16 items-center gap-3 py-2.5">
+            <div className="min-w-0 flex-1"><p className="text-sm font-medium leading-snug">{i.produto.nome}</p>{i.opcoes.length > 0 && <p className="mt-0.5 text-xs text-suave">+ {i.opcoes.map((o) => o.nome).join(", ")}</p>}<p className="mt-0.5 font-mono text-[11px] text-suave">{formatarPreco(unitario(i))} / {i.produto.vende_pacote ? "pct" : "un"}</p></div>
+            <div className="flex w-[100px] shrink-0 items-center justify-center">
+              <Button variant="fantasma" size="icone-sm" className="size-8 rounded-md text-suave" onClick={() => onAlterar(i.chave, -1)} aria-label={`Menos ${i.produto.nome}`}>{i.quantidade === 1 ? <Trash2 /> : <Minus />}</Button>
+              <span className="w-8 text-center font-mono text-sm">{i.quantidade}</span>
+              <Button variant="fantasma" size="icone-sm" className="size-8 rounded-md text-suave" onClick={() => onAlterar(i.chave, 1)} aria-label={`Mais ${i.produto.nome}`}><Plus /></Button>
             </div>
-          )}
-          <div className="flex items-baseline justify-between">
-            <dt className="font-bold">Total</dt>
-            <dd className="preco text-2xl" data-testid="pdv-total">
-              {formatarPreco(total)}
-            </dd>
-          </div>
-        </dl>
-        <Button size="lg" className="w-full" disabled={!itens.length || recebidoInsuficiente || finalizando} onClick={finalizar}>
-          {finalizando ? "Registrando…" : `Finalizar · ${formatarPreco(total)}`}
+            <span className="w-20 shrink-0 text-right font-mono text-sm tabular-nums">{formatarPreco(unitario(i) * i.quantidade)}</span>
+          </li>)}
+        </ul>
+      </div>}
+
+      <footer className="shrink-0 space-y-3 border-t border-borda bg-superficie px-4 py-4">
+        {valorDesconto > 0 && <dl className="space-y-1 text-xs text-suave"><div className="flex justify-between"><dt>Subtotal</dt><dd className="font-mono">{formatarPreco(subtotal)}</dd></div><div className="flex justify-between"><dt>Desconto</dt><dd className="font-mono">− {formatarPreco(valorDesconto)}</dd></div></dl>}
+        <div className="flex items-baseline justify-between"><span className="text-sm text-suave">Total da venda</span><strong className="font-mono text-2xl font-semibold tabular-nums" data-testid="pdv-total">{formatarPreco(total)}</strong></div>
+        <Button size="sm" className="h-11 w-full rounded-lg text-sm font-semibold shadow-none" disabled={!itens.length || finalizando || (recebimento && (recebidoInsuficiente || recebidoInvalido))} onClick={(e) => { if (e.detail > 1) return; if (recebimento) void finalizar(); else setRecebimento(true); }}>
+          {finalizando ? "Registrando…" : recebimento ? `Finalizar · ${formatarPreco(total)}` : "Ir para pagamento"}
         </Button>
-      </div>
+      </footer>
     </div>
   );
 }
 
 /** Título que funciona dentro e fora da gaveta (Radix exige Title só dentro de Dialog). */
 function SheetTitleSeguro({ children }: { children: React.ReactNode }) {
-  return <h2 className="titulo text-3xl">{children}</h2>;
+  return <h2 className="text-sm font-semibold">{children}</h2>;
 }
 
 /* ------------------------------------------------------------------ */

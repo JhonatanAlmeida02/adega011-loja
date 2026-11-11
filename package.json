@@ -12,7 +12,8 @@
     "criar-admin": "tsx scripts/criar-admin.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test --trace off",
-    "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts --trace off"
+    "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts --trace off",
+    "test:unit": "tsx --test tests/unit/*.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

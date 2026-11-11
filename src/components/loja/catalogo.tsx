@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { combina } from "@/lib/busca";
 import type { Categoria, DadosLoja, Produto } from "@/lib/tipos";
+import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
 import { cn } from "@/lib/utils";
 import { DivisorRua } from "@/components/marca/grafismos";
 import { CardProduto } from "./card-produto";
@@ -16,7 +17,7 @@ interface Secao {
 }
 
 function montarSecoes(categorias: Categoria[], produtos: Produto[]): Secao[] {
-  const visiveis = produtos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem);
+  const visiveis = agruparVariacoes(produtos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem));
   const ativas = categorias.filter((c) => c.ativa).sort((a, b) => a.ordem - b.ordem);
   const secoes: Secao[] = ativas
     .map((c) => ({ id: c.slug, nome: c.nome, produtos: visiveis.filter((p) => p.categoria_id === c.id) }))
@@ -41,7 +42,7 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
 
   const todos = useMemo(() => secoes.flatMap((s) => s.produtos), [secoes]);
   const resultados = useMemo(
-    () => (busca.trim() ? todos.filter((p) => combina(`${p.nome} ${p.descricao}`, busca)) : []),
+    () => (busca.trim() ? todos.filter((p) => combina(textoBuscaProduto(p), busca)) : []),
     [busca, todos],
   );
   const buscando = busca.trim().length > 0;

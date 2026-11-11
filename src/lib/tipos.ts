@@ -88,11 +88,41 @@ export interface Produto {
   controla_estoque: boolean;
   estoque: number;
   grupos?: GrupoOpcoes[];
+  eh_kit?: boolean;
+  unidade_estoque?: "un" | "ml";
+  volume_unidade?: number;
+  /** Quantidade de unidades avulsas recebidas em um pacote. Não altera a venda. */
+  unidades_pacote?: number;
+  /** Venda deste SKU desconta um pacote completo em vez de uma UN. */
+  vende_pacote?: boolean;
+  saldo_venda?: number;
+  familia_id?: string | null;
+  familia_nome?: string | null;
+  variacao_atributo?: string | null;
+  variacao_nome?: string | null;
+  /** Agrupamento somente para exibição; carrinho e estoque usam os SKUs. */
+  variacoes?: Produto[];
+
 }
 
 /** Pode ser vendido agora? (marcado como disponível e com estoque, se controla) */
-export function produtoDisponivel(p: Pick<Produto, "disponivel" | "ativo" | "controla_estoque" | "estoque">): boolean {
-  return p.disponivel && p.ativo && (!p.controla_estoque || p.estoque > 0);
+export function controlaSaldo(p: Pick<Produto, "controla_estoque" | "eh_kit">): boolean {
+  return !!p.eh_kit || p.controla_estoque;
+}
+
+/** Number of bottles, single units or kits that can actually be sold. */
+export function saldoVendavel(p: Pick<Produto, "eh_kit" | "saldo_venda" | "estoque" | "volume_unidade">): number {
+  if (p.eh_kit) return Math.max(0, p.saldo_venda ?? 0);
+  return Math.max(0, Math.floor(p.estoque / (p.volume_unidade ?? 1)));
+}
+
+export function produtoDisponivel(p: Pick<Produto, "disponivel" | "ativo" | "controla_estoque" | "estoque" | "eh_kit" | "saldo_venda" | "volume_unidade">): boolean {
+  return p.disponivel && p.ativo && (!controlaSaldo(p) || saldoVendavel(p) > 0);
+}
+
+export function aplicarSaldos(produtos: Produto[], saldos: { produto_id: string; saldo: number }[]): Produto[] {
+  const mapa = new Map(saldos.map((s) => [s.produto_id, s.saldo]));
+  return produtos.map((p) => ({ ...p, saldo_venda: mapa.get(p.id) }));
 }
 
 export interface RegiaoEntrega {

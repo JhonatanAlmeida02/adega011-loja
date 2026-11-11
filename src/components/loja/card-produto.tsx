@@ -2,7 +2,7 @@
 
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { chaveDe, quantidadeDoProduto, useCarrinho } from "@/lib/carrinho";
-import { produtoDisponivel, type Produto } from "@/lib/tipos";
+import { produtoDisponivel, controlaSaldo, saldoVendavel, type Produto } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FotoProduto } from "./foto-produto";
@@ -24,8 +24,8 @@ export function SeloProduto({ tipo, texto }: { tipo: "destaque" | "esgotado" | "
 
 /** Selo de "Últimas X" quando o estoque está baixo. */
 export function avisoEstoque(p: Produto): string | null {
-  if (!p.controla_estoque || p.estoque <= 0 || p.estoque > 5) return null;
-  return p.estoque === 1 ? "Última unidade" : `Últimas ${p.estoque}`;
+  if (!controlaSaldo(p) || saldoVendavel(p) <= 0 || saldoVendavel(p) > 5) return null;
+  return saldoVendavel(p) === 1 ? "Última unidade" : `Últimas ${saldoVendavel(p)}`;
 }
 
 export function CardProduto({
@@ -37,15 +37,16 @@ export function CardProduto({
   onAbrir: (p: Produto) => void;
   carregarJa?: boolean;
 }) {
-  const temOpcoes = (produto.grupos?.length ?? 0) > 0;
+  const temVariacoes = !!produto.variacoes?.length;
+  const temOpcoes = temVariacoes || (produto.grupos?.length ?? 0) > 0;
   const chave = chaveDe(produto.id);
-  const noCarrinho = useCarrinho((s) => quantidadeDoProduto(s.itens, produto.id));
+  const noCarrinho = useCarrinho((s) => (produto.variacoes ?? [produto]).reduce((q, v) => q + quantidadeDoProduto(s.itens, v.id), 0));
   const quantidadeSimples = useCarrinho((s) => s.itens[chave]?.quantidade ?? 0);
   const adicionar = useCarrinho((s) => s.adicionar);
   const remover = useCarrinho((s) => s.remover);
   const esgotado = !produtoDisponivel(produto);
   const ultimas = avisoEstoque(produto);
-  const limite = produto.controla_estoque ? produto.estoque : undefined;
+  const limite = controlaSaldo(produto) ? saldoVendavel(produto) : undefined;
 
   return (
     <article
@@ -83,6 +84,7 @@ export function CardProduto({
 
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <h3 className="text-[0.95rem] font-bold leading-snug sm:text-base">{produto.nome}</h3>
+        {temVariacoes && <p className="text-xs text-rosa">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
         {produto.descricao && (
           <p className="line-clamp-2 text-[0.82rem] leading-snug text-suave sm:text-sm">{produto.descricao}</p>
         )}
