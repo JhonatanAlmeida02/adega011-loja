@@ -15,13 +15,13 @@ export const CONFIG_EXEMPLO: Configuracoes = {
   endereco: "Travessa Sebastião I de Camargo, 72 · Jardim Galetto, Itatiba - SP",
   instagram: "_adega.011",
   horarios: {
-    "0": [{ abre: "14:00", fecha: "22:00" }],
-    "1": [{ abre: "16:00", fecha: "00:00" }],
-    "2": [{ abre: "16:00", fecha: "00:00" }],
-    "3": [{ abre: "16:00", fecha: "00:00" }],
-    "4": [{ abre: "16:00", fecha: "00:00" }],
-    "5": [{ abre: "16:00", fecha: "02:00" }],
-    "6": [{ abre: "16:00", fecha: "02:00" }],
+    "0": [{ abre: "10:00", fecha: "17:00" }],
+    "1": [{ abre: "14:00", fecha: "21:00" }],
+    "2": [{ abre: "14:00", fecha: "21:00" }],
+    "3": [{ abre: "14:00", fecha: "21:00" }],
+    "4": [{ abre: "14:00", fecha: "21:00" }],
+    "5": [{ abre: "10:00", fecha: "00:00" }],
+    "6": [{ abre: "10:00", fecha: "00:00" }],
   },
   status_manual: "auto",
   pedido_minimo: 3000,
@@ -35,6 +35,12 @@ export const CONFIG_EXEMPLO: Configuracoes = {
   banner_botao_texto: "Ver combos",
   banner_botao_link: "#combos",
   banner_imagem_url: null,
+  // No modo demonstração (sem Supabase) o frete por km não roda; usamos regiões.
+  modo_frete: "regioes",
+  taxa_base: 200,
+  taxa_por_km: 150,
+  raio_maximo_km: 15,
+  cidade_padrao: "Itatiba - SP",
 };
 
 const id = (n: number, prefixo: string) =>
@@ -68,11 +74,32 @@ const p = (
   disponivel: true,
   ativo: true,
   ordem: n,
+  controla_estoque: false,
+  estoque: 0,
+  grupos: [],
   ...extra,
 });
 
 export const PRODUTOS_EXEMPLO: Produto[] = [
   p(1, combos, "Combo Gin Tônica", "Gin London Dry 750 ml + 4 tônicas 350 ml + gelo 2 kg. É só montar o copo.", 14990, "combo-gin", { destaque: true }),
+  p(11, combos, "Copão de Askov", "Copão de 700 ml com Askov e gelo. Quer turbinar? Escolhe o energético.", 1000, "combo-vodka", {
+    ordem: 0,
+    destaque: true,
+    grupos: [
+      {
+        id: id(1, "b0000000"),
+        produto_id: id(11, "a0000000"),
+        nome: "Energético",
+        minimo: 0,
+        maximo: 1,
+        ordem: 0,
+        opcoes: [
+          { id: id(1, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Baly", preco: 300, disponivel: true, ordem: 0 },
+          { id: id(2, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Red Bull", preco: 700, disponivel: true, ordem: 1 },
+        ],
+      },
+    ],
+  }),
   p(2, combos, "Combo Vodka + Energético", "Vodka 1 L + 4 energéticos 473 ml + gelo 2 kg. Pra virar a noite.", 12990, "combo-vodka"),
   p(3, vinhos, "Tinto Malbec 750 ml", "Argentino, encorpado, com notas de ameixa e baunilha. Vai bem com carne e papo longo.", 6990, "vinho-tinto", { destaque: true }),
   p(4, vinhos, "Branco Sauvignon Blanc 750 ml", "Chileno, fresco e cítrico. Gelado é outra coisa.", 5490, "vinho-branco"),
