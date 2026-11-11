@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, Package, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Package, Plus, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
@@ -18,7 +19,7 @@ import { Carregando, UploadImagem } from "./ui";
 
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
 interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[] }
-interface VariacaoRascunho { id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean }
+interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean }
 
 export function CadastroProduto({ produtoId }: { produtoId?: string }) {
   const params = useSearchParams();
@@ -71,10 +72,12 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const [comVariacoes, setComVariacoes] = useState(!!dados.produto.familia_id);
   const [atributo, setAtributo] = useState(dados.produto.variacao_atributo ?? "Sabor");
   const [variacoes, setVariacoes] = useState<VariacaoRascunho[]>(dados.variacoes.map((p) => ({
-    id: p.id, nome: p.variacao_nome ?? "", preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1, unidades_pacote: p.unidades_pacote ?? 1,
+    foto_url: p.foto_url, id: p.id, nome: p.variacao_nome ?? "", preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1, unidades_pacote: p.unidades_pacote ?? 1,
     ativo: p.ativo, disponivel: p.disponivel, estoque: p.estoque, existente: true,
   })));
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
+  const [fotoVariacaoId, setFotoVariacaoId] = useState(dados.variacoes[0]?.id ?? "");
+  const fotoVariacao = variacoes.find((v) => v.id === fotoVariacaoId) ?? variacoes[0];
   const [componentes, setComponentes] = useState(dados.componentes);
   const [aba, setAba] = useState("gerais");
   const [erros, setErros] = useState<Record<string, string | undefined>>({});
@@ -100,7 +103,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     if (!comVariacoes && preco === null) novos.preco = "Informe um preço válido (ex.: 49,90).";
     if (!comVariacoes && !f.eh_kit && f.unidade_estoque === "ml" && (!Number.isInteger(f.volume_unidade) || (f.volume_unidade ?? 0) < 1 || (f.volume_unidade ?? 0) > 1000000)) novos.volume = "Informe o volume inteiro consumido por venda em ml.";
     if (!f.eh_kit && f.unidade_estoque !== "ml" && (!Number.isInteger(f.unidades_pacote ?? 1) || (f.unidades_pacote ?? 1) < 1 || (f.unidades_pacote ?? 1) > 1000000)) novos.pacote = "Informe quantas unidades vêm no pacote (de 1 a 1.000.000).";
-    if (f.eh_kit && (!componentes.length || componentes.some((l) => !l.componente_id || !Number.isInteger(l.quantidade) || l.quantidade < 1 || l.quantidade > 1000000))) novos.kit = "Selecione os componentes e informe o consumo de cada um.";
+    if (f.eh_kit && (componentes.some((l) => !l.componente_id || !Number.isInteger(l.quantidade) || l.quantidade < 1 || l.quantidade > 1000000))) novos.kit = "Selecione os componentes e informe o consumo de cada um.";
     if (comVariacoes) {
       if (!f.nome.trim() || f.nome.trim().length > 60) novos.nome = "Informe o nome do produto (até 60 caracteres).";
       if (!atributo.trim()) novos.variacoes = "Informe o tipo da variação: sabor, tamanho…";
@@ -124,11 +127,11 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
       const sb = supabaseNavegador();
       const { data, error } = comVariacoes
         ? await sb.rpc("salvar_produto_variacoes", { p_familia: f.familia_id ?? f.id, p_dados, p_atributo: atributo.trim(),
-          p_variacoes: variacoes.map((v) => ({ id: v.id, nome: v.nome.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) })
+          p_variacoes: variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) })
         : await sb.rpc("salvar_produto_com_kit", { p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [] });
       if (error || !data) { setErros({ geral: error?.message ?? "Não foi possível salvar." }); return; }
       salvo = true;
-      uploads.concluir(f.foto_url);
+      uploads.concluir(comVariacoes ? variacoes.map((v) => v.foto_url) : f.foto_url);
       if (existente && !dados.produto.familia_id && !comVariacoes && dados.produto.foto_url && dados.produto.foto_url !== f.foto_url) void removerImagem(dados.produto.foto_url);
       await revalidarLoja().catch(() => null);
       toast.success(existente ? "Produto atualizado" : "Produto criado");
@@ -183,7 +186,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
             <Campo label="Tipo de produto" htmlFor="p-tipo"><Select id="p-tipo" disabled={!!f.familia_id} value={comVariacoes ? "variacoes" : f.eh_kit ? "kit" : "simples"} onChange={(e) => {
               const tipo = e.target.value; const kit = tipo === "kit";
               setComVariacoes(tipo === "variacoes"); set("eh_kit", kit);
-              if (tipo === "variacoes" && !variacoes.length) setVariacoes([{ id: f.id, nome: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: f.ativo, disponivel: f.disponivel, estoque: f.estoque, existente }]);
+              if (tipo === "variacoes" && !variacoes.length) setVariacoes([{ foto_url: f.foto_url, id: f.id, nome: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: f.ativo, disponivel: f.disponivel, estoque: f.estoque, existente }]);
               if (kit && !componentes.length) setComponentes([{ componente_id: "", quantidade: 1 }]);
             }}><option value="simples">Produto simples</option><option value="variacoes">Produto com variações</option><option value="kit">Kit / fardo / copão</option></Select></Campo>
             <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Campo>
@@ -213,14 +216,15 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         </Tabs.Content>
 
         {comVariacoes && <Tabs.Content value="variacoes" forceMount className={painel}>
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-semibold">Variações do produto</h2><p className="mt-1 text-xs text-suave">Defina as opções e os preços de cada variação.</p></div><Button type="button" variant="suave" size="sm" disabled={variacoes.length >= 50} onClick={() => setVariacoes((vs) => [...vs, { id: crypto.randomUUID(), nome: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: true, disponivel: true, estoque: 0, existente: false }])}><Plus /> Adicionar variação</Button></div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-semibold">Variações do produto</h2><p className="mt-1 text-xs text-suave">Defina as opções e os preços de cada variação.</p></div><Button type="button" variant="suave" size="sm" disabled={variacoes.length >= 50} onClick={() => setVariacoes((vs) => [...vs, { foto_url: null, id: crypto.randomUUID(), nome: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: true, disponivel: true, estoque: 0, existente: false }])}><Plus /> Adicionar variação</Button></div>
           <div className="max-w-xs"><Campo label="Tipo da variação" htmlFor="v-atributo" ajuda="Ex.: Sabor, Tamanho ou Sabor / tamanho."><Input id="v-atributo" maxLength={30} value={atributo} onChange={(e) => setAtributo(e.target.value)} /></Campo></div>
           {erros.variacoes && <p role="alert" className="text-sm text-perigo">{erros.variacoes}</p>}
           <div className="border-t border-borda pt-5"><h3 className="mb-3 font-medium">Grade de variações <span className="ml-1 text-xs font-normal text-suave">({variacoes.length})</span></h3>
             <div className="relative overflow-x-auto rounded-lg border border-borda">
               <table className="w-full min-w-[690px] border-collapse text-left text-[13px]">
-                <thead className="bg-superficie-2 text-xs font-normal text-suave"><tr><th scope="col" className="px-3 py-2.5 font-medium">Variação</th><th scope="col" className="w-36 px-3 py-2.5 font-medium">Preço (R$)</th>{f.unidade_estoque === "ml" && <th scope="col" className="w-32 px-3 py-2.5 font-medium">ml / venda</th>}{f.unidade_estoque !== "ml" && <th scope="col" className="w-28 px-3 py-2.5 font-medium">UN / pacote</th>}<th scope="col" className="w-24 px-3 py-2.5 text-right font-medium">Estoque</th><th scope="col" className="w-20 px-3 py-2.5 text-center font-medium">Visível</th><th scope="col" className="w-24 px-3 py-2.5 text-center font-medium">Disponível</th><th scope="col" className="w-12"><span className="sr-only">Ações</span></th></tr></thead>
+                <thead className="bg-superficie-2 text-xs font-normal text-suave"><tr><th scope="col" className="w-16 px-3 py-2.5 font-medium">Foto</th><th scope="col" className="px-3 py-2.5 font-medium">Variação</th><th scope="col" className="w-36 px-3 py-2.5 font-medium">Preço (R$)</th>{f.unidade_estoque === "ml" && <th scope="col" className="w-32 px-3 py-2.5 font-medium">ml / venda</th>}{f.unidade_estoque !== "ml" && <th scope="col" className="w-28 px-3 py-2.5 font-medium">UN / pacote</th>}<th scope="col" className="w-24 px-3 py-2.5 text-right font-medium">Estoque</th><th scope="col" className="w-20 px-3 py-2.5 text-center font-medium">Visível</th><th scope="col" className="w-24 px-3 py-2.5 text-center font-medium">Disponível</th><th scope="col" className="w-12"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody className="divide-y divide-borda">{variacoes.map((v, i) => <tr key={v.id} className="bg-superficie/40 hover:bg-superficie-2/60">
+                  <td className="px-3 py-2"><button type="button" aria-label={`Foto de ${v.nome || `variação ${i + 1}`}`} onClick={() => { setFotoVariacaoId(v.id); setAba("fotos"); }} className="relative grid size-9 cursor-pointer place-items-center overflow-hidden rounded-lg border border-borda bg-superficie-2 text-suave hover:border-rosa hover:text-rosa-texto">{v.foto_url ? <Image src={v.foto_url} alt="" fill sizes="36px" className="object-cover" /> : <ImagePlus className="size-4" aria-hidden />}</button></td>
                   <td className="px-3 py-2"><Input id={`v-nome-${i}`} aria-label={`Nome da variação ${i + 1}`} maxLength={35} placeholder="Melancia, 269 ml…" value={v.nome} onChange={(e) => alterarVariacao(v.id, { nome: e.target.value })} aria-invalid={!!erros.variacoes && !v.nome.trim()} /></td>
                   <td className="px-3 py-2"><Input id={`v-preco-${i}`} aria-label={`Preço da variação ${i + 1} (R$)`} className="font-mono" inputMode="decimal" placeholder="0,00" value={v.preco} onChange={(e) => alterarVariacao(v.id, { preco: e.target.value.replace(/[^\d,.]/g, "") })} aria-invalid={!!erros.variacoes && paraCentavos(v.preco) === null} /></td>
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
@@ -245,8 +249,17 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
 
 
         <Tabs.Content value="fotos" forceMount className={painel}>
-          <div><h2 className="font-semibold">Foto do produto</h2><p className="mt-1 text-xs text-suave">Imagem exibida na loja{comVariacoes ? " para todas as variações" : ""}.</p></div>
-          <div className="max-w-xs"><UploadImagem valor={f.foto_url} onChange={(url) => { uploads.registrar(url); set("foto_url", url); }} pasta="produtos" proporcao="aspect-square" /></div>
+          {comVariacoes ? <>
+            <div><h2 className="font-semibold">Fotos das variações</h2><p className="mt-1 text-xs text-suave">Cada variação aparece separada na loja, com sua própria foto. Salve o cadastro para aplicar.</p></div>
+            {fotoVariacao ? <div className="max-w-xs space-y-4">
+              <Campo label="Variação" htmlFor="v-foto"><Select id="v-foto" value={fotoVariacao.id} onChange={(e) => setFotoVariacaoId(e.target.value)}>{variacoes.map((v, i) => <option key={v.id} value={v.id}>{v.nome || `Variação ${i + 1}`}</option>)}</Select></Campo>
+              <UploadImagem key={fotoVariacao.id} valor={fotoVariacao.foto_url} rotulo={`Foto · ${fotoVariacao.nome || "Variação"}`} onChange={(url) => { uploads.registrar(url); alterarVariacao(fotoVariacao.id, { foto_url: url }); }} pasta="produtos" proporcao="aspect-square" />
+              <Button type="button" variant="suave" size="sm" onClick={() => setAba("variacoes")}>Voltar à grade</Button>
+            </div> : <p className="text-xs text-suave">Adicione as variações na grade para escolher suas fotos.</p>}
+          </> : <>
+            <div><h2 className="font-semibold">Foto do produto</h2><p className="mt-1 text-xs text-suave">Imagem exibida na loja.</p></div>
+            <div className="max-w-xs"><UploadImagem valor={f.foto_url} onChange={(url) => { uploads.registrar(url); set("foto_url", url); }} pasta="produtos" proporcao="aspect-square" /></div>
+          </>}
         </Tabs.Content>
 
         {existente && <Tabs.Content value="adicionais" forceMount className={painel}>

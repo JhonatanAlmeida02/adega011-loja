@@ -1,21 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import { History, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { combina } from "@/lib/busca";
+import { normalizar } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { revalidarLoja } from "@/app/admin/acoes";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
-import type { Produto } from "@/lib/tipos";
-import { cn } from "@/lib/utils";
+import { saldoVendavel, type Categoria, type Produto } from "@/lib/tipos";
+import { cn, formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Interruptor, Select } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CabecalhoPagina, Carregando, Vazio } from "../ui";
 
 type Filtro = "controlados" | "baixo" | "todos";
+type TipoEstoque = "todos" | "simples" | "kits" | "insumos";
+interface MetaEstoque { produto_id: string; codigo: string; custo: number | null; origem: { tipo?: string } | null }
+const ITENS_POR_PAGINA = 50;
 
 interface Movimento {
   id: string;
@@ -46,17 +48,68 @@ const fmtData = new Intl.DateTimeFormat("pt-BR", {
 
 export function PaginaEstoque() {
   const produtos = useTabela<Produto>("produtos");
+  const categorias = useTabela<Categoria>("categorias");
+  const metadados = useTabela<MetaEstoque>("produto_importacao", "produto_id,codigo,custo,origem", "codigo");
+  const metadata = useMemo(() => new Map(metadados.dados.map((m) => [m.produto_id, m])), [metadados.dados]);
+  const categoriasInsumos = useMemo(() => new Set(categorias.dados.filter((c) => c.slug === "insumos").map((c) => c.id)), [categorias.dados]);
   const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
+  const [pagina, setPagina] = useState(1);
   const [filtro, setFiltro] = useState<Filtro>("controlados");
+  const [tipo, setTipo] = useState<TipoEstoque>("todos");
+  const [situacao, setSituacao] = useState("todos");
+  const [categoria, setCategoria] = useState("todas");
+  const [saldos, setSaldos] = useState<Map<string, number> | null>(null);
   const [acao, setAcao] = useState<{ produto: Produto; modo: "entrada" | "ajuste" | "historico" } | null>(null);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBuscaAplicada(busca);
+      setPagina(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [busca]);
+
+  useEffect(() => {
+    let ativo = true;
+    supabaseNavegador().rpc("saldos_venda").then(({ data, error }) => {
+      if (!ativo) return;
+      if (error) { setSaldos(null); toast.error("Não foi possível consultar o saldo dos kits."); }
+      else setSaldos(new Map((data as { produto_id: string; saldo: number }[] ?? []).map((s) => [s.produto_id, s.saldo])));
+    });
+    return () => { ativo = false; };
+  }, [produtos.dados]);
+
+  const tipoProduto = (p: Produto): TipoEstoque => p.eh_kit ? "kits" : metadata.get(p.id)?.origem?.tipo === "insumo" || categoriasInsumos.has(p.categoria_id ?? "") ? "insumos" : "simples";
+  const indice = useMemo(() => [...produtos.dados]
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+    .map((p) => ({
+      produto: p,
+      texto: normalizar(p.nome + " " + (metadata.get(p.id)?.codigo ?? "")),
+      tipo: p.eh_kit ? "kits" : metadata.get(p.id)?.origem?.tipo === "insumo" || categoriasInsumos.has(p.categoria_id ?? "") ? "insumos" : "simples",
+    })), [produtos.dados, metadata, categoriasInsumos]);
+  const contagens = useMemo(() => {
+    const totais = { todos: indice.length, simples: 0, kits: 0, insumos: 0 };
+    for (const item of indice) totais[item.tipo as Exclude<TipoEstoque, "todos">]++;
+    return totais;
+  }, [indice]);
+
   const lista = useMemo(() => {
-    let l = [...produtos.dados].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-    if (filtro === "controlados") l = l.filter((p) => p.controla_estoque || p.eh_kit);
-    if (filtro === "baixo") l = l.filter((p) => !p.eh_kit && p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5);
-    if (busca.trim()) l = l.filter((p) => combina(p.nome, busca));
-    return l;
-  }, [produtos.dados, filtro, busca]);
+    const palavras = normalizar(buscaAplicada).split(/\s+/).filter(Boolean);
+    return indice.filter(({ produto: p, texto, tipo: tipoItem }) => {
+      if (filtro === "controlados" && !p.controla_estoque && !p.eh_kit) return false;
+      if (filtro === "baixo" && (p.eh_kit || !p.controla_estoque || p.estoque > (p.volume_unidade ?? 1) * 5)) return false;
+      if (tipo !== "todos" && tipoItem !== tipo) return false;
+      if (situacao !== "todos" && (situacao === "ativos" ? !p.ativo : p.ativo)) return false;
+      if (categoria !== "todas" && p.categoria_id !== categoria) return false;
+      return palavras.every((palavra) => texto.includes(palavra));
+    }).map((item) => item.produto);
+  }, [indice, filtro, buscaAplicada, tipo, situacao, categoria]);
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / ITENS_POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const itensPagina = lista.slice(inicio, inicio + ITENS_POR_PAGINA);
+  const filtrando = busca !== buscaAplicada;
 
   const atualizar = (id: string, campos: Partial<Produto>) =>
     produtos.setDados((l) => l.map((p) => (p.id === id ? { ...p, ...campos } : p)));
@@ -70,9 +123,15 @@ export function PaginaEstoque() {
     if (!ok) atualizar(p.id, { controla_estoque: p.controla_estoque });
   };
 
+  const alternarAtivo = async (p: Produto) => {
+    atualizar(p.id, { ativo: !p.ativo });
+    const ok = await salvar(supabaseNavegador().from("produtos").update({ ativo: !p.ativo }).eq("id", p.id), null);
+    if (!ok) atualizar(p.id, { ativo: p.ativo });
+  };
+
   const baixos = produtos.dados.filter((p) => !p.eh_kit && p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5).length;
 
-  if (produtos.carregando) return <Carregando />;
+  if (produtos.carregando || categorias.carregando || metadados.carregando) return <Carregando />;
 
   return (
     <>
@@ -81,92 +140,85 @@ export function PaginaEstoque() {
         descricao="Vendas do site e do balcão baixam sozinhas; cancelamentos devolvem."
       />
 
-      <div className="relative mb-3">
-        <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-suave" />
-        <Input
-          type="search"
-          aria-label="Buscar produto"
-          placeholder="Buscar produto…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="rounded-full pl-12"
-        />
-      </div>
-      <div className="sem-barra -mx-4 mb-5 flex gap-2 overflow-x-auto px-4">
-        {(
-          [
-            ["controlados", "Com controle"],
-            ["baixo", `Estoque baixo${baixos ? ` (${baixos})` : ""}`],
-            ["todos", "Todos os produtos"],
-          ] as [Filtro, string][]
-        ).map(([id, rotulo]) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={filtro === id}
-            onClick={() => setFiltro(id)}
-            className={cn(
-              "rotulo h-11 shrink-0 cursor-pointer rounded-full border px-4 font-bold",
-              filtro === id ? "border-rosa bg-rosa text-preto" : "border-borda hover:border-rosa/60",
-            )}
-          >
-            {rotulo}
-          </button>
-        ))}
-      </div>
-
-      {lista.length === 0 ? (
-        <Vazio
-          titulo={filtro === "controlados" ? "Nenhum produto com controle" : "Nada por aqui"}
-          texto={
-            filtro === "controlados"
-              ? "Abra “Todos os produtos” e ligue o controle nos itens que você quer acompanhar."
-              : undefined
-          }
-          acao={filtro !== "todos" ? <Button variant="suave" onClick={() => setFiltro("todos")}>Ver todos os produtos</Button> : undefined}
-        />
-      ) : (
-        <ul className="space-y-2">
-          {lista.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-borda bg-superficie p-3">
-              <div className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-superficie-2">
-                {p.foto_url && <Image src={p.foto_url} alt="" fill sizes="48px" className="object-cover" />}
-              </div>
-              <div className="min-w-0 flex-1 basis-36">
-                <p className="font-bold leading-snug">{p.nome}</p>
-                {p.eh_kit ? <p className="text-sm text-rosa-texto">Kit · saldo calculado pelos componentes</p> : p.controla_estoque ? (
-                  <p
-                    className={cn(
-                      "font-mono text-sm",
-                      p.estoque <= 0 ? "text-perigo" : p.estoque <= 5 ? "text-amarelo-texto" : "text-suave",
-                    )}
-                  >
-                    {p.estoque <= 0 ? "Esgotado · 0" : `${p.estoque} ${p.unidade_estoque ?? "un"} em estoque${p.unidade_estoque === "ml" ? ` · ${(p.estoque / (p.volume_unidade ?? 1)).toFixed(2)} garrafas equivalentes` : ""}`}
-                  </p>
-                ) : (
-                  <p className="text-sm text-suave">Sem controle de estoque</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Interruptor disabled={!!p.eh_kit} checked={p.controla_estoque || !!p.eh_kit} onCheckedChange={() => alternarControle(p)} label={`Controlar estoque de ${p.nome}`} />
-                {!p.eh_kit && p.controla_estoque && (
-                  <>
-                    <Button size="sm" onClick={() => setAcao({ produto: p, modo: "entrada" })} aria-label={`Entrada de ${p.nome}`}>
-                      <PackagePlus /> <span className="hidden sm:inline">Entrada</span>
-                    </Button>
-                    <Button variant="suave" size="icone" onClick={() => setAcao({ produto: p, modo: "ajuste" })} aria-label={`Ajustar contagem de ${p.nome}`}>
-                      <SlidersHorizontal />
-                    </Button>
-                    <Button variant="fantasma" size="icone" onClick={() => setAcao({ produto: p, modo: "historico" })} aria-label={`Histórico de ${p.nome}`}>
-                      <History />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </li>
+      <section aria-label="Controle de estoque" className="produtos-erp">
+        <div className="produtos-ferramentas">
+          <div className="produtos-busca relative">
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
+            <Input type="search" aria-label="Buscar produto no estoque" placeholder="Pesquisar por nome ou código (SKU)" value={busca} onChange={(e) => setBusca(e.target.value)} className="h-9 pl-9" />
+          </div>
+          <Select className="h-9" aria-label="Filtrar por categoria" value={categoria} onChange={(e) => { setCategoria(e.target.value); setPagina(1); }}>
+            <option value="todas">Todas as categorias</option>
+            {categorias.dados.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </Select>
+          <Select className="h-9" aria-label="Filtrar por situação" value={situacao} onChange={(e) => { setSituacao(e.target.value); setPagina(1); }}>
+            <option value="todos">Ativos e inativos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option>
+          </Select>
+          <Select className="h-9" aria-label="Filtrar por estoque" value={filtro} onChange={(e) => { setFiltro(e.target.value as Filtro); setPagina(1); }}>
+            <option value="controlados">Com controle</option><option value="baixo">Estoque baixo ({baixos})</option><option value="todos">Todos os produtos</option>
+          </Select>
+        </div>
+        <div className="produtos-tipos" role="group" aria-label="Filtrar por tipo de produto">
+          {([["todos", "Todos"], ["simples", "Simples"], ["kits", "Kits"], ["insumos", "Insumos"]] as const).map(([valor, rotulo]) => (
+            <button key={valor} type="button" aria-pressed={tipo === valor} onClick={() => { setTipo(valor); setPagina(1); }} className={cn("produto-tipo", tipo === valor && "produto-tipo-ativo")}>
+              <span>{rotulo}</span><span className="tabular-nums">{contagens[valor]}</span>
+            </button>
           ))}
-        </ul>
-      )}
+        </div>
+        <p role="status" className="mb-2 text-xs text-suave">{filtrando ? "Filtrando…" : lista.length ? `${inicio + 1}–${Math.min(inicio + ITENS_POR_PAGINA, lista.length)} de ${lista.length} itens encontrados` : "Nenhum item encontrado"}</p>
+        {lista.length === 0 ? (
+          <Vazio titulo="Nenhum item encontrado" texto="Ajuste a pesquisa ou os filtros para encontrar um produto." acao={
+            <Button variant="suave" size="sm" onClick={() => { setBusca(""); setBuscaAplicada(""); setTipo("todos"); setFiltro("todos"); setSituacao("todos"); setCategoria("todas"); setPagina(1); }}>Limpar filtros</Button>
+          } />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-borda" tabIndex={0} role="region" aria-label="Tabela de estoque" aria-busy={filtrando}>
+            <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+              <caption className="sr-only">Estoque por produto, com situação e ações de movimentação</caption>
+              <thead className="bg-superficie-2 text-xs text-suave">
+                <tr>{["Produto", "Código (SKU)", "Unidade", "Preço", "Custo", "Estoque físico", "Disponível", "Controle", "Ativo", "Ações"].map((c, i) => (
+                  <th key={c} scope="col" className={cn("whitespace-nowrap px-3 py-2.5 font-normal", i >= 3 && i <= 6 && "text-right", i >= 7 && "text-center")}>{c}</th>
+                ))}</tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {itensPagina.map((p) => {
+                  const meta = metadata.get(p.id);
+                  const saldo = p.eh_kit ? saldos?.get(p.id) ?? null : p.controla_estoque ? saldoVendavel(p) : null;
+                  const baixo = p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5;
+                  return <tr key={p.id} className="bg-superficie transition-colors hover:bg-superficie-2">
+                    <td className="min-w-60 px-3 py-2">
+                      <span className={cn("leading-snug", !p.ativo && "text-suave")}>{p.nome}</span>
+                      <span className="ml-2 text-[.7rem] text-suave">{p.eh_kit ? "Kit" : tipoProduto(p) === "insumos" ? "Insumo" : ""}</span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-suave">{meta?.codigo || "—"}</td>
+                    <td className="px-3 py-2 text-xs">{p.eh_kit ? "KIT" : (p.unidade_estoque ?? "un").toUpperCase()}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{p.preco_pendente ? "Pendente" : tipoProduto(p) === "insumos" && !p.preco ? "—" : formatarPreco(p.preco)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-suave tabular-nums">{meta?.custo != null ? formatarPreco(meta.custo) : "—"}</td>
+                    <td className={cn("whitespace-nowrap px-3 py-2 text-right tabular-nums", !p.eh_kit && baixo && (p.estoque <= 0 ? "text-perigo" : "text-amarelo-texto"))}>
+                      {p.eh_kit || !p.controla_estoque ? "—" : p.estoque.toLocaleString("pt-BR") + " " + (p.unidade_estoque ?? "un")}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" title={p.eh_kit ? "Kits possíveis pelo saldo dos componentes e escolhas obrigatórias." : "Quantidade de vendas completas possível pelo estoque físico."}>{saldo === null ? "—" : saldo.toLocaleString("pt-BR")}</td>
+                    <td className="px-3 py-2"><div className="flex justify-center"><Interruptor disabled={!!p.eh_kit} checked={p.controla_estoque || !!p.eh_kit} onCheckedChange={() => void alternarControle(p)} label={"Controlar estoque de " + p.nome} /></div></td>
+                    <td className="px-3 py-2"><div className="flex justify-center"><Interruptor checked={p.ativo} onCheckedChange={() => void alternarAtivo(p)} label={p.nome + " ativo na loja"} /></div></td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center justify-end gap-1">
+                        {!p.eh_kit && p.controla_estoque ? <>
+                          <Button size="icone-sm" onClick={() => setAcao({ produto: p, modo: "entrada" })} aria-label={"Entrada de " + p.nome} title="Registrar entrada"><PackagePlus /></Button>
+                          <Button variant="fantasma" size="icone-sm" onClick={() => setAcao({ produto: p, modo: "ajuste" })} aria-label={"Ajustar contagem de " + p.nome} title="Ajustar contagem"><SlidersHorizontal /></Button>
+                          <Button variant="fantasma" size="icone-sm" onClick={() => setAcao({ produto: p, modo: "historico" })} aria-label={"Histórico de " + p.nome} title="Histórico"><History /></Button>
+                        </> : <span className="px-2 text-xs text-suave">{p.eh_kit ? "Via componentes" : "Sem controle"}</span>}
+                      </div>
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {lista.length > ITENS_POR_PAGINA && <nav aria-label="Paginação do estoque" className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          <span className="mr-2 text-xs text-suave">Página {paginaAtual} de {totalPaginas} · 50 por página</span>
+          <Button variant="suave" size="sm" disabled={paginaAtual === 1 || filtrando} onClick={() => setPagina(paginaAtual - 1)}>Anterior</Button>
+          <Button variant="suave" size="sm" disabled={paginaAtual === totalPaginas || filtrando} onClick={() => setPagina(paginaAtual + 1)}>Próxima</Button>
+        </nav>}
+      </section>
 
       <Sheet open={!!acao} onOpenChange={(v) => !v && setAcao(null)}>
         <SheetContent className="overflow-y-auto" rotuloFechar="Fechar">

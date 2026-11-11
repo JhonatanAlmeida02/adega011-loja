@@ -3,30 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { combina } from "@/lib/busca";
-import type { Categoria, DadosLoja, Produto } from "@/lib/tipos";
-import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
+import type { DadosLoja, Produto } from "@/lib/tipos";
+import { textoBuscaProduto } from "@/lib/variacoes";
+import { montarSecoes } from "@/lib/catalogo-secoes";
 import { cn } from "@/lib/utils";
 import { DivisorRua } from "@/components/marca/grafismos";
 import { CardProduto } from "./card-produto";
 import { ProdutoDetalhe } from "./produto-detalhe";
-
-interface Secao {
-  id: string;
-  nome: string;
-  produtos: Produto[];
-}
-
-function montarSecoes(categorias: Categoria[], produtos: Produto[]): Secao[] {
-  const visiveis = agruparVariacoes(produtos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem));
-  const ativas = categorias.filter((c) => c.ativa).sort((a, b) => a.ordem - b.ordem);
-  const secoes: Secao[] = ativas
-    .map((c) => ({ id: c.slug, nome: c.nome, produtos: visiveis.filter((p) => p.categoria_id === c.id) }))
-    .filter((s) => s.produtos.length > 0);
-  // Produtos de categorias inativas somem; os sem categoria vão para "Outros".
-  const orfaos = visiveis.filter((p) => !p.categoria_id);
-  if (orfaos.length) secoes.push({ id: "outros", nome: "Outros", produtos: orfaos });
-  return secoes;
-}
 
 export function Catalogo({ loja }: { loja: DadosLoja }) {
   const secoes = useMemo(() => montarSecoes(loja.categorias, loja.produtos), [loja.categorias, loja.produtos]);
@@ -203,7 +186,7 @@ function Grade({
   carregarJa?: boolean;
 }) {
   return (
-    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+    <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
       {produtos.map((p, i) => (
         <CardProduto key={p.id} produto={p} onAbrir={onAbrir} carregarJa={carregarJa && i < 2} />
       ))}

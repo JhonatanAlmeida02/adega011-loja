@@ -78,8 +78,9 @@ export function useUploadsPendentes() {
       registrar(url: string | null) {
         if (url) enviadas.current.add(url);
       },
-      concluir(manter: string | null) {
-        for (const url of enviadas.current) if (url !== manter) void removerImagem(url);
+      concluir(manter: string | null | (string | null)[]) {
+        const salvas = new Set(Array.isArray(manter) ? manter : [manter]);
+        for (const url of enviadas.current) if (!salvas.has(url)) void removerImagem(url);
         enviadas.current.clear();
       },
     }),

@@ -43,7 +43,7 @@ export function Banner({ config }: { config: Configuracoes }) {
           <a
             href={link}
             {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-            className="mt-4 inline-flex h-10 [@media(pointer:coarse)]:min-h-11 w-fit items-center gap-2 rounded-full bg-rosa px-5 text-sm font-bold text-preto shadow-[0_10px_30px_-10px_rgba(255,92,138,0.8)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.97]"
+            className="mt-4 inline-flex h-10 [@media(pointer:coarse)]:min-h-11 w-fit items-center gap-2 rounded-full bg-rosa px-5 text-sm font-bold text-preto shadow-[0_10px_30px_-10px_var(--acao-brilho)] transition-transform hover:bg-rosa-hover active:scale-[0.97]"
           >
             {config.banner_botao_texto}
             {!externo && <ArrowDown aria-hidden className="size-4" />}
