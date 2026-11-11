@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, BellOff, MapPin, Phone, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { revalidarLoja } from "@/app/admin/acoes";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
-import { NOMES_PAGAMENTO, NOMES_STATUS, type Pedido, type StatusPedido } from "@/lib/tipos";
+import { NOMES_ORIGEM, NOMES_PAGAMENTO, NOMES_STATUS, type Pedido, type StatusPedido } from "@/lib/tipos";
 import { apenasDigitos, cn, formatarPreco, mascararTelefone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/marca/icones";
@@ -131,6 +132,8 @@ export function PaginaPedidos() {
       toast.error(`Não foi possível atualizar: ${error.message}`);
     } else {
       toast.success(`Pedido #${pedido.numero}: ${NOMES_STATUS[novo]}`);
+      // Cancelar/reativar mexe no estoque: atualiza a vitrine
+      if (novo === "cancelado" || anterior === "cancelado") void revalidarLoja().catch(() => null);
     }
   };
 
@@ -208,20 +211,27 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
           <p className="titulo text-3xl">#{p.numero}</p>
           <p className="rotulo mt-1 text-suave">{fmtData.format(new Date(p.criado_em))}</p>
         </div>
-        <span className={cn("rotulo rounded-full px-3 py-1.5 font-bold", CORES_STATUS[p.status])}>{NOMES_STATUS[p.status]}</span>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className={cn("rotulo rounded-full px-3 py-1.5 font-bold", CORES_STATUS[p.status])}>{NOMES_STATUS[p.status]}</span>
+          <span className="rotulo rounded-full border border-borda px-2 py-0.5 text-[0.65rem] text-suave">{NOMES_ORIGEM[p.origem ?? "site"]}</span>
+        </div>
       </div>
 
       <div className="mt-4 space-y-1.5 text-sm">
         <p className="text-base font-bold">{p.cliente_nome}</p>
-        <p className="flex items-center gap-2 text-suave">
-          <Phone className="size-4" aria-hidden /> {mascararTelefone(tel)}
-        </p>
+        {tel && (
+          <p className="flex items-center gap-2 text-suave">
+            <Phone className="size-4" aria-hidden /> {mascararTelefone(tel)}
+          </p>
+        )}
         <p className="flex items-start gap-2 text-suave">
           <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
           {p.tipo === "entrega" ? (
             <span>
               {p.endereco} <span className="text-branco/70">· {p.regiao_nome}</span>
             </span>
+          ) : p.tipo === "balcao" ? (
+            "Venda no balcão"
           ) : (
             "Retirada na loja"
           )}
@@ -229,10 +239,13 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
       </div>
 
       <ul className="mt-4 space-y-1 border-y border-borda py-3 text-sm">
-        {p.itens.map((it) => (
-          <li key={it.produto_id} className="flex justify-between gap-3">
+        {p.itens.map((it, i) => (
+          <li key={`${it.produto_id}-${i}`} className="flex justify-between gap-3">
             <span>
               <span className="font-mono font-bold text-rosa">{it.quantidade}x</span> {it.nome}
+              {it.opcoes && it.opcoes.length > 0 && (
+                <span className="block pl-7 text-suave">+ {it.opcoes.map((o) => o.nome).join(", ")}</span>
+              )}
             </span>
             <span className="font-mono text-suave">{formatarPreco(it.preco * it.quantidade)}</span>
           </li>
@@ -240,6 +253,12 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
       </ul>
 
       <dl className="mt-3 space-y-1 text-sm">
+        {p.desconto > 0 && (
+          <div className="flex justify-between">
+            <dt className="text-suave">Desconto</dt>
+            <dd className="font-mono text-sucesso">− {formatarPreco(p.desconto)}</dd>
+          </div>
+        )}
         {p.taxa > 0 && (
           <div className="flex justify-between">
             <dt className="text-suave">Taxa de entrega</dt>
@@ -271,11 +290,13 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
             Marcar: {NOMES_STATUS[proximo]}
           </Button>
         )}
+        {tel && (
         <Button asChild size="sm" variant="whatsapp">
           <a href={`https://wa.me/${telWa}`} target="_blank" rel="noopener noreferrer">
             <IconeWhatsApp /> Cliente
           </a>
         </Button>
+        )}
         <label className="sr-only" htmlFor={`status-${p.id}`}>
           Alterar status do pedido {p.numero}
         </label>

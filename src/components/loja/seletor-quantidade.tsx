@@ -12,7 +12,12 @@ export function SeletorQuantidade({
   nome,
   tamanho = "md",
   className,
+  maximo,
+  minimo = 0,
 }: {
+  maximo?: number;
+  /** Com mínimo 1 o botão "−" para no 1 (sem lixeira). */
+  minimo?: number;
   quantidade: number;
   onMais: () => void;
   onMenos: () => void;
@@ -33,9 +38,10 @@ export function SeletorQuantidade({
         type="button"
         onClick={onMenos}
         className={cn(botao, dim, "text-branco hover:bg-borda")}
-        aria-label={quantidade === 1 ? `Remover ${nome} do carrinho` : `Diminuir quantidade de ${nome}`}
+        disabled={minimo > 0 && quantidade <= minimo}
+        aria-label={quantidade === 1 && minimo === 0 ? `Remover ${nome} do carrinho` : `Diminuir quantidade de ${nome}`}
       >
-        {quantidade === 1 ? <Trash2 className="size-[18px]" /> : <Minus className="size-5" />}
+        {quantidade === 1 && minimo === 0 ? <Trash2 className="size-[18px]" /> : <Minus className="size-5" />}
       </button>
       <span
         key={quantidade}
@@ -47,7 +53,7 @@ export function SeletorQuantidade({
       <button
         type="button"
         onClick={onMais}
-        disabled={quantidade >= QTD_MAXIMA}
+        disabled={quantidade >= Math.min(QTD_MAXIMA, maximo ?? QTD_MAXIMA)}
         className={cn(botao, dim, "bg-rosa text-preto hover:bg-[#ff7a9f]")}
         aria-label={`Aumentar quantidade de ${nome}`}
       >

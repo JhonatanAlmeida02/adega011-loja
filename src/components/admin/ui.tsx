@@ -3,12 +3,13 @@
 import { useId, useRef, useState } from "react";
 import Image from "next/image";
 import { AlertDialog } from "radix-ui";
-import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Link2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { importarImagemPorLink } from "@/app/admin/acoes";
 import { enviarImagem } from "@/lib/admin/imagens";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Interruptor } from "@/components/ui/campos";
+import { Input, Interruptor } from "@/components/ui/campos";
 
 export function CabecalhoPagina({
   titulo,
@@ -136,6 +137,9 @@ export function UploadImagem({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
+  const [modoLink, setModoLink] = useState(false);
+  const [link, setLink] = useState("");
+  const [erroLink, setErroLink] = useState("");
   const id = useId();
 
   const escolher = async (arquivo: File | undefined) => {
@@ -150,6 +154,19 @@ export function UploadImagem({
       setEnviando(false);
       if (input.current) input.current.value = "";
     }
+  };
+
+  const importar = async () => {
+    if (!link.trim()) return setErroLink("Cole o link da imagem.");
+    setErroLink("");
+    setEnviando(true);
+    const r = await importarImagemPorLink(link.trim(), pasta);
+    setEnviando(false);
+    if (!r.ok) return setErroLink(r.erro);
+    onChange(r.url);
+    setLink("");
+    setModoLink(false);
+    toast.success("Imagem importada");
   };
 
   return (
@@ -184,14 +201,59 @@ export function UploadImagem({
         aria-labelledby={`${id}-rotulo`}
         onChange={(e) => void escolher(e.target.files?.[0])}
       />
-      {valor && (
-        <div className="mt-3 flex gap-2">
-          <Button type="button" variant="suave" size="sm" onClick={() => input.current?.click()} disabled={enviando}>
-            <ImagePlus /> Trocar
-          </Button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button type="button" variant="suave" size="sm" onClick={() => input.current?.click()} disabled={enviando}>
+          <ImagePlus /> {valor ? "Trocar foto" : "Escolher foto"}
+        </Button>
+        <Button
+          type="button"
+          variant={modoLink ? "contorno" : "suave"}
+          size="sm"
+          onClick={() => setModoLink((v) => !v)}
+          disabled={enviando}
+          aria-expanded={modoLink}
+          aria-controls={`${id}-link`}
+        >
+          <Link2 /> Colar link
+        </Button>
+        {valor && (
           <Button type="button" variant="fantasma" size="sm" onClick={() => onChange(null)} disabled={enviando}>
             <Trash2 /> Remover
           </Button>
+        )}
+      </div>
+      {modoLink && (
+        <div id={`${id}-link`} className="mt-3 rounded-2xl border border-borda bg-superficie-2 p-3">
+          <label htmlFor={`${id}-url`} className="rotulo mb-2 block text-suave">
+            Link da imagem
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id={`${id}-url`}
+              type="url"
+              inputMode="url"
+              placeholder="https://…/foto.jpg"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter importa a imagem em vez de enviar o formulário do produto
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void importar();
+                }
+              }}
+              aria-invalid={!!erroLink}
+              aria-describedby={`${id}-ajuda`}
+              autoFocus
+            />
+            <Button type="button" onClick={() => void importar()} disabled={enviando || !link.trim()} className="shrink-0">
+              Importar
+            </Button>
+          </div>
+          <p id={`${id}-ajuda`} role={erroLink ? "alert" : undefined} className={cn("mt-2 text-sm", erroLink ? "text-perigo" : "text-suave")}>
+            {erroLink ||
+              "Na foto, clique com o botão direito (ou segure no celular) e escolha “Copiar endereço da imagem”. Use só imagens que você tem direito de usar."}
+          </p>
         </div>
       )}
     </div>

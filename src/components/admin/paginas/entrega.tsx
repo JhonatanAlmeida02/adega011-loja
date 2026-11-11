@@ -6,7 +6,7 @@ import { useConfiguracoes } from "@/lib/admin/config";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import type { Configuracoes, RegiaoEntrega } from "@/lib/tipos";
-import { centavosParaCampo, formatarPreco, paraCentavos } from "@/lib/utils";
+import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Interruptor } from "@/components/ui/campos";
 import { ListaOrdenavel } from "../lista-ordenavel";
@@ -20,9 +20,10 @@ export function PaginaEntrega() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Entrega" descricao="Regiões com taxa, pedido mínimo e modos de entrega." />
+      <CabecalhoPagina titulo="Entrega" descricao="Como a taxa é calculada, pedido mínimo e modos de entrega." />
       <RegrasGerais config={config} gravar={gravar} />
-      <Regioes {...regioes} />
+      <ModoFrete key={`${config.modo_frete}-${config.taxa_base}-${config.taxa_por_km}-${config.raio_maximo_km}-${config.cidade_padrao}`} config={config} gravar={gravar} />
+      {config.modo_frete === "regioes" && <Regioes {...regioes} />}
     </>
   );
 }
@@ -83,6 +84,97 @@ function RegrasGerais({
           }}
         />
       </div>
+    </Cartao>
+  );
+}
+
+function ModoFrete({
+  config,
+  gravar,
+}: {
+  config: Configuracoes;
+  gravar: (c: Partial<Configuracoes>, msg?: string) => Promise<boolean>;
+}) {
+  const [base, setBase] = useState(centavosParaCampo(config.taxa_base));
+  const [porKm, setPorKm] = useState(centavosParaCampo(config.taxa_por_km));
+  const [raio, setRaio] = useState(String(config.raio_maximo_km).replace(".", ","));
+  const [cidade, setCidade] = useState(config.cidade_padrao);
+  const [erro, setErro] = useState("");
+
+  const b = paraCentavos(base || "0");
+  const k = paraCentavos(porKm || "0");
+  const r = Number(raio.replace(",", "."));
+  const exemplo = (km: number) => (b !== null && k !== null ? formatarPreco(b + Math.round(km * k)) : "—");
+
+  const salvarDistancia = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (b === null || k === null) return setErro("Valores inválidos (ex.: 2,00 e 1,50).");
+    if (!(r > 0 && r <= 200)) return setErro("Raio entre 0,1 e 200 km.");
+    setErro("");
+    await gravar(
+      { taxa_base: b, taxa_por_km: k, raio_maximo_km: Math.round(r * 10) / 10, cidade_padrao: cidade.trim() },
+      "Frete por distância salvo",
+    );
+  };
+
+  return (
+    <Cartao className="mb-6">
+      <h2 className="titulo mb-3 text-3xl">Como cobrar a entrega</h2>
+      <div role="radiogroup" aria-label="Modo de cálculo do frete" className="grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            ["distancia", "Por km rodado", "Taxa base + valor por km, calculado pelo Google Maps"],
+            ["regioes", "Por região", "Cliente escolhe o bairro/região com taxa fixa"],
+          ] as const
+        ).map(([valor, titulo, texto]) => {
+          const sel = config.modo_frete === valor;
+          return (
+            <button
+              key={valor}
+              type="button"
+              role="radio"
+              aria-checked={sel}
+              onClick={() => !sel && gravar({ modo_frete: valor }, `Frete: ${titulo.toLowerCase()}`)}
+              className={cn(
+                "min-h-16 cursor-pointer rounded-2xl border-2 px-4 py-3 text-left transition-colors",
+                sel ? "border-rosa bg-rosa/10" : "border-borda bg-superficie-2 hover:border-rosa/50",
+              )}
+            >
+              <span className="block font-bold">{titulo}</span>
+              <span className="text-sm text-suave">{texto}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {config.modo_frete === "distancia" && (
+        <form onSubmit={salvarDistancia} className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Campo label="Taxa inicial (R$)" htmlFor="f-base">
+            <Input id="f-base" inputMode="decimal" value={base} onChange={(e) => setBase(e.target.value.replace(/[^\d,.]/g, ""))} className="font-mono" />
+          </Campo>
+          <Campo label="Por km rodado (R$)" htmlFor="f-km">
+            <Input id="f-km" inputMode="decimal" value={porKm} onChange={(e) => setPorKm(e.target.value.replace(/[^\d,.]/g, ""))} className="font-mono" />
+          </Campo>
+          <Campo label="Entrega até (km)" htmlFor="f-raio" ajuda="Mais longe que isso, o site não aceita entrega">
+            <Input id="f-raio" inputMode="decimal" value={raio} onChange={(e) => setRaio(e.target.value.replace(/[^\d,.]/g, ""))} className="font-mono" />
+          </Campo>
+          <Campo label="Cidade padrão" htmlFor="f-cidade" ajuda="Já vem preenchida no checkout">
+            <Input id="f-cidade" placeholder="Itatiba - SP" value={cidade} onChange={(e) => setCidade(e.target.value)} maxLength={80} />
+          </Campo>
+          <p className="rounded-xl bg-superficie-2 p-3 text-sm text-suave sm:col-span-2">
+            Simulação: 2 km = <strong className="preco">{exemplo(2)}</strong> · 5 km = <strong className="preco">{exemplo(5)}</strong> · 8 km ={" "}
+            <strong className="preco">{exemplo(8)}</strong>. A distância é pela rua (rota de carro), arredondada para cima a cada 100 m.
+          </p>
+          {erro && (
+            <p role="alert" className="text-sm text-perigo sm:col-span-2">
+              {erro}
+            </p>
+          )}
+          <div className="sm:col-span-2">
+            <Button type="submit">Salvar frete por distância</Button>
+          </div>
+        </form>
+      )}
     </Cartao>
   );
 }

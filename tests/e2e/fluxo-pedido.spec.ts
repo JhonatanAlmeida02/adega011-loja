@@ -87,7 +87,7 @@ test("fluxo completo: carrinho, taxa por região e link do WhatsApp", async ({ p
   await page.getByLabel("Observações (opcional)").fill("Bem gelada!");
 
   await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
-  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/5511900000000?text=");
+  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/5511941522867?text=");
 
   const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
   expect(texto).toContain("2x IPA 473 ml — R$ 29,80");
@@ -144,9 +144,46 @@ test("retirada na loja não cobra taxa e lembra os dados do cliente", async ({ p
 test("loja fechada bloqueia o envio e mostra quando abre", async ({ page }) => {
   await abrirLoja(page, SEGUNDA_10H);
   await expect(page.getByText("Fechado agora")).toBeVisible();
-  await expect(page.getByText("Abre hoje às 16h").first()).toBeVisible();
+  await expect(page.getByText("Abre hoje às 14h").first()).toBeVisible();
   await page.getByRole("button", { name: "Adicionar Gin London Dry 750 ml" }).click();
   await page.getByRole("button", { name: /Ver carrinho/ }).click();
   await page.getByRole("button", { name: "Finalizar pedido" }).click();
   await expect(page.getByRole("button", { name: "Loja fechada" })).toBeDisabled();
+});
+
+test("adicionais: Copão de Askov com Baly entra no carrinho e na mensagem", async ({ page }) => {
+  await abrirLoja(page);
+  const whatsapp = await capturarWhatsApp(page);
+
+  await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
+  const detalhe = page.getByRole("dialog", { name: "Copão de Askov" });
+  await expect(detalhe.getByRole("button", { name: /Adicionar · R\$ 10,00/ })).toBeVisible();
+  const opcao = (nome: string) => detalhe.locator("label").filter({ hasText: nome });
+  await opcao("Baly").click();
+  // Rádio opcional: escolher outro troca a opção
+  await opcao("Red Bull").click();
+  await expect(detalhe.getByRole("radio", { name: /Baly/ })).not.toBeChecked();
+  await opcao("Baly").click();
+  await detalhe.getByRole("button", { name: "Aumentar quantidade de Copão de Askov" }).click();
+  await detalhe.getByRole("button", { name: /Adicionar · R\$ 26,00/ }).click();
+
+  // Sem adicional também (linha separada no carrinho)
+  await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
+  await page.getByRole("dialog", { name: "Copão de Askov" }).getByRole("button", { name: /Adicionar · R\$ 10,00/ }).click();
+
+  await page.getByRole("button", { name: /Ver carrinho: 3 itens, total R\$ 36,00/ }).click();
+  const carrinho = page.getByRole("dialog");
+  await expect(carrinho.getByText("+ Baly")).toBeVisible();
+  await carrinho.getByRole("button", { name: "Finalizar pedido" }).click();
+  await page.getByRole("dialog").getByRole("radio", { name: "Retirada" }).check({ force: true });
+  await page.getByLabel("Nome").fill("Duda");
+  await page.getByLabel("WhatsApp / telefone").fill("11912340000");
+  await page.getByRole("dialog").getByRole("radio", { name: "Pix" }).check({ force: true });
+  await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+
+  await expect.poll(() => whatsapp.url).toContain("wa.me");
+  const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
+  expect(texto).toContain("2x Copão de Askov (+ Baly) — R$ 26,00");
+  expect(texto).toContain("1x Copão de Askov — R$ 10,00");
+  expect(texto).toContain("*Total: R$ 36,00*");
 });

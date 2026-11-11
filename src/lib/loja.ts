@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { ordenarGrupos } from "./loja-ordenacao";
 import { supabaseConfigurado } from "./supabase/config";
 import { supabasePublico } from "./supabase/servidor";
 import {
@@ -25,7 +26,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
     return {
       config: CONFIG_EXEMPLO,
       categorias: CATEGORIAS_EXEMPLO,
-      produtos: PRODUTOS_EXEMPLO,
+      produtos: PRODUTOS_EXEMPLO.map(ordenarGrupos),
       regioes: REGIOES_EXEMPLO,
       modoDemo: true,
     };
@@ -37,7 +38,10 @@ export async function carregarLoja(): Promise<DadosLoja> {
     sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
     sb
       .from("produtos")
-      .select("id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem")
+      .select(
+        "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque," +
+          "grupos:grupos_opcoes(id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem))",
+      )
       .order("ordem"),
     sb.from("regioes_entrega").select("id,nome,taxa,ordem,ativa").order("ordem"),
   ]);
@@ -67,7 +71,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
   return {
     config: { ...CONFIG_EXEMPLO, ...cfg },
     categorias: (categorias.data ?? []) as Categoria[],
-    produtos: (produtos.data ?? []) as Produto[],
+    produtos: ((produtos.data ?? []) as unknown as Produto[]).map(ordenarGrupos),
     regioes: (regioes.data ?? []) as RegiaoEntrega[],
     modoDemo: false,
   };

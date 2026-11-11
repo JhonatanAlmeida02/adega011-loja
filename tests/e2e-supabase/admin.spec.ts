@@ -14,6 +14,14 @@ async function entrar(page: Page) {
   await expect(page.getByRole("heading", { name: "Pedidos" })).toBeVisible();
 }
 
+/** Navega pelo menu do painel (no celular, algumas telas ficam em "Mais"). */
+async function irPara(page: Page, nome: string) {
+  const link = page.getByRole("link", { name: nome, exact: true });
+  if (await link.first().isVisible()) return link.first().click();
+  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("dialog").getByRole("link", { name: nome, exact: true }).click();
+}
+
 async function abrirLoja(page: Page) {
   await page.clock.setFixedTime(SEXTA_20H);
   await page.addInitScript(() => localStorage.setItem("adega011:maior-de-idade", "sim"));
@@ -98,7 +106,7 @@ test("criar produto com foto, categoria nova e reordenar", async ({ page, browse
   const categoria = `Gelo ${sufixo}`;
   const produto = `Gelo 5 kg ${sufixo}`;
   await entrar(page);
-  await page.getByRole("link", { name: "Categorias" }).click();
+  await irPara(page, "Categorias");
   await page.getByLabel("Nome da nova categoria").fill(categoria);
   await page.getByRole("button", { name: "Adicionar categoria" }).click();
   await expect(page.getByText("Categoria criada")).toBeVisible();
@@ -139,12 +147,12 @@ test("criar produto com foto, categoria nova e reordenar", async ({ page, browse
 
 test("taxa de entrega, banner e loja fechada", async ({ page, browser }) => {
   await entrar(page);
-  await page.getByRole("link", { name: "Entrega" }).click();
+  await irPara(page, "Entrega");
   await page.getByLabel("Taxa de Região A · até 3 km em reais").fill("6,50");
   await page.getByRole("button", { name: "Salvar Região A · até 3 km" }).click();
   await expect(page.getByText("Região salva")).toBeVisible();
 
-  await page.getByRole("link", { name: "Banner" }).click();
+  await irPara(page, "Banner");
   await page.getByLabel("Título").fill("Sextou no 011");
   await page.getByRole("button", { name: "Salvar banner" }).click();
   await expect(page.getByText("Banner atualizado na loja")).toBeVisible();
@@ -158,7 +166,7 @@ test("taxa de entrega, banner e loja fechada", async ({ page, browser }) => {
   await loja.getByLabel("Região / bairro").selectOption({ label: "Região A · até 3 km — R$ 6,50" });
   await expect(loja.getByTestId("total")).toHaveText("R$ 126,40");
 
-  await page.getByRole("link", { name: "Loja", exact: true }).click();
+  await irPara(page, "Loja");
   await page.getByRole("radio", { name: /Forçar fechada/ }).click();
   await expect(page.getByText("Modo: Forçar fechada")).toBeVisible();
   await loja.reload();
@@ -166,10 +174,10 @@ test("taxa de entrega, banner e loja fechada", async ({ page, browser }) => {
 
   // Restaura
   await page.getByRole("radio", { name: /Automático/ }).click();
-  await page.getByRole("link", { name: "Banner" }).click();
+  await irPara(page, "Banner");
   await page.getByLabel("Título").fill("São Paulo no copo");
   await page.getByRole("button", { name: "Salvar banner" }).click();
-  await page.getByRole("link", { name: "Entrega" }).click();
+  await irPara(page, "Entrega");
   await page.getByLabel("Taxa de Região A · até 3 km em reais").fill("5,00");
   await page.getByRole("button", { name: "Salvar Região A · até 3 km" }).click();
   await expect(page.getByText("Região salva")).toBeVisible();
@@ -321,4 +329,185 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   await page.getByRole("alertdialog").getByRole("button", { name: "Excluir" }).click();
   await expect(page.getByText("Produto excluído")).toBeVisible();
   await expect.poll(() => existe(segunda)).toBe(false);
+});
+
+test("importar foto por link (e recusar link que não é imagem)", async ({ page, request }) => {
+  // Precisa de internet. Imagem pública e estável usada só para o teste.
+  const LINK = process.env.LINK_IMAGEM_TESTE ?? "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png";
+  await entrar(page);
+  await page.getByRole("link", { name: "Produtos", exact: true }).click();
+  await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
+  const form = page.getByRole("dialog", { name: "Editar produto" });
+
+  await form.getByRole("button", { name: "Colar link" }).click();
+  const campo = form.getByLabel("Link da imagem");
+
+  // Link de página: mensagem de ajuda, sem enviar o formulário do produto
+  await campo.fill("https://www.google.com/");
+  await campo.press("Enter");
+  await expect(form.getByRole("alert")).toContainText("não de uma imagem");
+  await expect(form).toBeVisible();
+
+  // Link de imagem: baixa, converte e mostra a prévia vinda do Supabase
+  await campo.fill(LINK);
+  await form.getByRole("button", { name: "Importar" }).click();
+  await expect(page.getByText("Imagem importada")).toBeVisible({ timeout: 20_000 });
+  const src = await form.getByAltText("Pré-visualização").getAttribute("src");
+  const original = decodeURIComponent(new URL(src!, "http://x").searchParams.get("url")!);
+  expect(original).toContain("/storage/v1/object/public/produtos/produtos/");
+  expect(original).toMatch(/\.webp$/);
+  const img = await request.get(original);
+  expect(img.headers()["content-type"]).toBe("image/webp");
+
+  // Fecha sem salvar: a imagem importada é descartada do Storage
+  await page.getByRole("button", { name: "Fechar formulário" }).click();
+  await expect.poll(async () => (await request.get(original)).status()).not.toBe(200);
+});
+
+test("estoque: entrada, esgota com pedidos e volta ao cancelar", async ({ page, browser }) => {
+  await entrar(page);
+  await page.getByRole("link", { name: "Estoque", exact: true }).click();
+  await page.getByRole("button", { name: /Todos os produtos/ }).click();
+  await page.getByRole("switch", { name: "Controlar estoque de Whisky 12 anos 1 L" }).click();
+  await page.getByRole("button", { name: "Entrada de Whisky 12 anos 1 L" }).click();
+  await page.getByLabel("Quantas unidades chegaram?").fill("2");
+  await page.getByRole("button", { name: "Registrar entrada" }).click();
+  await expect(page.getByText("Whisky 12 anos 1 L: 2 em estoque")).toBeVisible();
+
+  const loja = await (await browser.newContext()).newPage();
+  await loja.context().route(/^https:\/\/(wa\.me|api\.whatsapp\.com)\//, (r) => r.fulfill({ status: 200, body: "ok" }));
+  await abrirLoja(loja);
+  const card = loja.getByRole("article", { name: "Whisky 12 anos 1 L" });
+  await expect(card).toContainText("Últimas 2");
+  await loja.getByRole("button", { name: "Adicionar Whisky 12 anos 1 L" }).click();
+  await loja.getByRole("button", { name: "Aumentar quantidade de Whisky 12 anos 1 L" }).click();
+  await expect(loja.getByRole("button", { name: "Aumentar quantidade de Whisky 12 anos 1 L" })).toBeDisabled();
+  await loja.getByRole("button", { name: /Ver carrinho/ }).click();
+  await loja.getByRole("button", { name: "Finalizar pedido" }).click();
+  await loja.getByRole("dialog").getByRole("radio", { name: "Retirada" }).check({ force: true });
+  await loja.getByLabel("Nome").fill("Cliente Estoque");
+  await loja.getByLabel("WhatsApp / telefone").fill(`119${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`);
+  await loja.getByRole("dialog").getByRole("radio", { name: "Pix" }).check({ force: true });
+  await loja.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+  await expect.poll(async () => (await loja.evaluate(() => location.href)) + "").not.toBe("");
+
+  // Esgotou: a loja mostra esgotado
+  const outra = await (await browser.newContext()).newPage();
+  await abrirLoja(outra);
+  await expect(outra.getByRole("article", { name: "Whisky 12 anos 1 L" })).toContainText("Esgotado");
+
+  // Cancelar o pedido devolve as 2 unidades
+  await page.getByRole("link", { name: "Pedidos", exact: true }).click();
+  await page.getByRole("tab", { name: "Todos" }).click();
+  const pedido = page.getByRole("main").getByRole("listitem").filter({ hasText: "Cliente Estoque" });
+  const numero = (await pedido.locator("p.titulo").first().textContent())!.replace("#", "");
+  await pedido.getByLabel(`Alterar status do pedido ${numero}`).selectOption("cancelado");
+  await expect(page.getByText(`Pedido #${numero}: Cancelado`)).toBeVisible();
+  await page.goto("/admin/estoque");
+  await expect(
+    page.getByRole("main").getByRole("listitem").filter({ hasText: "Whisky 12 anos 1 L" }).filter({ hasText: "em estoque" }),
+  ).toContainText("2 em estoque");
+});
+
+test("PDV: abre caixa, vende com adicional e desconto, imprime cupom e fecha", async ({ browser }) => {
+  // Desktop: painel da venda na coluna ao lado
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.getByRole("link", { name: "PDV", exact: true }).click();
+  await page.getByLabel("Troco inicial (R$)").fill("50");
+  await page.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(page.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+
+  await page.getByRole("button", { name: "Vender Copão de Askov" }).click();
+  const opcoes = page.getByRole("dialog", { name: "Copão de Askov" });
+  await opcoes.locator("label").filter({ hasText: "Baly" }).click();
+  await opcoes.getByRole("button", { name: /Adicionar · R\$ 13,00/ }).click();
+  await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+  await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+
+  const venda = page.getByRole("complementary");
+  await expect(venda.getByTestId("pdv-total")).toHaveText("R$ 42,80");
+  await venda.getByLabel("Desconto", { exact: true }).fill("2,80");
+  await expect(venda.getByTestId("pdv-total")).toHaveText("R$ 40,00");
+  await venda.getByLabel("Recebido", { exact: true }).fill("50");
+  await expect(venda.getByText("Troco: R$ 10,00")).toBeVisible();
+  await venda.getByRole("button", { name: "Finalizar · R$ 40,00" }).click();
+
+  const cupom = page.getByRole("dialog", { name: /Venda #/ });
+  await expect(cupom).toContainText("Troco");
+  await expect(cupom).toContainText("R$ 10,00");
+  await expect(cupom).toContainText("+ Baly");
+  await cupom.getByRole("button", { name: "Nova venda" }).click();
+
+  await page.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = page.getByRole("dialog", { name: "Fechar caixa" });
+  // 50 de troco + 40 da venda em dinheiro = 90 esperados
+  await expect(fechar).toContainText("R$ 90,00");
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("88");
+  await expect(fechar.getByText("Falta R$ 2,00")).toBeVisible();
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+  await expect(page.getByText(/faltou R\$ 2,00/)).toBeVisible();
+});
+
+test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
+  await entrar(page);
+  await irPara(page, "Entrega");
+  await page.getByRole("radio", { name: /Por km rodado/ }).click();
+  await expect(page.getByText("Frete: por km rodado")).toBeVisible();
+  await page.getByLabel("Cidade padrão").fill("Itatiba - SP");
+  await page.getByRole("button", { name: "Salvar frete por distância" }).click();
+  await expect(page.getByText("Frete por distância salvo")).toBeVisible();
+
+  const loja = await (await browser.newContext()).newPage();
+  let url = "";
+  await loja.context().route(/^https:\/\/(wa\.me|api\.whatsapp\.com)\//, (r) => {
+    if (r.request().url().startsWith("https://wa.me/")) url = r.request().url();
+    return r.fulfill({ status: 200, body: "ok" });
+  });
+  await abrirLoja(loja);
+  await loja.getByRole("button", { name: "Adicionar Gin London Dry 750 ml" }).click();
+  await loja.getByRole("button", { name: /Ver carrinho/ }).click();
+  await loja.getByRole("button", { name: "Finalizar pedido" }).click();
+  await loja.getByLabel("Nome").fill("Cliente Km");
+  await loja.getByLabel("WhatsApp / telefone").fill(`119${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`);
+  // MAPS_FAKE=1 nos testes: "[km=6]" define a distância
+  await loja.getByLabel("Rua e número").fill("Rua das Flores, 120 [km=6]");
+  await loja.getByLabel("Bairro").fill("Centro");
+  await expect(loja.getByLabel("Cidade")).toHaveValue("Itatiba - SP");
+  await loja.getByRole("button", { name: /Calcular entrega/ }).click();
+  await expect(loja.getByText(/6,0 km/).first()).toBeVisible();
+  await expect(loja.getByTestId("total")).toHaveText("R$ 130,90"); // 119,90 + 2,00 + 6 × 1,50
+  // Mudou o endereço depois do cálculo: precisa calcular de novo
+  await loja.getByLabel("Bairro").fill("Outro");
+  await expect(loja.getByRole("button", { name: /Calcular entrega/ })).toBeVisible();
+  // Voltou ao mesmo endereço: a cotação anterior volta a valer
+  await loja.getByLabel("Bairro").fill("Centro");
+  await expect(loja.getByTestId("total")).toHaveText("R$ 130,90");
+  await loja.getByRole("dialog").getByRole("radio", { name: "Pix" }).check({ force: true });
+  await loja.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+  await expect.poll(() => url, { timeout: 15_000 }).toContain("wa.me");
+  const texto = new URL(url).searchParams.get("text") ?? "";
+  expect(texto).toContain("Taxa de entrega (6,0 km): R$ 11,00");
+  expect(texto).toMatch(/#\d+/);
+
+  // Cotação não pode ser criada nem lida pelo visitante
+  const urlSb = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const chave = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const h = { apikey: chave, Authorization: `Bearer ${chave}`, "Content-Type": "application/json" };
+  const forjada = await request.post(`${urlSb}/rest/v1/cotacoes_frete`, { headers: h, data: { endereco: "x", endereco_formatado: "x", km: 0, taxa: 0 } });
+  expect([401, 403]).toContain(forjada.status());
+
+  // Volta para regiões (outros testes usam)
+  await page.getByRole("radio", { name: /Por região/ }).click();
+  await expect(page.getByText("Frete: por região")).toBeVisible();
+});
+
+test("relatórios mostram as vendas do período", async ({ page }) => {
+  await entrar(page);
+  await page.goto("/admin/relatorios");
+  await page.getByRole("button", { name: "Hoje" }).click();
+  await expect(page.getByText("Faturamento", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mais vendidos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Por origem" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Balcão");
 });

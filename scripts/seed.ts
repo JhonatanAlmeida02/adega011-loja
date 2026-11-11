@@ -36,7 +36,12 @@ async function upsert(tabela: string, linhas: object | object[]) {
 async function main() {
   await upsert("configuracoes", { id: 1, ...CONFIG_EXEMPLO });
   await upsert("categorias", CATEGORIAS_EXEMPLO);
-  await upsert("produtos", PRODUTOS_EXEMPLO);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  await upsert("produtos", PRODUTOS_EXEMPLO.map(({ grupos, estoque, ...p }) => p));
+  const grupos = PRODUTOS_EXEMPLO.flatMap((p) => p.grupos ?? []);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  await upsert("grupos_opcoes", grupos.map(({ opcoes, ...g }) => g));
+  await upsert("opcoes", grupos.flatMap((g) => g.opcoes));
   await upsert("regioes_entrega", REGIOES_EXEMPLO);
   console.log("\nPronto! Loja populada com 4 categorias, 10 produtos e 3 regiões.");
 }
