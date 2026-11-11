@@ -37,7 +37,7 @@ export function SeletorQuantidade({
       <button
         type="button"
         onClick={onMenos}
-        className={cn(botao, dim, "text-branco hover:bg-borda")}
+        className={cn(botao, dim, "text-texto hover:bg-borda")}
         disabled={minimo > 0 && quantidade <= minimo}
         aria-label={quantidade === 1 && minimo === 0 ? `Remover ${nome} do carrinho` : `Diminuir quantidade de ${nome}`}
       >

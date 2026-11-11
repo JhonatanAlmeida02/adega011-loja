@@ -76,7 +76,7 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
   return (
     <div id="cardapio">
       {/* Barra fixa: busca + categorias */}
-      <div className="sticky top-0 z-30 border-b border-borda/70 bg-preto/90 backdrop-blur-md supports-[backdrop-filter]:bg-preto/75">
+      <div className="sticky top-0 z-30 border-b border-borda/70 bg-fundo/90 backdrop-blur-md supports-[backdrop-filter]:bg-fundo/75">
         <div className="mx-auto max-w-6xl px-4 pt-2">
           <div className="relative">
             <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
@@ -91,13 +91,13 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar gin, vinho, cerveja…"
-              className="h-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:text-base w-full rounded-full border border-borda bg-superficie-2 pl-10 pr-10 text-sm text-branco placeholder:text-[#8f8f8f] focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 [&::-webkit-search-cancel-button]:hidden"
+              className="h-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:text-base w-full rounded-full border border-borda bg-superficie-2 pl-10 pr-10 text-sm text-texto placeholder:text-suave/70 focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 [&::-webkit-search-cancel-button]:hidden"
             />
             {buscando && (
               <button
                 type="button"
                 onClick={() => setBusca("")}
-                className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-suave hover:text-branco"
+                className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-suave hover:text-texto"
                 aria-label="Limpar busca"
               >
                 <X className="size-4" />
@@ -120,7 +120,7 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
                     "rotulo h-8 [@media(pointer:coarse)]:min-h-11 shrink-0 cursor-pointer rounded-full border px-3 text-xs font-bold transition-colors",
                     sel
                       ? "border-rosa bg-rosa text-preto"
-                      : "border-borda bg-superficie text-branco hover:border-rosa/70",
+                      : "border-borda bg-superficie text-texto hover:border-rosa/70",
                   )}
                 >
                   {s.nome}

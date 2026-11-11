@@ -134,11 +134,11 @@ export function PaginaEstoque() {
               </div>
               <div className="min-w-0 flex-1 basis-36">
                 <p className="font-bold leading-snug">{p.nome}</p>
-                {p.eh_kit ? <p className="text-sm text-rosa">Kit · saldo calculado pelos componentes</p> : p.controla_estoque ? (
+                {p.eh_kit ? <p className="text-sm text-rosa-texto">Kit · saldo calculado pelos componentes</p> : p.controla_estoque ? (
                   <p
                     className={cn(
                       "font-mono text-sm",
-                      p.estoque <= 0 ? "text-perigo" : p.estoque <= 5 ? "text-amarelo" : "text-suave",
+                      p.estoque <= 0 ? "text-perigo" : p.estoque <= 5 ? "text-amarelo-texto" : "text-suave",
                     )}
                   >
                     {p.estoque <= 0 ? "Esgotado · 0" : `${p.estoque} ${p.unidade_estoque ?? "un"} em estoque${p.unidade_estoque === "ml" ? ` · ${(p.estoque / (p.volume_unidade ?? 1)).toFixed(2)} garrafas equivalentes` : ""}`}
@@ -235,7 +235,7 @@ function FormMovimento({
         <div>
           <SheetTitle className="titulo text-4xl">{modo === "entrada" ? "Entrada" : "Ajustar contagem"}</SheetTitle>
           <SheetDescription className="mt-1 text-suave">
-            {produto.nome} · hoje: <strong className="font-mono text-branco">{produto.estoque} {produto.unidade_estoque ?? "un"}</strong>
+            {produto.nome} · hoje: <strong className="font-mono text-texto">{produto.estoque} {produto.unidade_estoque ?? "un"}</strong>
           </SheetDescription>
         </div>
         {temEmbalagem && modo === "entrada" && <Campo label="Forma de entrada" htmlFor="mov-formato">
@@ -305,7 +305,7 @@ function Historico({ produto }: { produto: Produto }) {
               <span
                 className={cn(
                   "w-14 shrink-0 text-right font-mono text-lg font-bold",
-                  m.quantidade > 0 ? "text-sucesso" : "text-rosa",
+                  m.quantidade > 0 ? "text-sucesso" : "text-rosa-texto",
                 )}
               >
                 {m.quantidade > 0 ? `+${m.quantidade}` : m.quantidade} {m.unidade ?? "un"}

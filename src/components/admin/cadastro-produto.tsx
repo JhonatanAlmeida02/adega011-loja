@@ -157,13 +157,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
 
   return <form ref={formRef} onSubmit={enviar} noValidate data-testid="cadastro-produto" className="cadastro-erp mx-auto min-w-0 max-w-[1120px] text-sm">
     <div className="mb-5 flex items-center gap-2 text-xs text-suave">
-      <button type="button" className="cursor-pointer hover:text-rosa" disabled={salvando} onClick={() => router.push("/admin/produtos")}>Produtos</button>
+      <button type="button" className="cursor-pointer hover:text-rosa-texto" disabled={salvando} onClick={() => router.push("/admin/produtos")}>Produtos</button>
       <span aria-hidden>/</span><span>{existente ? "Editar cadastro" : "Novo cadastro"}</span>
     </div>
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button type="button" variant="suave" size="icone-sm" disabled={salvando} aria-label="Voltar para produtos" onClick={() => router.push("/admin/produtos")}><ArrowLeft /></Button>
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-rosa/20 bg-rosa/10 text-rosa"><Package className="size-5" aria-hidden /></div>
+        <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-rosa/20 bg-rosa/10 text-rosa-texto"><Package className="size-5" aria-hidden /></div>
         <div className="min-w-0"><h1 className="truncate text-lg font-semibold" title={f.nome}>{f.nome.trim() || (existente ? "Editar produto" : "Novo produto")}</h1><p className="mt-0.5 text-xs text-suave">{tipoAtual} · {existente ? "Editar produto" : "Novo produto"}</p></div>
       </div>
       <Button type="submit" size="sm" className="rounded-lg shadow-none" disabled={salvando}><Check />{salvando ? "Salvando…" : "Salvar produto"}</Button>
@@ -174,13 +174,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
       <Tabs.Root value={aba} onValueChange={setAba}>
         <div className="mb-5 overflow-x-auto border-b border-borda">
           <Tabs.List aria-label="Seções do cadastro" className="flex min-w-max gap-5">
-            {abas.map((a) => <Tabs.Trigger key={a.id} value={a.id} aria-label={a.nome} disabled={salvando} className="cursor-pointer border-b-2 border-transparent px-0.5 py-3 text-[13px] text-suave outline-none transition-colors hover:text-branco focus-visible:ring-2 focus-visible:ring-rosa data-[state=active]:border-rosa data-[state=active]:font-medium data-[state=active]:text-rosa">{a.nome}{a.id === "variacoes" && <span className="ml-1.5 rounded bg-rosa/10 px-1.5 py-0.5 text-[10px] text-rosa">{variacoes.length}</span>}</Tabs.Trigger>)}
+            {abas.map((a) => <Tabs.Trigger key={a.id} value={a.id} aria-label={a.nome} disabled={salvando} className="cursor-pointer border-b-2 border-transparent px-0.5 py-3 text-[13px] text-suave outline-none transition-colors hover:text-texto focus-visible:ring-2 focus-visible:ring-rosa data-[state=active]:border-rosa data-[state=active]:font-medium data-[state=active]:text-rosa-texto">{a.nome}{a.id === "variacoes" && <span className="ml-1.5 rounded bg-rosa/10 px-1.5 py-0.5 text-[10px] text-rosa-texto">{variacoes.length}</span>}</Tabs.Trigger>)}
           </Tabs.List>
         </div>
 
         <Tabs.Content value="gerais" forceMount className={painel}>
           <div><h2 className="font-semibold">Dados do produto</h2><p className="mt-1 text-xs text-suave">Informações principais para o cadastro e a venda.</p></div>
-          {dados.produto.preco_pendente && <p role="status" className="rounded-lg border border-amarelo/30 bg-amarelo/5 px-3 py-2 text-xs text-amarelo">Preço não informado na importação. Preencha o preço para concluir este cadastro.</p>}
+          {dados.produto.preco_pendente && <p role="status" className="rounded-lg border border-amarelo/30 bg-amarelo/5 px-3 py-2 text-xs text-amarelo-texto">Preço não informado na importação. Preencha o preço para concluir este cadastro.</p>}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="sm:col-span-2 lg:col-span-2"><Campo label="Nome" htmlFor="p-nome" erro={erros.nome}><Input id="p-nome" value={f.nome} onChange={(e) => set("nome", e.target.value)} maxLength={comVariacoes ? 60 : 100} aria-invalid={!!erros.nome} /></Campo></div>
             <Campo label="Tipo de produto" htmlFor="p-tipo"><Select id="p-tipo" disabled={!!f.familia_id} value={comVariacoes ? "variacoes" : f.eh_kit ? "kit" : "simples"} onChange={(e) => {
@@ -207,8 +207,8 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
               {f.unidade_estoque !== "ml" && <Campo label="Unidades por pacote" htmlFor="p-pacote" erro={erros.pacote} ajuda={comVariacoes ? "Aplicado à grade; você pode ajustar cada variação depois." : "Ex.: 50 folhas por pacote. Use 1 para entradas somente avulsas."}><Input id="p-pacote" type="number" min={1} max={1000000} step={1} value={f.unidades_pacote ?? 1} onChange={(e) => { const quantidade = Number(e.target.value); set("unidades_pacote", quantidade); if (comVariacoes) setVariacoes((vs) => vs.map((v) => ({ ...v, unidades_pacote: quantidade }))); }} aria-invalid={!!erros.pacote} /></Campo>}
               {!comVariacoes && f.unidade_estoque === "ml" && <Campo label="Volume por venda (ml)" htmlFor="p-volume" erro={erros.volume} ajuda="1 litro = 1.000 ml. Garrafa de 900 ml = 900."><Input id="p-volume" type="number" min={1} max={1000000} value={f.volume_unidade ?? 1} onChange={(e) => set("volume_unidade", Number(e.target.value))} aria-invalid={!!erros.volume} /></Campo>}
             </div>
-            {f.unidade_estoque !== "ml" && (f.unidades_pacote ?? 1) > 1 && <p className="text-xs text-rosa">1 pacote = {f.unidades_pacote} UN. {f.vende_pacote ? `Cada venda deste produto baixa ${f.unidades_pacote} UN.` : "Cada venda deste produto baixa 1 UN."} Na entrada, escolha pacotes ou unidades avulsas.</p>}
-            {f.unidade_estoque === "ml" && !comVariacoes && <p className="text-xs text-rosa">Cada venda baixa {f.volume_unidade ?? 1} ml do saldo.</p>}
+            {f.unidade_estoque !== "ml" && (f.unidades_pacote ?? 1) > 1 && <p className="text-xs text-rosa-texto">1 pacote = {f.unidades_pacote} UN. {f.vende_pacote ? `Cada venda deste produto baixa ${f.unidades_pacote} UN.` : "Cada venda deste produto baixa 1 UN."} Na entrada, escolha pacotes ou unidades avulsas.</p>}
+            {f.unidade_estoque === "ml" && !comVariacoes && <p className="text-xs text-rosa-texto">Cada venda baixa {f.volume_unidade ?? 1} ml do saldo.</p>}
             {!comVariacoes && <div className="inline-flex items-baseline gap-3 rounded-lg border border-borda bg-superficie px-4 py-3"><span className="text-xs text-suave">Saldo atual</span><strong className="font-mono text-lg font-medium">{f.estoque} <span className="text-xs font-normal text-suave">{f.unidade_estoque ?? "un"}</span></strong></div>}
             <p className="text-xs text-suave">Entradas e ajustes são feitos em Estoque. O cadastro preserva o saldo atual.</p>
           </>}
@@ -268,7 +268,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         </Tabs.Content>}
       </Tabs.Root>
     </fieldset>
-    <footer className="sticky bottom-20 z-20 mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-borda bg-preto/95 py-3 backdrop-blur md:bottom-0">
+    <footer className="sticky bottom-20 z-20 mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-borda bg-fundo/95 py-3 backdrop-blur md:bottom-0">
       <p className="text-xs text-suave">{salvando ? "Salvando cadastro…" : "Salve para aplicar as alterações do cadastro."}</p>
       <div className="flex items-center gap-2"><Button type="button" size="sm" variant="suave" disabled={salvando} onClick={() => router.push("/admin/produtos")}>Cancelar</Button><Button type="submit" size="sm" className="shadow-none" disabled={salvando}><Check />{salvando ? "Salvando…" : "Salvar cadastro"}</Button></div>
     </footer>

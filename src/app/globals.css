@@ -1,10 +1,20 @@
 @import "tailwindcss";
 
 /*
- * Identidade visual Adega011
+ * Identidade visual Adega011 (Manual de Marca, cap. Cores)
  * Proporção de uso: preto 60% · rosa 25% · branco 10% · amarelo 5%.
- * Contraste sobre o preto: rosa 6,7:1 · amarelo 12,3:1 · branco 19,7:1.
- * Evite rosa sobre branco (2,9:1) e texto branco sobre rosa.
+ *
+ * Dois temas:
+ *  - escuro (padrão): preto de fundo, rosa de assinatura. Rosa 6,7:1, amarelo 12,3:1
+ *    e branco 19,7:1 sobre o preto.
+ *  - claro: branco de fundo e texto preto. O manual pede para EVITAR rosa sobre
+ *    branco (2,9:1) e amarelo sobre branco (1,6:1). Por isso, no claro, o rosa e o
+ *    amarelo aparecem como PREENCHIMENTO (botão rosa com texto preto, 6,7:1) e os
+ *    textos usam "rosa-texto"/"amarelo-texto", tons fechados com 4,5:1 ou mais.
+ *    Preços ficam em preto (Space Mono Bold), como o selo "preto em branco".
+ *
+ * Cores da marca (bg-rosa, text-preto em botão etc.) nunca mudam com o tema.
+ * Cores de função (fundo, texto, superfícies, rosa-texto...) mudam.
  */
 :root {
   --adega-preto: #0b0b0b;
@@ -14,18 +24,27 @@
 }
 
 @theme {
+  /* Cores da marca: fixas nos dois temas */
   --color-preto: #0b0b0b;
   --color-rosa: #ff5c8a;
   --color-rosa-escuro: #e0406f;
   --color-branco: #ffffff;
   --color-amarelo: #ffc400;
+  --color-sucesso-vivo: #4ade80; /* preenchimento com texto preto */
+  --color-perigo-vivo: #ff6b6b; /* preenchimento com texto preto */
 
-  /* Superfícies e textos auxiliares (todos com contraste >= 4,5:1 sobre o preto) */
+  /* Cores de função: valores do tema escuro (o claro troca abaixo) */
+  --color-fundo: #0b0b0b;
+  --color-texto: #ffffff;
   --color-superficie: #141414;
   --color-superficie-2: #1c1c1c;
   --color-superficie-3: #262626;
   --color-borda: #2e2e2e;
   --color-suave: #b5b5b5;
+  --color-rosa-texto: #ff5c8a;
+  --color-amarelo-texto: #ffc400;
+  --color-preco: #ffc400;
+  --color-foco: #ffc400;
   --color-perigo: #ff6b6b;
   --color-sucesso: #4ade80;
 
@@ -66,6 +85,53 @@
 
 /* Slightly denser app-wide rem scale: 16px -> 15px with default browser settings.
  * Applies consistently to the storefront, admin, dialogs and POS. */
+/* Tema claro: textos com 4,5:1 ou mais sobre o branco e as superfícies */
+[data-tema="claro"] {
+  color-scheme: light;
+  --color-fundo: #ffffff;
+  --color-texto: #0b0b0b;
+  --color-superficie: #f7f7f7;
+  --color-superficie-2: #efefef;
+  --color-superficie-3: #e4e4e4;
+  --color-borda: #d6d6d6;
+  --color-suave: #555555;
+  --color-rosa-texto: #c4164f;
+  --color-amarelo-texto: #8a5a00;
+  --color-preco: #0b0b0b;
+  --color-foco: #0b0b0b;
+  --color-perigo: #b91c1c;
+  --color-sucesso: #137333;
+}
+
+/* Bloco que fica sempre escuro (ex.: banner com foto), mesmo no tema claro */
+.tema-escuro {
+  color-scheme: dark;
+  --color-fundo: #0b0b0b;
+  --color-texto: #ffffff;
+  --color-superficie: #141414;
+  --color-superficie-2: #1c1c1c;
+  --color-superficie-3: #262626;
+  --color-borda: #2e2e2e;
+  --color-suave: #b5b5b5;
+  --color-rosa-texto: #ff5c8a;
+  --color-amarelo-texto: #ffc400;
+  --color-preco: #ffc400;
+  --color-foco: #ffc400;
+  --color-perigo: #ff6b6b;
+  --color-sucesso: #4ade80;
+  color: var(--color-texto);
+}
+
+/* Logos e imagens com versão por tema (selo rosa no escuro, preto no claro) */
+[data-tema="claro"] .so-escuro,
+:root:not([data-tema="claro"]) .so-claro,
+[data-tema="claro"] .tema-escuro .so-claro {
+  display: none !important;
+}
+[data-tema="claro"] .tema-escuro .so-escuro {
+  display: revert !important;
+}
+
 html {
   font-size: 93.75%;
   color-scheme: dark;
@@ -74,14 +140,14 @@ html {
 }
 
 body {
-  background: var(--color-preto);
-  color: var(--color-branco);
+  background: var(--color-fundo);
+  color: var(--color-texto);
   font-family: var(--font-sans);
 }
 
 /* Foco sempre visível para navegação por teclado */
 :focus-visible {
-  outline: 3px solid var(--color-amarelo);
+  outline: 3px solid var(--color-foco);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -109,7 +175,7 @@ body {
   .preco {
     font-family: var(--font-mono);
     font-weight: 700;
-    color: var(--color-amarelo);
+    color: var(--color-preco);
     font-variant-numeric: tabular-nums;
   }
 
@@ -283,9 +349,9 @@ body {
 .produtos-ferramentas > div:not(.produtos-busca) { flex: 0 1 12rem; min-width: 10rem; }
 .produtos-tipos { display: flex; gap: .5rem; overflow-x: auto; border-bottom: 1px solid var(--color-borda); margin-bottom: .625rem; }
 .produto-tipo { display: flex; flex-direction: column; flex-shrink: 0; gap: .125rem; min-width: 5.5rem; padding: .5rem 1rem; border-bottom: 2px solid transparent; color: var(--color-suave); font-size: .8125rem; line-height: 1.25; cursor: pointer; }
-.produto-tipo:hover { color: var(--color-branco); }
-.produto-tipo-ativo { border-bottom-color: var(--color-rosa); color: var(--color-branco); font-weight: 600; }
-.produto-tipo-ativo > span:last-child { color: var(--color-rosa); }
+.produto-tipo:hover { color: var(--color-texto); }
+.produto-tipo-ativo { border-bottom-color: var(--color-rosa); color: var(--color-texto); font-weight: 600; }
+.produto-tipo-ativo > span:last-child { color: var(--color-rosa-texto); }
 @media (max-width: 639px) {
   .produtos-ferramentas > .produtos-busca { flex-basis: 100%; }
   .produtos-ferramentas > div:not(.produtos-busca) { flex: 1 1 9rem; min-width: 0; }

@@ -30,7 +30,7 @@ export function SheetContent({
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] data-[state=open]:animate-[fade-in_0.2s_ease-out] data-[state=closed]:animate-[fade-out_0.15s_ease-in]" />
       <Dialog.Content
         className={cn(
-          "fixed z-50 flex flex-col bg-superficie text-branco shadow-2xl outline-none",
+          "fixed z-50 flex flex-col bg-superficie text-texto shadow-2xl outline-none",
           lado === "responsivo" &&
             "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-[1.75rem] border-t border-borda data-[state=open]:animate-[sobe_0.3s_cubic-bezier(0.2,0.8,0.2,1)] data-[state=closed]:animate-[desce_0.2s_ease-in] md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-[440px] md:rounded-none md:rounded-l-[1.75rem] md:border-t-0 md:border-l md:data-[state=open]:animate-[entra-direita_0.3s_cubic-bezier(0.2,0.8,0.2,1)] md:data-[state=closed]:animate-[sai-direita_0.2s_ease-in]",
           lado === "centro" &&
@@ -44,7 +44,7 @@ export function SheetContent({
         )}
         {children}
         <Dialog.Close
-          className="absolute right-3 top-3 inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-suave transition-colors hover:bg-superficie-3 hover:text-branco"
+          className="absolute right-3 top-3 inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-suave transition-colors hover:bg-superficie-3 hover:text-texto"
           aria-label={rotuloFechar}
         >
           <X className="size-5" />

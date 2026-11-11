@@ -36,7 +36,7 @@ export function VerificacaoIdade() {
   return (
     <Dialog.Root open={aberto}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-preto/95 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-fundo/95 backdrop-blur-sm" />
         <Dialog.Content
           onEscapeKeyDown={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}

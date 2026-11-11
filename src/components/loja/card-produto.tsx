@@ -84,7 +84,7 @@ export function CardProduto({
 
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="text-sm font-bold leading-snug">{produto.nome}</h3>
-        {temVariacoes && <p className="text-xs text-rosa">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
+        {temVariacoes && <p className="text-xs text-rosa-texto">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
         {produto.descricao && (
           <p className="line-clamp-2 text-[0.82rem] leading-snug text-suave sm:text-sm">{produto.descricao}</p>
         )}

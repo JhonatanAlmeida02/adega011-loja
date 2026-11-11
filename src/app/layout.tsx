@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, DM_Sans, Space_Mono } from "next/font/google";
-import { Toaster } from "sonner";
 import { RegistrarSW } from "@/components/registrar-sw";
+import { Notificacoes } from "@/components/tema/notificacoes";
+import { SCRIPT_TEMA } from "@/lib/tema";
 import "./globals.css";
 
 const anton = Anton({
@@ -51,7 +52,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0B0B0B",
-  colorScheme: "dark",
+  colorScheme: "dark light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -61,23 +62,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="pt-BR"
+      suppressHydrationWarning
       className={`${anton.variable} ${dmSans.variable} ${spaceMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="flex min-h-full flex-col">
         {children}
         <RegistrarSW />
-        <Toaster
-          theme="dark"
-          position="top-center"
-          toastOptions={{
-            style: {
-              background: "#1c1c1c",
-              border: "1px solid #2e2e2e",
-              color: "#fff",
-              fontFamily: "var(--font-dm-sans)",
-            },
-          }}
-        />
+        <Notificacoes />
       </body>
     </html>
   );

@@ -33,6 +33,38 @@ test("acessibilidade: verificação de idade, vitrine, carrinho e checkout", asy
   await auditar(page, "checkout com erros");
 });
 
+test("acessibilidade no tema claro: vitrine, carrinho e checkout", async ({ page }) => {
+  await page.clock.setFixedTime(SEXTA_20H);
+  await page.addInitScript(() => {
+    localStorage.setItem("adega011:maior-de-idade", "sim");
+    localStorage.setItem("adega011-tema", "claro");
+  });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-tema", "claro");
+  await page.waitForTimeout(1800);
+  await auditar(page, "vitrine (claro)");
+
+  await page.getByRole("button", { name: "Ver detalhes de Copão de Askov" }).click();
+  await page.waitForTimeout(400);
+  await auditar(page, "detalhe com adicionais (claro)");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Adicionar Gin London Dry 750 ml" }).click();
+  await page.getByRole("button", { name: /Ver carrinho/ }).click();
+  await page.waitForTimeout(400);
+  await auditar(page, "carrinho (claro)");
+  await page.getByRole("button", { name: "Finalizar pedido" }).click();
+  await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+  await page.waitForTimeout(400);
+  await auditar(page, "checkout com erros (claro)");
+});
+
+test("acessibilidade no tema claro: login do painel", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("adega011-tema", "claro"));
+  await page.goto("/admin/login");
+  await auditar(page, "login (claro)");
+});
+
 test("acessibilidade: login do painel", async ({ page }) => {
   await page.goto("/admin/login");
   await auditar(page, "login");

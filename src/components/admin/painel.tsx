@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -26,6 +25,8 @@ import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "./ui";
+import { AlternarTema } from "@/components/tema/alternar-tema";
+import { LogoTema, SELO } from "@/components/tema/logo-tema";
 
 const LINKS = [
   { href: "/admin", rotulo: "Pedidos", icone: ClipboardList, principal: true },
@@ -61,8 +62,8 @@ export function Painel({ children }: { children: React.ReactNode }) {
       <Centro>
         <h1 className="titulo text-4xl">Painel indisponível</h1>
         <p className="mt-3 text-suave">
-          A loja está em modo demonstração. Configure as variáveis <code className="text-amarelo">NEXT_PUBLIC_SUPABASE_URL</code> e{" "}
-          <code className="text-amarelo">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> (veja o README) para usar o painel.
+          A loja está em modo demonstração. Configure as variáveis <code className="text-amarelo-texto">NEXT_PUBLIC_SUPABASE_URL</code> e{" "}
+          <code className="text-amarelo-texto">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> (veja o README) para usar o painel.
         </p>
         <Button asChild className="mt-6">
           <Link href="/">Voltar para a loja</Link>
@@ -77,7 +78,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
       <Centro>
         <h1 className="titulo text-4xl">Acesso negado</h1>
         <p className="mt-3 text-suave">
-          {sessao.email} não tem permissão de administrador. Rode <code className="text-amarelo">npm run criar-admin</code> com
+          {sessao.email} não tem permissão de administrador. Rode <code className="text-amarelo-texto">npm run criar-admin</code> com
           esse e-mail ou entre com outra conta.
         </p>
         <Button className="mt-6" onClick={sair}>
@@ -98,14 +99,14 @@ export function Painel({ children }: { children: React.ReactNode }) {
       )}>
         <div className={cn("flex h-16 shrink-0 items-center border-b border-borda", recolhida ? "justify-center" : "gap-2 px-4")}>
           <Link href="/admin" aria-label="Adega011 · Painel" className={cn("flex min-w-0 flex-1 items-center justify-center gap-2", recolhida && "hidden")}>
-            {!recolhida && <Image src="/logo-selo.svg" alt="" width={36} height={36} />}
+            {!recolhida && <LogoTema {...SELO} alt="" width={36} height={36} />}
             {!recolhida && <span className="min-w-0 flex-1"><span className="titulo block text-xl">Adega011</span><span className="text-xs text-suave">Painel da loja</span></span>}
           </Link>
           <button type="button" onClick={() => setRecolhida((v) => !v)}
             aria-label={recolhida ? "Expandir menu lateral" : "Recolher menu lateral"}
             aria-expanded={!recolhida} aria-controls="links-painel"
             title={recolhida ? "Expandir menu" : "Recolher menu"}
-            className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg text-suave hover:bg-superficie-3 hover:text-branco"
+            className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg text-suave hover:bg-superficie-3 hover:text-texto"
           >
             {recolhida ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
           </button>
@@ -117,7 +118,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
               className={cn(
                 "flex h-10 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
                 recolhida ? "justify-center" : "px-3",
-                ativo(href) ? "bg-rosa/10 text-rosa" : "text-suave hover:bg-superficie-3 hover:text-branco",
+                ativo(href) ? "bg-rosa/10 text-rosa-texto" : "text-suave hover:bg-superficie-3 hover:text-texto",
               )}
             >
               <Icone className="size-5 shrink-0" aria-hidden />
@@ -127,21 +128,24 @@ export function Painel({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="shrink-0 space-y-1 border-t border-borda p-3">
           {!recolhida && <p className="mb-3 truncate px-2 text-xs text-suave" title={sessao.email}>{sessao.email}</p>}
+          <AlternarTema comTexto={!recolhida}
+            className={cn("h-10 w-full rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "justify-start px-3")} />
           <a href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver loja (abre em nova aba)" title="Ver loja"
-            className={cn("flex h-10 items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-branco", recolhida ? "justify-center" : "px-3")}>
+            className={cn("flex h-10 items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "px-3")}>
             <ExternalLink className="size-5 shrink-0" />{!recolhida && "Ver loja"}
           </a>
           <button type="button" onClick={sair} aria-label="Sair" title="Sair"
-            className={cn("flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-branco", recolhida ? "justify-center" : "px-3")}>
+            className={cn("flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "px-3")}>
             <LogOut className="size-5 shrink-0" />{!recolhida && "Sair"}
           </button>
         </div>
       </aside>
 
       {/* Topo (celular) */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-borda bg-preto/90 px-4 py-3 backdrop-blur md:hidden print:hidden">
-        <Image src="/logo-selo.svg" alt="" width={40} height={40} />
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-borda bg-fundo/90 px-4 py-3 backdrop-blur md:hidden print:hidden">
+        <LogoTema {...SELO} alt="" width={40} height={40} />
         <span className="titulo flex-1 text-2xl">Painel</span>
+        <AlternarTema className="size-11 hover:bg-superficie-3" />
         <Button asChild variant="fantasma" size="icone" aria-label="Ver loja (abre em nova aba)">
           <a href="/" target="_blank" rel="noopener noreferrer">
             <ExternalLink />
@@ -169,7 +173,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
             aria-current={ativo(href) ? "page" : undefined}
             className={cn(
               "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[0.68rem] font-bold",
-              ativo(href) ? "text-rosa" : "text-suave",
+              ativo(href) ? "text-rosa-texto" : "text-suave",
             )}
           >
             <Icone className="size-5" aria-hidden />
@@ -182,7 +186,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
           aria-expanded={mais}
           className={cn(
             "flex min-h-14 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl text-[0.68rem] font-bold",
-            LINKS.some((l) => !l.principal && ativo(l.href)) ? "text-rosa" : "text-suave",
+            LINKS.some((l) => !l.principal && ativo(l.href)) ? "text-rosa-texto" : "text-suave",
           )}
         >
           <Menu className="size-5" aria-hidden />
@@ -203,7 +207,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
                   aria-current={ativo(href) ? "page" : undefined}
                   className={cn(
                     "flex h-14 items-center gap-3 rounded-2xl border px-4 font-bold",
-                    ativo(href) ? "border-rosa bg-rosa/10 text-rosa" : "border-borda bg-superficie-2",
+                    ativo(href) ? "border-rosa bg-rosa/10 text-rosa-texto" : "border-borda bg-superficie-2",
                   )}
                 >
                   <Icone className="size-5" aria-hidden /> {rotulo}

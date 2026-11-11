@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { LogoTema, SELO_SIMPLES } from "@/components/tema/logo-tema";
 import { cn } from "@/lib/utils";
 
 /** Foto do produto com lazy loading e fallback com o selo quando não houver imagem. */
@@ -33,7 +34,7 @@ export function FotoProduto({
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center">
-          <Image src="/marca/logo-selo-simples-rosa.svg" alt="" width={72} height={72} className="opacity-40" />
+          <LogoTema {...SELO_SIMPLES} alt="" width={72} height={72} className="opacity-40" />
         </div>
       )}
     </div>

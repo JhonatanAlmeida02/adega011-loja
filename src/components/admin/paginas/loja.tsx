@@ -43,7 +43,7 @@ function StatusManualCard({ config, gravar }: Props) {
         <span
           className={cn(
             "rounded-full px-3 py-1.5 text-sm font-bold",
-            status.aberta ? "bg-sucesso/15 text-sucesso" : "bg-rosa/15 text-rosa",
+            status.aberta ? "bg-sucesso/15 text-sucesso" : "bg-rosa/15 text-rosa-texto",
           )}
         >
           {status.titulo} · {status.detalhe}

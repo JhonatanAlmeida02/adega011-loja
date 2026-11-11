@@ -10,7 +10,7 @@ export function Banner({ config }: { config: Configuracoes }) {
 
   return (
     <section aria-label="Destaque" className="mx-auto w-full max-w-6xl px-4">
-      <div className="relative isolate flex min-h-[240px] flex-col justify-end overflow-hidden rounded-[1.25rem] border border-borda bg-superficie p-5 sm:min-h-[280px] sm:p-7 lg:min-h-[300px]">
+      <div className="tema-escuro relative isolate flex min-h-[240px] flex-col justify-end overflow-hidden rounded-[1.25rem] border border-borda bg-superficie p-5 sm:min-h-[280px] sm:p-7 lg:min-h-[300px]">
         {temImagem ? (
           <>
             <Image
@@ -32,12 +32,12 @@ export function Banner({ config }: { config: Configuracoes }) {
           </div>
         )}
 
-        <p className="rotulo mb-2 text-[.65rem] inline-flex w-fit items-center gap-2 rounded-full bg-preto/70 px-2.5 py-1 text-amarelo">
+        <p className="rotulo mb-2 text-[.65rem] inline-flex w-fit items-center gap-2 rounded-full bg-preto/70 px-2.5 py-1 text-amarelo-texto">
           <span aria-hidden className="size-1.5 rounded-full bg-amarelo" /> 011 · São Paulo
         </p>
         <h1 className="titulo max-w-3xl text-[2.5rem] sm:text-5xl lg:text-6xl">{config.banner_titulo}</h1>
         {config.banner_texto && (
-          <p className="mt-2 max-w-lg text-sm text-branco/90 sm:text-base">{config.banner_texto}</p>
+          <p className="mt-2 max-w-lg text-sm text-texto/90 sm:text-base">{config.banner_texto}</p>
         )}
         {config.banner_botao_texto && (
           <a

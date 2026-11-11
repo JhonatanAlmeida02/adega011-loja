@@ -187,3 +187,25 @@ test("adicionais: Copão de Askov com Baly entra no carrinho e na mensagem", asy
   expect(texto).toContain("1x Copão de Askov — R$ 10,00");
   expect(texto).toContain("*Total: R$ 36,00*");
 });
+
+test("tema: alterna claro/escuro e lembra a escolha", async ({ page }) => {
+  await abrirLoja(page);
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-tema", "escuro");
+  await expect(page.locator('img.so-escuro[src*="logo-selo"]').first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Usar tema claro" }).click();
+  await expect(html).toHaveAttribute("data-tema", "claro");
+  await expect(page.locator('img.so-claro[src*="logo-selo-preto"]').first()).toBeVisible();
+  await expect(page.locator('img.so-escuro[src*="logo-selo"]').first()).toBeHidden();
+  // fundo branco e texto preto, como no manual
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator("body")).toHaveCSS("color", "rgb(11, 11, 11)");
+
+  // A escolha vale na próxima visita, já no primeiro quadro
+  await page.reload();
+  await expect(html).toHaveAttribute("data-tema", "claro");
+  await page.getByRole("button", { name: "Usar tema escuro" }).click();
+  await expect(html).toHaveAttribute("data-tema", "escuro");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(11, 11, 11)");
+});

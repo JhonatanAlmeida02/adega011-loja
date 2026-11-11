@@ -163,6 +163,7 @@ A taxa é **taxa inicial + valor por km rodado** (ex.: R$ 2,00 + R$ 1,50/km), co
 - **Dados reais da loja** (WhatsApp, endereço, horário, pedido mínimo, regiões e taxas): edite pelo painel em `/admin/loja` e `/admin/entrega`. Os valores iniciais ficam em [`src/lib/dados-exemplo.ts`](src/lib/dados-exemplo.ts). Se mudar esse arquivo, rode `npm run seed:sql` para atualizar o `seed.sql`.
 - **Logo**: o selo usado no site é `public/logo-selo.svg`; as variações do kit estão em `public/marca/`. Os ícones do app e o favicon ficam em `public/icons/`, `src/app/icon.svg` e `src/app/apple-icon.png`.
 - **Cores e fontes**: em [`src/app/globals.css`](src/app/globals.css) (tokens `--color-*`).
+- **Tema claro e escuro**: o botão de sol/lua no topo da loja e no menu do painel troca o tema, e a escolha fica salva no aparelho. O padrão é o escuro (preto é a base da marca). Nos componentes, use as cores de função (`bg-fundo`, `text-texto`, `bg-superficie`, `text-suave`, `text-rosa-texto`, `text-amarelo-texto`, `text-preco`), que mudam com o tema. As cores da marca (`bg-rosa`, `bg-amarelo`, `text-preto` em cima delas) ficam fixas. Seguindo o manual, o tema claro não usa rosa nem amarelo como cor de texto sobre o branco (contraste baixo): eles aparecem como preenchimento, e os textos usam tons mais fechados. Um bloco com a classe `tema-escuro` (como o banner) fica sempre escuro. Para logos, use `LogoTema` (selo rosa no escuro e preto no claro).
 - **Fotos de exemplo**: são ilustrações em `public/produtos/`. Troque pelas fotos reais pelo painel.
 
 ## 8. Testes

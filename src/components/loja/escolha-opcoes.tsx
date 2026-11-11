@@ -80,7 +80,7 @@ export function EscolhaOpcoes({
                   <label
                     key={o.id}
                     className={cn(
-                      "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 px-3 py-2 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-amarelo",
+                      "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 px-3 py-2 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-foco",
                       marcada ? "border-rosa bg-rosa/10" : "border-transparent bg-superficie hover:border-rosa/40",
                       bloqueada && "cursor-not-allowed opacity-50",
                     )}
@@ -114,7 +114,7 @@ export function EscolhaOpcoes({
                       {o.nome}
                       {!o.disponivel && <span className="ml-2 text-xs text-suave">esgotado</span>}
                     </span>
-                    <span className="font-mono text-sm text-amarelo">{o.preco ? `+ ${formatarPreco(o.preco)}` : "grátis"}</span>
+                    <span className="font-mono text-sm text-preco">{o.preco ? `+ ${formatarPreco(o.preco)}` : "grátis"}</span>
                   </label>
                 );
               })}

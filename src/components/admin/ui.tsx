@@ -181,7 +181,7 @@ export function UploadImagem({
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-2 text-suave hover:text-branco"
+            className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-2 text-suave hover:text-texto"
           >
             <ImagePlus className="size-8" aria-hidden />
             <span className="text-sm">Toque para escolher uma imagem</span>
@@ -189,7 +189,7 @@ export function UploadImagem({
         )}
         {enviando && (
           <div className="absolute inset-0 grid place-items-center bg-preto/70" role="status">
-            <Loader2 className="size-8 animate-spin text-rosa" aria-label="Enviando imagem" />
+            <Loader2 className="size-8 animate-spin text-rosa-texto" aria-label="Enviando imagem" />
           </div>
         )}
       </div>

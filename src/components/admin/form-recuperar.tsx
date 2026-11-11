@@ -44,7 +44,7 @@ export function FormRecuperar() {
         <div className="text-center" role="status">
           <MailCheck className="mx-auto size-12 text-sucesso" aria-hidden />
           <p className="mt-4 text-suave">
-            Se <strong className="text-branco">{email.trim()}</strong> for o e-mail do painel, você vai receber um link
+            Se <strong className="text-texto">{email.trim()}</strong> for o e-mail do painel, você vai receber um link
             para criar uma nova senha. Abra o link neste mesmo navegador.
           </p>
         </div>
