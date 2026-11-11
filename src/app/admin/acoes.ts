@@ -57,3 +57,17 @@ export async function importarImagemPorLink(
     return { ok: false, erro: "Não foi possível importar essa imagem." };
   }
 }
+
+let ultimaAtualizacaoPublica = 0;
+
+/**
+ * Chamada pela loja depois de um pedido com produto de estoque controlado,
+ * para a vitrine mostrar "esgotado"/"últimas unidades" na hora.
+ * Pública (o cliente não está logado), então limitada a 1 vez a cada 3 s.
+ */
+export async function atualizarVitrineAposPedido(): Promise<void> {
+  const agora = Date.now();
+  if (agora - ultimaAtualizacaoPublica < 3000) return;
+  ultimaAtualizacaoPublica = agora;
+  updateTag(TAG_LOJA);
+}

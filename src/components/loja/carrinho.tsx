@@ -19,6 +19,7 @@ import {
   type ErrosCheckout,
   type LinhaCarrinho,
 } from "@/lib/pedido";
+import { atualizarVitrineAposPedido } from "@/app/admin/acoes";
 import { abrirWhatsApp, cotarFrete, registrarPedido } from "@/lib/registrar-pedido";
 import { NOMES_PAGAMENTO, type DadosLoja, type FormaPagamento } from "@/lib/tipos";
 import { cn, formatarPreco, mascararTelefone } from "@/lib/utils";
@@ -400,6 +401,10 @@ function EtapaCheckout({
       /* sem armazenamento disponível */
     }
 
+    // Atualiza a vitrine (estoque) antes de sair para o WhatsApp; no máximo 1,5 s de espera
+    if (linhas.some((l) => l.produto.controla_estoque)) {
+      await Promise.race([atualizarVitrineAposPedido().catch(() => null), new Promise((ok) => setTimeout(ok, 1500))]);
+    }
     limpar();
     onEnviado({ numero: r.numero, url, pix: dados.pagamento === "pix" });
     abrirWhatsApp(url, janela);

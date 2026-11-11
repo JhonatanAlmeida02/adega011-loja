@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, BellOff, MapPin, Phone, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { revalidarLoja } from "@/app/admin/acoes";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { NOMES_ORIGEM, NOMES_PAGAMENTO, NOMES_STATUS, type Pedido, type StatusPedido } from "@/lib/tipos";
 import { apenasDigitos, cn, formatarPreco, mascararTelefone } from "@/lib/utils";
@@ -131,6 +132,8 @@ export function PaginaPedidos() {
       toast.error(`Não foi possível atualizar: ${error.message}`);
     } else {
       toast.success(`Pedido #${pedido.numero}: ${NOMES_STATUS[novo]}`);
+      // Cancelar/reativar mexe no estoque: atualiza a vitrine
+      if (novo === "cancelado" || anterior === "cancelado") void revalidarLoja().catch(() => null);
     }
   };
 
