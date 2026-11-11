@@ -114,7 +114,7 @@ export function EscolhaOpcoes({
                       {o.nome}
                       {!o.disponivel && <span className="ml-2 text-xs text-suave">esgotado</span>}
                     </span>
-                    <span className="font-mono text-sm text-amarelo-texto">{o.preco ? `+ ${formatarPreco(o.preco)}` : "grátis"}</span>
+                    <span className="font-mono text-sm text-preco">{o.preco ? `+ ${formatarPreco(o.preco)}` : "grátis"}</span>
                   </label>
                 );
               })}

@@ -193,7 +193,7 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
   return (
     <div className="rounded-card border border-borda bg-superficie p-4">
       <p className="rotulo text-suave">{rotulo}</p>
-      <p className={cn("mt-1 font-mono text-xl font-bold tabular-nums sm:text-2xl", destaque && "text-amarelo-texto")}>
+      <p className={cn("mt-1 font-mono text-xl font-bold tabular-nums sm:text-2xl", destaque && "text-preco")}>
         {valor}
       </p>
     </div>

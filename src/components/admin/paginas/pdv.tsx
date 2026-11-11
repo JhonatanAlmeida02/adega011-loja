@@ -518,7 +518,7 @@ function PainelVenda({
                 ))}
               </div>
               {troco != null && (
-                <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-amarelo-texto")} aria-live="polite">
+                <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-preco")} aria-live="polite">
                   {recebidoInsuficiente ? `Faltam ${formatarPreco(-troco)}` : `Troco: ${formatarPreco(troco)}`}
                 </p>
               )}
@@ -796,7 +796,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
         </div>
         <div className="flex justify-between py-2 font-bold">
           <dt>Dinheiro esperado na gaveta</dt>
-          <dd className="whitespace-nowrap pl-3 font-mono text-amarelo-texto">{formatarPreco(r.dinheiro_esperado)}</dd>
+          <dd className="whitespace-nowrap pl-3 font-mono text-preco">{formatarPreco(r.dinheiro_esperado)}</dd>
         </div>
       </dl>
 
