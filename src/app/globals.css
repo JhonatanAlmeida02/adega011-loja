@@ -161,3 +161,34 @@ body {
   from { stroke-dashoffset: var(--comprimento, 2000); }
   to { stroke-dashoffset: 0; }
 }
+
+/* Cupom do PDV: na impressão só aparece a área do cupom (80 mm) */
+@page cupom {
+  size: 80mm auto;
+  margin: 3mm;
+}
+.area-cupom {
+  display: none;
+}
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .area-cupom,
+  .area-cupom * {
+    visibility: visible !important;
+  }
+  .area-cupom {
+    display: block !important;
+    page: cupom;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 74mm;
+    background: #fff;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+}
