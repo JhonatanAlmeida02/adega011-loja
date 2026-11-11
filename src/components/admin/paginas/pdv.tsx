@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, Lock, Minus, Plus, Printer, Search, ShoppingCart, SlidersHorizontal, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
+import { textoBuscaProduto } from "@/lib/variacoes";
 import { combina } from "@/lib/busca";
 import { revalidarLoja } from "@/app/admin/acoes";
 import { useConfiguracoes } from "@/lib/admin/config";
@@ -166,16 +166,15 @@ function Venda({
   const [cat, setCat] = useState("todas");
   const [filtroAberto, setFiltroAberto] = useState(false);
   const [itens, setItens] = useState<ItemVenda[]>([]);
-  const [familia, setFamilia] = useState<Produto | null>(null);
   const [escolhendo, setEscolhendo] = useState<Produto | null>(null);
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [cupom, setCupom] = useState<DadosCupom | null>(null);
   const [painelCaixa, setPainelCaixa] = useState<"movimento" | "fechar" | null>(null);
 
   const lista = useMemo(() => {
-    let l = agruparVariacoes(produtos);
+    let l = produtos;
     if (cat !== "todas") l = l.filter((p) => p.categoria_id === cat);
-    if (busca.trim()) l = l.filter((p) => combina(textoBuscaProduto(p), busca));
+    if (busca.trim()) l = l.filter((p) => combina(`${textoBuscaProduto(p)} ${p.familia_nome ?? ""} ${p.variacao_nome ?? ""}`, busca));
     return l;
   }, [produtos, cat, busca]);
 
@@ -194,7 +193,6 @@ function Venda({
   };
 
   const tocar = (p: Produto) => {
-    if (p.variacoes?.length) { setFamilia(p); return; }
     if (!produtoDisponivel(p)) return;
     if ((p.grupos?.length ?? 0) > 0) setEscolhendo(p);
     else adicionar(p);
@@ -269,8 +267,8 @@ function Venda({
             <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto pb-24 lg:pb-0">
               {lista.map((p) => {
                 const ok = produtoDisponivel(p);
-                const q = (p.variacoes ?? [p]).reduce((s, v) => s + qtdNoCarrinho(v.id), 0);
-                const detalhe = !ok ? "Esgotado" : q > 0 ? `${q} na venda` : p.variacoes?.length ? `Escolher ${p.variacao_atributo?.toLowerCase() || "variação"}` : (p.grupos?.length ?? 0) > 0 ? "Escolher adicionais" : controlaSaldo(p) && saldoVendavel(p) <= 5 ? `${saldoVendavel(p)} disponíveis` : null;
+                const q = qtdNoCarrinho(p.id);
+                const detalhe = !ok ? "Esgotado" : q > 0 ? `${q} na venda` : (p.grupos?.length ?? 0) > 0 ? "Escolher adicionais" : controlaSaldo(p) && saldoVendavel(p) <= 5 ? `${saldoVendavel(p)} disponíveis` : null;
                 return (
                   <li key={p.id}>
                     <button type="button" onClick={() => tocar(p)} disabled={!ok} aria-label={`Vender ${p.nome}`}
@@ -279,7 +277,7 @@ function Venda({
                         <span className="block text-sm font-medium leading-snug">{p.nome}</span>
                         {detalhe && <span className="mt-0.5 block text-[11px] text-suave">{detalhe}</span>}
                       </span>
-                      <span className="shrink-0 text-right font-mono text-sm tabular-nums">{p.variacoes?.length && <span className="block font-sans text-[10px] text-suave">a partir de</span>}{formatarPreco(p.preco)}</span>
+                      <span className="shrink-0 text-right font-mono text-sm tabular-nums">{formatarPreco(p.preco)}</span>
                       <span className="grid size-7 shrink-0 place-items-center rounded-md text-suave group-hover:bg-rosa/10 group-hover:text-rosa-texto"><Plus className="size-4" aria-hidden /></span>
                     </button>
                   </li>
@@ -313,18 +311,6 @@ function Venda({
         </Sheet>
       </div>
 
-      <Sheet open={!!familia} onOpenChange={(v) => !v && setFamilia(null)}>
-        <SheetContent className="overflow-y-auto">
-          {familia && <div className="space-y-4 px-5 pt-16 pb-6">
-            <SheetTitle className="text-2xl font-semibold">{familia.nome}</SheetTitle>
-            <SheetDescription>Escolha {familia.variacao_atributo?.toLowerCase() || "a variação"} para adicionar à venda.</SheetDescription>
-            {familia.variacoes?.map((v) => <Button key={v.id} variant="suave" className="h-auto min-h-14 w-full justify-between rounded-xl py-3" disabled={!produtoDisponivel(v)} onClick={() => { setFamilia(null); tocar(v); }}>
-              <span className="text-left">{v.variacao_nome}<span className="mt-1 block text-xs font-normal text-suave">{!produtoDisponivel(v) ? "Esgotado" : `${saldoVendavel(v)} disponíveis`}</span></span>
-              <span className="font-mono">{formatarPreco(v.preco)}</span>
-            </Button>)}
-          </div>}
-        </SheetContent>
-      </Sheet>
       <EscolherOpcoes
         produto={escolhendo}
         onFechar={() => setEscolhendo(null)}
