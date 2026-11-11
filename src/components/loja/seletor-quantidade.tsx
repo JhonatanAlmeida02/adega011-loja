@@ -54,7 +54,7 @@ export function SeletorQuantidade({
         type="button"
         onClick={onMais}
         disabled={quantidade >= Math.min(QTD_MAXIMA, maximo ?? QTD_MAXIMA)}
-        className={cn(botao, dim, "bg-rosa text-preto hover:bg-[#ff7a9f]")}
+        className={cn(botao, dim, "bg-rosa text-preto hover:bg-rosa-hover")}
         aria-label={`Aumentar quantidade de ${nome}`}
       >
         <Plus className="size-4" />

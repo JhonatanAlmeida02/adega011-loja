@@ -8,8 +8,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Texto preto sobre rosa (6,7:1) — nunca branco sobre rosa.
-        primario: "bg-rosa text-preto hover:bg-[#ff7a9f] shadow-[0_8px_24px_-8px_rgba(255,92,138,0.6)]",
+        // Fundo da cor de ação do tema, sempre com texto preto.
+        primario: "bg-rosa text-preto hover:bg-rosa-hover shadow-[0_8px_24px_-8px_var(--acao-brilho)]",
         destaque: "bg-amarelo text-preto hover:bg-[#ffd23f]",
         contorno: "border-2 border-rosa text-rosa-texto hover:bg-rosa hover:text-preto",
         fantasma: "text-texto hover:bg-superficie-3",

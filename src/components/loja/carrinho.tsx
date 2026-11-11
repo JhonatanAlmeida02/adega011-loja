@@ -85,7 +85,7 @@ export function Carrinho({ loja }: { loja: DadosLoja }) {
           <button
             type="button"
             onClick={() => mudarAberto(true)}
-            className="pointer-events-auto flex h-14 w-full animate-entrar cursor-pointer items-center gap-3 rounded-full bg-rosa pl-2 pr-6 text-preto shadow-[0_12px_40px_-8px_rgba(255,92,138,0.75)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.98] md:w-auto md:min-w-80"
+            className="pointer-events-auto flex h-14 w-full animate-entrar cursor-pointer items-center gap-3 rounded-full bg-rosa pl-2 pr-6 text-preto shadow-[0_12px_40px_-8px_var(--acao-brilho)] transition-transform hover:bg-rosa-hover active:scale-[0.98] md:w-auto md:min-w-80"
             aria-label={`Ver carrinho: ${quantidade} ${quantidade === 1 ? "item" : "itens"}, total ${formatarPreco(subtotal)}`}
           >
             <span key={quantidade} className="grid size-10 animate-pulsar place-items-center rounded-full bg-preto font-mono text-lg font-bold text-rosa">

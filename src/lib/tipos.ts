@@ -55,6 +55,9 @@ export interface Categoria {
 }
 
 export interface Opcao {
+  componente_id?: string | null;
+  quantidade_consumo?: number | null;
+  saldo?: number;
   id: string;
   grupo_id: string;
   nome: string;
@@ -121,9 +124,12 @@ export function produtoDisponivel(p: Pick<Produto, "disponivel" | "ativo" | "con
   return !p.preco_pendente && p.disponivel && p.ativo && (!controlaSaldo(p) || saldoVendavel(p) > 0);
 }
 
-export function aplicarSaldos(produtos: Produto[], saldos: { produto_id: string; saldo: number }[]): Produto[] {
+export function aplicarSaldos(produtos: Produto[], saldos: { produto_id: string; saldo: number }[], saldosOpcoes: { opcao_id: string; saldo: number }[] = []): Produto[] {
   const mapa = new Map(saldos.map((s) => [s.produto_id, s.saldo]));
-  return produtos.map((p) => ({ ...p, saldo_venda: mapa.get(p.id) }));
+  const mapaOpcoes = new Map(saldosOpcoes.map((s) => [s.opcao_id, s.saldo]));
+  return produtos.map((p) => ({ ...p, saldo_venda: mapa.get(p.id), grupos: p.grupos?.map((g) => ({ ...g,
+    opcoes: g.opcoes.map((o) => ({ ...o, saldo: mapaOpcoes.get(o.id), disponivel: o.disponivel && (mapaOpcoes.get(o.id) ?? 1) > 0 })),
+  })) }));
 }
 
 export interface RegiaoEntrega {

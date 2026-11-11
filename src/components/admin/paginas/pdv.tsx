@@ -74,12 +74,13 @@ export function PaginaPdv() {
         .order("ordem"),
       sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
       sb.rpc("saldos_venda"),
-    ]).then(([r, p, c, saldos]) => {
+      sb.rpc("saldos_opcoes"),
+    ]).then(([r, p, c, saldos, saldosOpcoes]) => {
       if (!ativo) return;
       if (r.error) toast.error(r.error.message);
       setCaixa((r.data as ResumoCaixa | null) ?? null);
-      if (p.error || saldos.error) toast.error(p.error?.message ?? saldos.error!.message);
-      setProdutos(aplicarSaldos(((p.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? []));
+      if (p.error || saldos.error || saldosOpcoes.error) toast.error(p.error?.message ?? saldos.error?.message ?? saldosOpcoes.error!.message);
+      setProdutos(aplicarSaldos(((p.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? [], saldosOpcoes.data ?? []));
       setCategorias((c.data ?? []) as Categoria[]);
     });
     return () => {

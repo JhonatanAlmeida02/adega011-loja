@@ -33,7 +33,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
   }
 
   const sb = supabasePublico();
-  const [config, categorias, produtos, regioes, saldos] = await Promise.all([
+  const [config, categorias, produtos, regioes, saldos, saldosOpcoes] = await Promise.all([
     sb.from("configuracoes").select("*").eq("id", 1).maybeSingle(),
     sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
     sb
@@ -45,9 +45,10 @@ export async function carregarLoja(): Promise<DadosLoja> {
       .order("ordem"),
     sb.from("regioes_entrega").select("id,nome,taxa,ordem,ativa").order("ordem"),
     sb.rpc("saldos_venda"),
+    sb.rpc("saldos_opcoes"),
   ]);
 
-  const erro = config.error ?? categorias.error ?? produtos.error ?? regioes.error ?? saldos.error;
+  const erro = config.error ?? categorias.error ?? produtos.error ?? regioes.error ?? saldos.error ?? saldosOpcoes.error;
   if (erro || !config.data) {
     console.error("[loja] Falha ao carregar dados do Supabase:", erro?.message ?? "configuração ausente");
     // Mantém por pouco tempo para tentar de novo logo.
@@ -72,7 +73,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
   return {
     config: { ...CONFIG_EXEMPLO, ...cfg },
     categorias: (categorias.data ?? []) as Categoria[],
-    produtos: aplicarSaldos(((produtos.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? []),
+    produtos: aplicarSaldos(((produtos.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? [], saldosOpcoes.data ?? []),
     regioes: (regioes.data ?? []) as RegiaoEntrega[],
     modoDemo: false,
   };

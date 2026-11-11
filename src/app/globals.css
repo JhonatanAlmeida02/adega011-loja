@@ -5,22 +5,23 @@
  * Proporção de uso: preto 60% · rosa 25% · branco 10% · amarelo 5%.
  *
  * Dois temas:
- *  - escuro (padrão): preto de fundo, rosa de assinatura. Rosa 6,7:1, amarelo 12,3:1
- *    e branco 19,7:1 sobre o preto.
+ *  - escuro (padrão): fundo grafite e superfícies em cinza, com rosa de assinatura.
+ *    Textos claros e bordas distinguem os blocos sem usar preto puro no fundo.
  *  - claro: branco de fundo e texto preto. O manual pede para EVITAR rosa sobre
  *    branco (2,9:1) e amarelo sobre branco (1,6:1). Por isso, no claro, o rosa e o
- *    amarelo aparecem como PREENCHIMENTO (botão rosa com texto preto, 6,7:1) e os
+ *    amarelo aparecem como PREENCHIMENTO com texto preto, e os
  *    textos usam "rosa-texto"/"amarelo-texto", tons fechados com 4,5:1 ou mais.
  *    Preços ficam em preto (Space Mono Bold), como o selo "preto em branco".
  *
- * Cores da marca (bg-rosa, text-preto em botão etc.) nunca mudam com o tema.
- * Cores de função (fundo, texto, superfícies, rosa-texto...) mudam.
+ * As cores --adega-* preservam a paleta da marca.
+ * Os tokens rosa* são aliases de interface: rosa no escuro, amarelo no claro.
  */
 :root {
   --adega-preto: #0b0b0b;
   --adega-rosa: #ff5c8a;
   --adega-branco: #ffffff;
   --adega-amarelo: #ffc400;
+  --acao-brilho: #ff5c8a99;
 }
 
 @theme {
@@ -28,20 +29,21 @@
   --color-preto: #0b0b0b;
   --color-rosa: #ff5c8a;
   --color-rosa-escuro: #e0406f;
+  --color-rosa-hover: #ff7a9f;
   --color-branco: #ffffff;
   --color-amarelo: #ffc400;
   --color-sucesso-vivo: #4ade80; /* preenchimento com texto preto */
   --color-perigo-vivo: #ff6b6b; /* preenchimento com texto preto */
 
   /* Cores de função: valores do tema escuro (o claro troca abaixo) */
-  --color-fundo: #0b0b0b;
-  --color-texto: #ffffff;
-  --color-superficie: #141414;
-  --color-superficie-2: #1c1c1c;
-  --color-superficie-3: #262626;
-  --color-borda: #2e2e2e;
-  --color-suave: #b5b5b5;
-  --color-rosa-texto: #ff5c8a;
+  --color-fundo: #323232;
+  --color-texto: #f5f5f5;
+  --color-superficie: #272727;
+  --color-superficie-2: #2e2e2e;
+  --color-superficie-3: #3b3b3b;
+  --color-borda: #515151;
+  --color-suave: #c4c4c4;
+  --color-rosa-texto: #ff8bad;
   --color-amarelo-texto: #ffc400;
   --color-preco: #ffc400;
   --color-foco: #ffc400;
@@ -83,11 +85,29 @@
   --font-mono: var(--font-space-mono), ui-monospace, monospace;
 }
 
-/* Slightly denser app-wide rem scale: 16px -> 15px with default browser settings.
- * Applies consistently to the storefront, admin, dialogs and POS. */
+/* Paleta explícita do tema escuro, inclusive nos controles nativos. */
+[data-tema="escuro"] {
+  color-scheme: dark;
+  --color-rosa: #ff5c8a;
+  --color-rosa-hover: #ff7a9f;
+  --acao-brilho: #ff5c8a99;
+  --color-fundo: #323232;
+  --color-texto: #f5f5f5;
+  --color-superficie: #272727;
+  --color-superficie-2: #2e2e2e;
+  --color-superficie-3: #3b3b3b;
+  --color-borda: #515151;
+  --color-suave: #c4c4c4;
+  --color-rosa-texto: #ff8bad;
+}
+
 /* Tema claro: textos com 4,5:1 ou mais sobre o branco e as superfícies */
 [data-tema="claro"] {
   color-scheme: light;
+  --color-rosa: #ffc400;
+  --color-rosa-escuro: #dba800;
+  --color-rosa-hover: #ffd23f;
+  --acao-brilho: #ffc40066;
   --color-fundo: #ffffff;
   --color-texto: #0b0b0b;
   --color-superficie: #f7f7f7;
@@ -95,7 +115,7 @@
   --color-superficie-3: #e4e4e4;
   --color-borda: #d6d6d6;
   --color-suave: #555555;
-  --color-rosa-texto: #c4164f;
+  --color-rosa-texto: #805500;
   --color-amarelo-texto: #8a5a00;
   --color-preco: #0b0b0b;
   --color-foco: #0b0b0b;
@@ -113,7 +133,7 @@
   --color-superficie-3: #262626;
   --color-borda: #2e2e2e;
   --color-suave: #b5b5b5;
-  --color-rosa-texto: #ff5c8a;
+  --color-rosa-texto: var(--color-rosa);
   --color-amarelo-texto: #ffc400;
   --color-preco: #ffc400;
   --color-foco: #ffc400;

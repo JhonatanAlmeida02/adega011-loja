@@ -1,12 +1,12 @@
 /**
  * Tema claro/escuro da Adega011.
  * O tema fica no atributo data-tema do <html> e a escolha é guardada no aparelho.
- * Padrão: escuro (o preto é a base da marca). Sem escolha salva, segue o escuro.
+ * Padrão: escuro em grafite. Sem escolha salva, segue o escuro.
  */
 export type Tema = "claro" | "escuro";
 
 export const CHAVE_TEMA = "adega011-tema";
-export const COR_BARRA: Record<Tema, string> = { escuro: "#0B0B0B", claro: "#FFFFFF" };
+export const COR_BARRA: Record<Tema, string> = { escuro: "#323232", claro: "#FFFFFF" };
 
 /**
  * Roda no <head> antes da pintura, para a página já abrir no tema certo

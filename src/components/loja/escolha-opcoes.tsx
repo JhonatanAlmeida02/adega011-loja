@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import type { GrupoOpcoes } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
 
@@ -23,13 +24,7 @@ export function pendencia(grupos: GrupoOpcoes[], sel: Selecao): string | null {
   return null;
 }
 
-function regra(g: GrupoOpcoes): string {
-  if (g.minimo > 0 && g.minimo === g.maximo) return g.minimo === 1 ? "Obrigatório · escolha 1" : `Obrigatório · escolha ${g.minimo}`;
-  if (g.minimo > 0) return `Obrigatório · ${g.minimo} a ${g.maximo}`;
-  return g.maximo === 1 ? "Opcional" : `Opcional · até ${g.maximo}`;
-}
-
-/** Lista de grupos de adicionais com rádio (máx. 1) ou caixas de seleção. */
+/** Grupos expansíveis com rádio ou múltipla escolha, mantendo as regras do cadastro. */
 export function EscolhaOpcoes({
   grupos,
   selecao,
@@ -57,22 +52,20 @@ export function EscolhaOpcoes({
         const escolhidas = selecao[g.id] ?? [];
         const unica = g.maximo === 1;
         return (
-          <fieldset key={g.id} className="rounded-2xl border border-borda bg-superficie-2 p-3">
+          <fieldset key={g.id} data-grupo={g.id} tabIndex={-1} className="min-w-0 scroll-mt-4 outline-none focus-visible:ring-2 focus-visible:ring-foco">
             <legend className="sr-only">{g.nome}</legend>
-            <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
-              <span className="font-bold" aria-hidden>
-                {g.nome}
-              </span>
-              <span
-                className={cn(
-                  "rotulo rounded-full px-2 py-0.5 text-[0.65rem]",
-                  g.minimo > 0 && escolhidas.length < g.minimo ? "bg-rosa text-preto" : "text-suave",
-                )}
-              >
-                {regra(g)}
-              </span>
-            </div>
-            <div className="space-y-1.5">
+            <details className="group rounded-lg border border-borda bg-superficie">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg bg-superficie-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <div><h3 className="text-sm font-semibold">{g.nome}</h3><p className="mt-0.5 text-xs text-suave">{g.minimo === g.maximo && g.minimo > 0 ? `Escolha ${g.minimo} ${g.minimo === 1 ? "opção" : "opções"}` : g.minimo > 0 ? `Escolha de ${g.minimo} a ${g.maximo} opções` : `Escolha até ${g.maximo} ${g.maximo === 1 ? "opção" : "opções"}`}</p>{escolhidas.length > 0 && <p className="mt-1 text-xs text-rosa-texto">{g.opcoes.filter((o) => escolhidas.includes(o.id)).map((o) => o.nome).join(", ")}</p>}</div>
+              <div className="flex shrink-0 items-center gap-2 text-xs">
+                <span className="text-suave" aria-label={`${escolhidas.length} de ${g.maximo} escolhas`}>{escolhidas.length}/{g.maximo}</span>
+                <span className={cn("rounded px-2 py-1 text-[.65rem] font-semibold", g.minimo > 0 && escolhidas.length < g.minimo ? "bg-texto text-fundo" : "bg-superficie-3 text-suave")}>
+                  {g.minimo > 0 ? "Obrigatório" : "Opcional"}
+                </span>
+                <ChevronDown aria-hidden className="size-4 shrink-0 text-suave transition-transform group-open:rotate-180" />
+              </div>
+            </summary>
+            <div className="divide-y divide-borda px-4">
               {g.opcoes.map((o) => {
                 const marcada = escolhidas.includes(o.id);
                 const bloqueada = !o.disponivel || (!marcada && !unica && escolhidas.length >= g.maximo);
@@ -80,15 +73,15 @@ export function EscolhaOpcoes({
                   <label
                     key={o.id}
                     className={cn(
-                      "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 px-3 py-2 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-foco",
-                      marcada ? "border-rosa bg-rosa/10" : "border-transparent bg-superficie hover:border-rosa/40",
+                      "relative flex min-h-16 cursor-pointer items-center gap-4 py-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-foco",
+                      marcada && "text-rosa-texto",
                       bloqueada && "cursor-not-allowed opacity-50",
                     )}
                   >
                     <input
                       type={unica ? "radio" : "checkbox"}
                       name={`${idBase}-${g.id}`}
-                      className="sr-only"
+                      className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                       checked={marcada}
                       disabled={bloqueada}
                       onChange={() => alternar(g, o.id)}
@@ -100,25 +93,20 @@ export function EscolhaOpcoes({
                         }
                       }}
                     />
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "grid size-5 shrink-0 place-items-center border-2",
-                        unica ? "rounded-full" : "rounded-md",
-                        marcada ? "border-rosa bg-rosa" : "border-suave",
-                      )}
-                    >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{o.nome}</span>
+                      <span className={cn("mt-1 block text-xs", !o.disponivel ? "text-suave" : o.preco ? "text-rosa-texto" : "text-suave")}>
+                        {!o.disponivel ? "Indisponível no momento" : o.preco ? `+ ${formatarPreco(o.preco)}` : "Incluso"}
+                      </span>
+                    </span>
+                    <span aria-hidden className={cn("grid size-5 shrink-0 place-items-center border-2", unica ? "rounded-full" : "rounded", marcada ? "border-rosa bg-rosa" : "border-suave")}>
                       {marcada && (unica ? <span className="size-2 rounded-full bg-preto" /> : <span className="text-xs font-bold text-preto">✓</span>)}
                     </span>
-                    <span className="flex-1">
-                      {o.nome}
-                      {!o.disponivel && <span className="ml-2 text-xs text-suave">esgotado</span>}
-                    </span>
-                    <span className="font-mono text-sm text-preco">{o.preco ? `+ ${formatarPreco(o.preco)}` : "grátis"}</span>
                   </label>
                 );
               })}
-            </div>
+              </div>
+            </details>
           </fieldset>
         );
       })}

@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { salvar } from "@/lib/admin/dados";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
-import type { GrupoOpcoes, Opcao } from "@/lib/tipos";
+import type { GrupoOpcoes, Opcao, Produto } from "@/lib/tipos";
 import { centavosParaCampo, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input, Interruptor } from "@/components/ui/campos";
+import { Input, Interruptor, Select } from "@/components/ui/campos";
 import { Confirmar } from "./ui";
 
 /**
@@ -17,14 +17,20 @@ import { Confirmar } from "./ui";
  */
 export function EditorAdicionais({ produtoId }: { produtoId: string }) {
   const [grupos, setGrupos] = useState<GrupoOpcoes[] | null>(null);
+  const [bases, setBases] = useState<Produto[]>([]);
   const [versao, setVersao] = useState(0);
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
 
   useEffect(() => {
     let ativo = true;
-    supabaseNavegador()
-      .from("grupos_opcoes")
-      .select("id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem)")
+    const sb = supabaseNavegador();
+    sb.from("produtos").select("id,nome,unidade_estoque,estoque").eq("eh_kit", false).eq("controla_estoque", true).order("nome").then(({ data, error }) => {
+      if (!ativo) return;
+      if (error) toast.error("Não foi possível carregar os ingredientes.");
+      else setBases((data ?? []) as Produto[]);
+    });
+    sb.from("grupos_opcoes")
+      .select("id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem,componente_id,quantidade_consumo)")
       .eq("produto_id", produtoId)
       .order("ordem")
       .then(({ data, error }) => {
@@ -52,14 +58,14 @@ export function EditorAdicionais({ produtoId }: { produtoId: string }) {
   if (!grupos) return <p className="text-sm text-suave">Carregando adicionais…</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {grupos.length === 0 && (
         <p className="text-sm text-suave">
           Sem adicionais. Ex.: no “Copão”, crie o grupo “Energético” com Baly (+ R$ 3,00) e Red Bull (+ R$ 7,00).
         </p>
       )}
       {grupos.map((g) => (
-        <Grupo key={`${g.id}-${g.nome}-${g.minimo}-${g.maximo}`} grupo={g} onMudou={recarregar} />
+        <Grupo key={g.id} grupo={g} bases={bases} onMudou={recarregar} />
       ))}
       <Button type="button" variant="suave" size="sm" onClick={novoGrupo}>
         <Plus /> Novo grupo de adicionais
@@ -68,11 +74,12 @@ export function EditorAdicionais({ produtoId }: { produtoId: string }) {
   );
 }
 
-function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) {
+function Grupo({ grupo, bases, onMudou }: { grupo: GrupoOpcoes; bases: Produto[]; onMudou: () => void }) {
   const [nome, setNome] = useState(grupo.nome);
   const [obrigatorio, setObrigatorio] = useState(grupo.minimo > 0);
   const [maximo, setMaximo] = useState(String(grupo.maximo));
   const [novaOpcao, setNovaOpcao] = useState({ nome: "", preco: "" });
+  const [aberto, setAberto] = useState(grupo.opcoes.length === 0);
   const sb = supabaseNavegador();
 
   const salvarGrupo = async (campos: Partial<GrupoOpcoes>, msg: string | null = "Grupo salvo") => {
@@ -98,7 +105,13 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
   };
 
   return (
-    <div className="rounded-2xl border border-borda bg-superficie-2 p-3">
+    <details className="group/adicionais rounded-xl border border-borda bg-superficie-2" open={aberto} onToggle={(e) => setAberto(e.currentTarget.open)}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+        <ChevronDown aria-hidden className="size-4 shrink-0 text-suave transition-transform group-open/adicionais:rotate-180" />
+        <span className="min-w-0 flex-1 font-semibold">{grupo.nome}</span>
+        <span className="text-xs text-suave">{grupo.opcoes.length} opções · {grupo.minimo > 0 ? "Obrigatório" : "Opcional"}</span>
+      </summary>
+      <div className="border-t border-borda p-2.5">
       <div className="flex items-center gap-2">
         <label className="sr-only" htmlFor={`g-${grupo.id}`}>
           Nome do grupo
@@ -108,7 +121,7 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           onBlur={() => nome.trim() && nome !== grupo.nome && void salvarGrupo({ nome: nome.trim() })}
-          className="h-11 font-bold"
+          className="h-8 text-sm font-bold"
           maxLength={60}
         />
         <Confirmar
@@ -119,13 +132,13 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
             if (await salvar(sb.from("grupos_opcoes").delete().eq("id", grupo.id), "Grupo apagado")) onMudou();
           }}
         >
-          <Button type="button" variant="fantasma" size="icone" aria-label={`Apagar grupo ${grupo.nome}`}>
+          <Button type="button" variant="fantasma" size="icone-sm" aria-label={`Apagar grupo ${grupo.nome}`}>
             <Trash2 />
           </Button>
         </Confirmar>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs">
         <label className="flex items-center gap-2">
           <Interruptor
             checked={obrigatorio}
@@ -146,15 +159,15 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
             value={maximo}
             onChange={(e) => setMaximo(e.target.value)}
             onBlur={() => aplicarRegras(obrigatorio, maximo)}
-            className="h-10 w-16 px-2 text-center"
+            className="h-8 w-14 px-2 text-center text-sm"
             aria-label={`Máximo de escolhas em ${grupo.nome}`}
           />
         </label>
       </div>
 
-      <ul className="mt-3 space-y-1.5">
+      <ul className="mt-2 space-y-1">
         {grupo.opcoes.map((o) => (
-          <LinhaOpcao key={`${o.id}-${o.nome}-${o.preco}`} opcao={o} onMudou={onMudou} />
+          <LinhaOpcao key={`${o.id}-${o.nome}-${o.preco}-${o.componente_id}-${o.quantidade_consumo}`} opcao={o} bases={bases} onMudou={onMudou} />
         ))}
       </ul>
 
@@ -168,14 +181,14 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
           value={novaOpcao.nome}
           onChange={(e) => setNovaOpcao((x) => ({ ...x, nome: e.target.value }))}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void adicionarOpcao())}
-          className="h-11"
+          className="h-8 min-w-0 text-sm"
           maxLength={60}
         />
         <label className="sr-only" htmlFor={`np-${grupo.id}`}>
           Preço do novo adicional
         </label>
-        <div className="relative w-28 shrink-0">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-suave">+R$</span>
+        <div className="flex w-24 shrink-0 items-center gap-1.5">
+          <span className="shrink-0 font-mono text-xs text-suave" aria-hidden="true">+R$</span>
           <Input
             id={`np-${grupo.id}`}
             inputMode="decimal"
@@ -183,19 +196,25 @@ function Grupo({ grupo, onMudou }: { grupo: GrupoOpcoes; onMudou: () => void }) 
             value={novaOpcao.preco}
             onChange={(e) => setNovaOpcao((x) => ({ ...x, preco: e.target.value.replace(/[^\d,.]/g, "") }))}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void adicionarOpcao())}
-            className="h-11 pl-11 font-mono"
+            className="h-8 min-w-0 flex-1 px-2 font-mono text-sm"
           />
         </div>
-        <Button type="button" size="icone" onClick={adicionarOpcao} aria-label={`Adicionar opção em ${grupo.nome}`}>
+        <Button type="button" size="icone-sm" onClick={adicionarOpcao} aria-label={`Adicionar opção em ${grupo.nome}`}>
           <Plus />
         </Button>
       </div>
-    </div>
+      </div>
+    </details>
   );
 }
 
-function LinhaOpcao({ opcao, onMudou }: { opcao: Opcao; onMudou: () => void }) {
+function LinhaOpcao({ opcao, bases, onMudou }: { opcao: Opcao; bases: Produto[]; onMudou: () => void }) {
   const [nome, setNome] = useState(opcao.nome);
+  const [componente, setComponente] = useState(opcao.componente_id ?? "");
+  const [quantidade, setQuantidade] = useState(String(opcao.quantidade_consumo ?? 1));
+  const [buscaBase, setBuscaBase] = useState("");
+  const base = bases.find((p) => p.id === componente);
+  const filtradas = bases.filter((p) => p.id === componente || p.nome.toLocaleLowerCase().includes(buscaBase.toLocaleLowerCase()));
   const [preco, setPreco] = useState(centavosParaCampo(opcao.preco));
   const [disponivel, setDisponivel] = useState(opcao.disponivel);
   const sb = supabaseNavegador();
@@ -205,7 +224,7 @@ function LinhaOpcao({ opcao, onMudou }: { opcao: Opcao; onMudou: () => void }) {
   };
 
   return (
-    <li className="flex items-center gap-2 rounded-xl bg-superficie px-2 py-1.5">
+    <li className="flex flex-wrap items-center gap-1.5 rounded-lg bg-superficie px-2 py-1">
       <label className="sr-only" htmlFor={`on-${opcao.id}`}>
         Nome do adicional
       </label>
@@ -214,14 +233,14 @@ function LinhaOpcao({ opcao, onMudou }: { opcao: Opcao; onMudou: () => void }) {
         value={nome}
         onChange={(e) => setNome(e.target.value)}
         onBlur={() => nome.trim() && nome !== opcao.nome && void salvarCampos({ nome: nome.trim() }, "Adicional salvo")}
-        className="h-10 flex-1"
+        className="h-8 min-w-0 flex-1 px-2 text-sm"
         maxLength={60}
       />
       <label className="sr-only" htmlFor={`op-${opcao.id}`}>
         Preço de {opcao.nome}
       </label>
-      <div className="relative w-28 shrink-0">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-suave">+R$</span>
+      <div className="flex w-24 shrink-0 items-center gap-1.5">
+        <span className="shrink-0 font-mono text-xs text-suave" aria-hidden="true">+R$</span>
         <Input
           id={`op-${opcao.id}`}
           inputMode="decimal"
@@ -231,7 +250,7 @@ function LinhaOpcao({ opcao, onMudou }: { opcao: Opcao; onMudou: () => void }) {
             const c = paraCentavos(preco || "0");
             if (c !== null && c !== opcao.preco) void salvarCampos({ preco: c }, `${opcao.nome}: ${formatarPreco(c)}`);
           }}
-          className="h-10 pl-11 font-mono"
+          className="h-8 min-w-0 flex-1 px-2 font-mono text-sm"
         />
       </div>
       <Interruptor
@@ -253,6 +272,22 @@ function LinhaOpcao({ opcao, onMudou }: { opcao: Opcao; onMudou: () => void }) {
       >
         <Trash2 />
       </Button>
+      <details className="basis-full border-t border-borda pt-1 text-xs">
+        <summary className="cursor-pointer text-suave">Baixa no estoque{opcao.componente_id ? ` · ${opcao.quantidade_consumo} ${base?.unidade_estoque ?? "un"} de ${base?.nome ?? "ingrediente"}` : " · sem vínculo"}</summary>
+        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-end">
+          <div className="space-y-2">
+            <Input className="h-8 text-sm" type="search" placeholder="Pesquisar ingrediente…" aria-label={`Pesquisar ingrediente de ${opcao.nome}`} value={buscaBase} onChange={(e) => setBuscaBase(e.target.value)} />
+            <Select className="h-8 text-sm" aria-label={`Ingrediente de ${opcao.nome}`} value={componente} onChange={(e) => setComponente(e.target.value)}><option value="">Sem baixa de ingrediente</option>{filtradas.map((p) => <option key={p.id} value={p.id}>{p.nome} · {p.unidade_estoque ?? "un"}</option>)}</Select>
+          </div>
+          <div><label htmlFor={`consumo-${opcao.id}`} className="mb-1 block text-suave">Consumo ({base?.unidade_estoque ?? "un"})</label><Input className="h-8 text-sm" id={`consumo-${opcao.id}`} type="number" min={1} max={1000000} step={1} disabled={!componente} value={quantidade} onChange={(e) => setQuantidade(e.target.value)} /></div>
+          <Button type="button" variant="suave" size="sm" onClick={() => {
+            const n = Number(quantidade);
+            if (componente && (!Number.isInteger(n) || n < 1 || n > 1000000)) return toast.error("Informe um consumo inteiro positivo.");
+            void salvarCampos({ componente_id: componente || null, quantidade_consumo: componente ? n : null }, "Consumo salvo");
+          }}>Salvar consumo</Button>
+        </div>
+        <p className="mt-2 text-suave">Baixa somente o ingrediente escolhido, na quantidade informada por copão. O preço acima é o acréscimo cobrado do cliente.</p>
+      </details>
     </li>
   );
 }
