@@ -12,6 +12,7 @@ import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils"
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Interruptor, Select, Textarea } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { EditorAdicionais } from "../editor-adicionais";
 import { ListaOrdenavel } from "../lista-ordenavel";
 import { CabecalhoPagina, Carregando, Confirmar, LinhaInterruptor, UploadImagem, Vazio } from "../ui";
 
@@ -27,6 +28,8 @@ const NOVO = (categoria_id: string | null, ordem: number): Rascunho => ({
   disponivel: true,
   ativo: true,
   ordem,
+  controla_estoque: false,
+  estoque: 0,
 });
 
 export function PaginaProdutos() {
@@ -153,6 +156,11 @@ export function PaginaProdutos() {
                 <p className="text-sm text-suave">
                   <span className="preco text-sm">{formatarPreco(p.preco)}</span>
                   {filtro === "todas" && <> · {p.categoria_id ? nomeCat.get(p.categoria_id) : "Sem categoria"}</>}
+                  {p.controla_estoque && (
+                    <span className={cn("ml-1 font-mono", p.estoque <= 0 ? "text-perigo" : p.estoque <= 5 ? "text-amarelo" : "")}>
+                      · {p.estoque} em estoque
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -275,6 +283,7 @@ function ConteudoForm({
       disponivel: f.disponivel,
       ativo: f.ativo,
       ordem: f.ordem,
+      controla_estoque: f.controla_estoque,
     };
     setSalvando(true);
     const sb = supabaseNavegador();
@@ -338,7 +347,30 @@ function ConteudoForm({
           <LinhaInterruptor rotulo="Disponível" descricao="Desligado = aparece como Esgotado" checked={f.disponivel} onChange={(v) => set("disponivel", v)} />
           <LinhaInterruptor rotulo="Destaque" descricao="Ganha o selo ★ Destaque" checked={f.destaque} onChange={(v) => set("destaque", v)} />
           <LinhaInterruptor rotulo="Visível na loja" descricao="Desligado = some do cardápio" checked={f.ativo} onChange={(v) => set("ativo", v)} />
+          <LinhaInterruptor
+            rotulo="Controlar estoque"
+            descricao={
+              f.controla_estoque
+                ? `Saldo atual: ${f.estoque}. Entradas e ajustes em Painel → Estoque.`
+                : "Ligado = baixa a cada venda e esgota sozinho no zero"
+            }
+            checked={f.controla_estoque}
+            onChange={(v) => set("controla_estoque", v)}
+          />
         </div>
+        <section aria-labelledby="titulo-adicionais">
+          <h3 id="titulo-adicionais" className="titulo mb-1 text-2xl">
+            Adicionais
+          </h3>
+          <p className="mb-3 text-sm text-suave">Opções que o cliente escolhe ao pedir (com ou sem acréscimo).</p>
+          {f.id ? (
+            <EditorAdicionais produtoId={f.id} />
+          ) : (
+            <p className="rounded-xl border border-dashed border-borda p-3 text-sm text-suave">
+              Salve o produto primeiro; depois abra de novo para cadastrar adicionais.
+            </p>
+          )}
+        </section>
       </div>
       <div className="pb-seguro sticky bottom-0 border-t border-borda bg-superficie px-5 pt-4 md:px-6">
         <Button type="submit" size="lg" className="w-full" disabled={salvando}>
