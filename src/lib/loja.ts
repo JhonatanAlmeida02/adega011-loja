@@ -39,7 +39,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
     sb
       .from("produtos")
       .select(
-        "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque,eh_kit,unidade_estoque,volume_unidade,unidades_pacote,vende_pacote,familia_id,familia_nome,variacao_atributo,variacao_nome," +
+        "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque,eh_kit,unidade_estoque,volume_unidade,unidades_pacote,vende_pacote,preco_pendente,familia_id,familia_nome,variacao_atributo,variacao_nome," +
           "grupos:grupos_opcoes(id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem))",
       )
       .order("ordem"),

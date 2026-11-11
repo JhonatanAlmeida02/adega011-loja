@@ -27,7 +27,7 @@ export function SeletorQuantidade({
 }) {
   const botao =
     "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors active:scale-95 disabled:opacity-40";
-  const dim = tamanho === "lg" ? "size-12" : "size-11";
+  const dim = tamanho === "lg" ? "size-10 [@media(pointer:coarse)]:size-11" : "size-9 [@media(pointer:coarse)]:size-11";
   return (
     <div
       className={cn("flex items-center justify-between gap-1 rounded-full bg-superficie-3 p-0.5", className)}
@@ -41,11 +41,11 @@ export function SeletorQuantidade({
         disabled={minimo > 0 && quantidade <= minimo}
         aria-label={quantidade === 1 && minimo === 0 ? `Remover ${nome} do carrinho` : `Diminuir quantidade de ${nome}`}
       >
-        {quantidade === 1 && minimo === 0 ? <Trash2 className="size-[18px]" /> : <Minus className="size-5" />}
+        {quantidade === 1 && minimo === 0 ? <Trash2 className="size-[18px]" /> : <Minus className="size-4" />}
       </button>
       <span
         key={quantidade}
-        className="min-w-7 animate-pulsar text-center font-mono text-lg font-bold tabular-nums"
+        className="min-w-7 animate-pulsar text-center font-mono text-base font-bold tabular-nums"
         aria-live="polite"
       >
         {quantidade}
@@ -57,7 +57,7 @@ export function SeletorQuantidade({
         className={cn(botao, dim, "bg-rosa text-preto hover:bg-[#ff7a9f]")}
         aria-label={`Aumentar quantidade de ${nome}`}
       >
-        <Plus className="size-5" />
+        <Plus className="size-4" />
       </button>
     </div>
   );

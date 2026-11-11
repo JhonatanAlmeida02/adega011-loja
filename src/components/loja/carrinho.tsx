@@ -85,10 +85,10 @@ export function Carrinho({ loja }: { loja: DadosLoja }) {
           <button
             type="button"
             onClick={() => mudarAberto(true)}
-            className="pointer-events-auto flex h-16 w-full animate-entrar cursor-pointer items-center gap-3 rounded-full bg-rosa pl-2 pr-6 text-preto shadow-[0_12px_40px_-8px_rgba(255,92,138,0.75)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.98] md:w-auto md:min-w-80"
+            className="pointer-events-auto flex h-14 w-full animate-entrar cursor-pointer items-center gap-3 rounded-full bg-rosa pl-2 pr-6 text-preto shadow-[0_12px_40px_-8px_rgba(255,92,138,0.75)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.98] md:w-auto md:min-w-80"
             aria-label={`Ver carrinho: ${quantidade} ${quantidade === 1 ? "item" : "itens"}, total ${formatarPreco(subtotal)}`}
           >
-            <span key={quantidade} className="grid size-12 animate-pulsar place-items-center rounded-full bg-preto font-mono text-lg font-bold text-rosa">
+            <span key={quantidade} className="grid size-10 animate-pulsar place-items-center rounded-full bg-preto font-mono text-lg font-bold text-rosa">
               {quantidade}
             </span>
             <span className="flex-1 text-left text-lg font-bold">Ver carrinho</span>
@@ -159,7 +159,7 @@ function EtapaItens({
     <>
       <div className="flex items-end gap-3 px-5 pt-4 pr-16 md:px-6 md:pt-6">
         <div>
-          <SheetTitle className="titulo text-4xl">Seu pedido</SheetTitle>
+          <SheetTitle className="titulo text-3xl">Seu pedido</SheetTitle>
           <SheetDescription className="rotulo mt-1 text-suave">
             {quantidade} {quantidade === 1 ? "item" : "itens"}
           </SheetDescription>
@@ -738,7 +738,7 @@ function EtapaEnviado({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <CheckCircle2 className="size-16 animate-pulsar text-sucesso" aria-hidden />
-      <SheetTitle className="titulo text-4xl">{numero ? `Pedido #${numero} pronto!` : "Pedido pronto!"}</SheetTitle>
+      <SheetTitle className="titulo text-3xl">{numero ? `Pedido #${numero} pronto!` : "Pedido pronto!"}</SheetTitle>
       <SheetDescription className="max-w-xs text-suave">
         Abrimos o WhatsApp com tudo preenchido. É só tocar em <strong className="text-branco">enviar</strong> por lá.
       </SheetDescription>

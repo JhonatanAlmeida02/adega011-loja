@@ -94,9 +94,9 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
     <div id="cardapio">
       {/* Barra fixa: busca + categorias */}
       <div className="sticky top-0 z-30 border-b border-borda/70 bg-preto/90 backdrop-blur-md supports-[backdrop-filter]:bg-preto/75">
-        <div className="mx-auto max-w-6xl px-4 pt-3">
+        <div className="mx-auto max-w-6xl px-4 pt-2">
           <div className="relative">
-            <Search aria-hidden className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-suave" />
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
             <label htmlFor="busca" className="sr-only">
               Buscar produto
             </label>
@@ -108,22 +108,22 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar gin, vinho, cerveja…"
-              className="h-12 w-full rounded-full border border-borda bg-superficie-2 pl-12 pr-12 text-base text-branco placeholder:text-[#8f8f8f] focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 [&::-webkit-search-cancel-button]:hidden"
+              className="h-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:text-base w-full rounded-full border border-borda bg-superficie-2 pl-10 pr-10 text-sm text-branco placeholder:text-[#8f8f8f] focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 [&::-webkit-search-cancel-button]:hidden"
             />
             {buscando && (
               <button
                 type="button"
                 onClick={() => setBusca("")}
-                className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-suave hover:text-branco"
+                className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-suave hover:text-branco"
                 aria-label="Limpar busca"
               >
-                <X className="size-5" />
+                <X className="size-4" />
               </button>
             )}
           </div>
         </div>
         <nav aria-label="Categorias" className="mx-auto max-w-6xl">
-          <div ref={barraChips} className="sem-barra flex gap-2 overflow-x-auto px-4 py-3">
+          <div ref={barraChips} className="sem-barra flex gap-2 overflow-x-auto px-4 py-2">
             {secoes.map((s) => {
               const sel = !buscando && ativa === s.id;
               return (
@@ -134,7 +134,7 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
                   onClick={() => irPara(s.id)}
                   aria-current={sel ? "true" : undefined}
                   className={cn(
-                    "rotulo h-11 shrink-0 cursor-pointer rounded-full border px-5 font-bold transition-colors",
+                    "rotulo h-8 [@media(pointer:coarse)]:min-h-11 shrink-0 cursor-pointer rounded-full border px-3 text-xs font-bold transition-colors",
                     sel
                       ? "border-rosa bg-rosa text-preto"
                       : "border-borda bg-superficie text-branco hover:border-rosa/70",
@@ -166,11 +166,11 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
           <p className="py-16 text-center text-suave">O cardápio está sendo montado. Volte logo!</p>
         ) : (
           secoes.map((s, i) => (
-            <section key={s.id} id={`cat-${s.id}`} aria-labelledby={`titulo-${s.id}`} className="scroll-mt-36 pt-8">
+            <section key={s.id} id={`cat-${s.id}`} aria-labelledby={`titulo-${s.id}`} className="scroll-mt-36 pt-6">
               {/* Âncora sem prefixo, para links do banner como "#combos" */}
               <span id={s.id} className="relative -top-36 block" aria-hidden />
               <div className="flex items-end justify-between gap-4">
-                <h2 id={`titulo-${s.id}`} className="titulo text-4xl sm:text-5xl">
+                <h2 id={`titulo-${s.id}`} className="titulo text-3xl sm:text-4xl">
                   {s.nome}
                 </h2>
                 <span className="rotulo pb-1 text-suave">

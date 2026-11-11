@@ -21,10 +21,10 @@ export function CabecalhoPagina({
   acoes?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="titulo text-4xl sm:text-5xl">{titulo}</h1>
-        {descricao && <p className="mt-1 text-suave">{descricao}</p>}
+        <h1 className="font-bold text-2xl">{titulo}</h1>
+        {descricao && <p className="mt-1 text-xs text-suave">{descricao}</p>}
       </div>
       {acoes && <div className="flex flex-wrap gap-2">{acoes}</div>}
     </div>
@@ -33,7 +33,7 @@ export function CabecalhoPagina({
 
 export function Cartao({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("rounded-card border border-borda bg-superficie p-4 sm:p-6", className)} {...props}>
+    <div className={cn("rounded-card border border-borda bg-superficie p-3 sm:p-4", className)} {...props}>
       {children}
     </div>
   );
@@ -73,7 +73,7 @@ export function LinhaInterruptor({
 }) {
   const id = useId();
   return (
-    <div className="flex min-h-14 items-center justify-between gap-4 py-2">
+    <div className="flex min-h-12 items-center justify-between gap-4 py-2">
       <label htmlFor={id} className="cursor-pointer">
         <span className="block font-bold">{rotulo}</span>
         {descricao && <span className="block text-sm text-suave">{descricao}</span>}

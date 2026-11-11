@@ -261,3 +261,33 @@ body {
 @media (pointer: coarse) {
   html { font-size: 100%; }
 }
+
+/* Compact shared controls; retain comfortable touch targets on touchscreens. */
+.menu-produto-item {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .5rem .625rem; border-radius: .375rem;
+  cursor: pointer; outline: none;
+}
+.menu-produto-item:focus, .menu-produto-item:hover { background: var(--color-superficie-3); }
+.menu-produto-item[data-disabled] { pointer-events: none; }
+.produtos-erp [data-slot="input"], .produtos-erp [data-slot="select"] { height: 2.375rem; font-size: .8125rem; }
+@media (pointer: coarse) {
+  [data-slot="button"], [data-slot="input"], [data-slot="select"], .menu-produto-item { min-height: 44px; }
+  [data-slot="button"]:has(> svg:only-child) { min-width: 44px; }
+  [data-slot="input"], [data-slot="select"], [data-slot="textarea"] { font-size: 1rem; }
+}
+
+/* Product toolbar and type tabs follow the compact ERP layout. */
+.produtos-ferramentas { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+.produtos-ferramentas > .produtos-busca { flex: 0 1 25rem; min-width: 14rem; }
+.produtos-ferramentas > div:not(.produtos-busca) { flex: 0 1 12rem; min-width: 10rem; }
+.produtos-tipos { display: flex; gap: .5rem; overflow-x: auto; border-bottom: 1px solid var(--color-borda); margin-bottom: .625rem; }
+.produto-tipo { display: flex; flex-direction: column; flex-shrink: 0; gap: .125rem; min-width: 5.5rem; padding: .5rem 1rem; border-bottom: 2px solid transparent; color: var(--color-suave); font-size: .8125rem; line-height: 1.25; cursor: pointer; }
+.produto-tipo:hover { color: var(--color-branco); }
+.produto-tipo-ativo { border-bottom-color: var(--color-rosa); color: var(--color-branco); font-weight: 600; }
+.produto-tipo-ativo > span:last-child { color: var(--color-rosa); }
+@media (max-width: 639px) {
+  .produtos-ferramentas > .produtos-busca { flex-basis: 100%; }
+  .produtos-ferramentas > div:not(.produtos-busca) { flex: 1 1 9rem; min-width: 0; }
+  .produto-tipo { min-width: 5rem; padding-inline: .75rem; }
+}

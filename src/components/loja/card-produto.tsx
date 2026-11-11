@@ -82,8 +82,8 @@ export function CardProduto({
         )}
       </button>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
-        <h3 className="text-[0.95rem] font-bold leading-snug sm:text-base">{produto.nome}</h3>
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <h3 className="text-sm font-bold leading-snug">{produto.nome}</h3>
         {temVariacoes && <p className="text-xs text-rosa">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
         {produto.descricao && (
           <p className="line-clamp-2 text-[0.82rem] leading-snug text-suave sm:text-sm">{produto.descricao}</p>
@@ -94,11 +94,11 @@ export function CardProduto({
             {formatarPreco(produto.preco)}
           </p>
           {esgotado ? (
-            <Button variant="suave" size="sm" disabled className="h-11 w-full">
+            <Button variant="suave" size="sm" disabled className="h-10 w-full">
               Esgotado
             </Button>
           ) : temOpcoes ? (
-            <Button size="sm" className="h-11 w-full" onClick={() => onAbrir(produto)} aria-label={`Escolher ${produto.nome}`}>
+            <Button size="sm" className="h-10 w-full" onClick={() => onAbrir(produto)} aria-label={`Escolher ${produto.nome}`}>
               <SlidersHorizontal /> Escolher
             </Button>
           ) : quantidadeSimples > 0 ? (
@@ -110,7 +110,7 @@ export function CardProduto({
               onMenos={() => remover(chave)}
             />
           ) : (
-            <Button size="sm" className="h-11 w-full" onClick={() => adicionar(produto.id)} aria-label={`Adicionar ${produto.nome}`}>
+            <Button size="sm" className="h-10 w-full" onClick={() => adicionar(produto.id)} aria-label={`Adicionar ${produto.nome}`}>
               <Plus /> Adicionar
             </Button>
           )}

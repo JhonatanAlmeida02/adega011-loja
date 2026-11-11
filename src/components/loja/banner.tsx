@@ -10,7 +10,7 @@ export function Banner({ config }: { config: Configuracoes }) {
 
   return (
     <section aria-label="Destaque" className="mx-auto w-full max-w-6xl px-4">
-      <div className="relative isolate flex min-h-[340px] flex-col justify-end overflow-hidden rounded-[1.75rem] border border-borda bg-superficie p-6 sm:min-h-[400px] sm:p-10 lg:min-h-[440px]">
+      <div className="relative isolate flex min-h-[240px] flex-col justify-end overflow-hidden rounded-[1.25rem] border border-borda bg-superficie p-5 sm:min-h-[280px] sm:p-7 lg:min-h-[300px]">
         {temImagem ? (
           <>
             <Image
@@ -32,21 +32,21 @@ export function Banner({ config }: { config: Configuracoes }) {
           </div>
         )}
 
-        <p className="rotulo mb-3 inline-flex w-fit items-center gap-2 rounded-full bg-preto/70 px-3 py-1.5 text-amarelo">
+        <p className="rotulo mb-2 text-[.65rem] inline-flex w-fit items-center gap-2 rounded-full bg-preto/70 px-2.5 py-1 text-amarelo">
           <span aria-hidden className="size-1.5 rounded-full bg-amarelo" /> 011 · São Paulo
         </p>
-        <h1 className="titulo max-w-3xl text-[3.4rem] sm:text-7xl lg:text-8xl">{config.banner_titulo}</h1>
+        <h1 className="titulo max-w-3xl text-[2.5rem] sm:text-5xl lg:text-6xl">{config.banner_titulo}</h1>
         {config.banner_texto && (
-          <p className="mt-3 max-w-xl text-base text-branco/90 sm:text-lg">{config.banner_texto}</p>
+          <p className="mt-2 max-w-lg text-sm text-branco/90 sm:text-base">{config.banner_texto}</p>
         )}
         {config.banner_botao_texto && (
           <a
             href={link}
             {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-            className="mt-6 inline-flex h-14 w-fit items-center gap-2 rounded-full bg-rosa px-7 text-lg font-bold text-preto shadow-[0_10px_30px_-10px_rgba(255,92,138,0.8)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.97]"
+            className="mt-4 inline-flex h-10 [@media(pointer:coarse)]:min-h-11 w-fit items-center gap-2 rounded-full bg-rosa px-5 text-sm font-bold text-preto shadow-[0_10px_30px_-10px_rgba(255,92,138,0.8)] transition-transform hover:bg-[#ff7a9f] active:scale-[0.97]"
           >
             {config.banner_botao_texto}
-            {!externo && <ArrowDown aria-hidden className="size-5" />}
+            {!externo && <ArrowDown aria-hidden className="size-4" />}
           </a>
         )}
       </div>

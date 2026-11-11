@@ -96,7 +96,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
         "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-borda bg-superficie transition-[width] duration-200 motion-reduce:transition-none md:flex print:hidden",
         recolhida ? "w-[72px]" : "w-56",
       )}>
-        <div className={cn("flex h-20 shrink-0 items-center border-b border-borda", recolhida ? "justify-center" : "gap-2 px-4")}>
+        <div className={cn("flex h-16 shrink-0 items-center border-b border-borda", recolhida ? "justify-center" : "gap-2 px-4")}>
           <Link href="/admin" aria-label="Adega011 · Painel" className={cn("flex min-w-0 flex-1 items-center justify-center gap-2", recolhida && "hidden")}>
             {!recolhida && <Image src="/logo-selo.svg" alt="" width={36} height={36} />}
             {!recolhida && <span className="min-w-0 flex-1"><span className="titulo block text-xl">Adega011</span><span className="text-xs text-suave">Painel da loja</span></span>}
@@ -115,7 +115,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
             <Link key={href} href={href} aria-label={rotulo} title={recolhida ? rotulo : undefined}
               aria-current={ativo(href) ? "page" : undefined}
               className={cn(
-                "flex h-11 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
+                "flex h-10 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
                 recolhida ? "justify-center" : "px-3",
                 ativo(href) ? "bg-rosa/10 text-rosa" : "text-suave hover:bg-superficie-3 hover:text-branco",
               )}
@@ -154,7 +154,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
-        pathname.startsWith("/admin/pdv") ? "max-w-none md:pt-5 md:pb-5" : "max-w-5xl md:pt-10 md:pb-16",
+        pathname.startsWith("/admin/pdv") ? "max-w-none md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>{children}</main>
 
       {/* Navegação inferior (celular) */}

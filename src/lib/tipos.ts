@@ -95,6 +95,7 @@ export interface Produto {
   unidades_pacote?: number;
   /** Venda deste SKU desconta um pacote completo em vez de uma UN. */
   vende_pacote?: boolean;
+  preco_pendente?: boolean;
   saldo_venda?: number;
   familia_id?: string | null;
   familia_nome?: string | null;
@@ -116,8 +117,8 @@ export function saldoVendavel(p: Pick<Produto, "eh_kit" | "saldo_venda" | "estoq
   return Math.max(0, Math.floor(p.estoque / (p.volume_unidade ?? 1)));
 }
 
-export function produtoDisponivel(p: Pick<Produto, "disponivel" | "ativo" | "controla_estoque" | "estoque" | "eh_kit" | "saldo_venda" | "volume_unidade">): boolean {
-  return p.disponivel && p.ativo && (!controlaSaldo(p) || saldoVendavel(p) > 0);
+export function produtoDisponivel(p: Pick<Produto, "disponivel" | "ativo" | "controla_estoque" | "estoque" | "eh_kit" | "saldo_venda" | "volume_unidade" | "preco_pendente">): boolean {
+  return !p.preco_pendente && p.disponivel && p.ativo && (!controlaSaldo(p) || saldoVendavel(p) > 0);
 }
 
 export function aplicarSaldos(produtos: Produto[], saldos: { produto_id: string; saldo: number }[]): Produto[] {

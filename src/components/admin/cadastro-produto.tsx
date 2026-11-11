@@ -67,11 +67,11 @@ export function CadastroProduto({ produtoId }: { produtoId?: string }) {
 }
 
 function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boolean }) {
-  const [f, setF] = useState<Rascunho>({ ...dados.produto, preco: existente ? centavosParaCampo(dados.produto.preco) : "", nome: dados.produto.familia_nome || dados.produto.nome });
+  const [f, setF] = useState<Rascunho>({ ...dados.produto, preco: existente && !dados.produto.preco_pendente ? centavosParaCampo(dados.produto.preco) : "", nome: dados.produto.familia_nome || dados.produto.nome });
   const [comVariacoes, setComVariacoes] = useState(!!dados.produto.familia_id);
   const [atributo, setAtributo] = useState(dados.produto.variacao_atributo ?? "Sabor");
   const [variacoes, setVariacoes] = useState<VariacaoRascunho[]>(dados.variacoes.map((p) => ({
-    id: p.id, nome: p.variacao_nome ?? "", preco: centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1, unidades_pacote: p.unidades_pacote ?? 1,
+    id: p.id, nome: p.variacao_nome ?? "", preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1, unidades_pacote: p.unidades_pacote ?? 1,
     ativo: p.ativo, disponivel: p.disponivel, estoque: p.estoque, existente: true,
   })));
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
@@ -177,6 +177,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
 
         <Tabs.Content value="gerais" forceMount className={painel}>
           <div><h2 className="font-semibold">Dados do produto</h2><p className="mt-1 text-xs text-suave">Informações principais para o cadastro e a venda.</p></div>
+          {dados.produto.preco_pendente && <p role="status" className="rounded-lg border border-amarelo/30 bg-amarelo/5 px-3 py-2 text-xs text-amarelo">Preço não informado na importação. Preencha o preço para concluir este cadastro.</p>}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="sm:col-span-2 lg:col-span-2"><Campo label="Nome" htmlFor="p-nome" erro={erros.nome}><Input id="p-nome" value={f.nome} onChange={(e) => set("nome", e.target.value)} maxLength={comVariacoes ? 60 : 100} aria-invalid={!!erros.nome} /></Campo></div>
             <Campo label="Tipo de produto" htmlFor="p-tipo"><Select id="p-tipo" disabled={!!f.familia_id} value={comVariacoes ? "variacoes" : f.eh_kit ? "kit" : "simples"} onChange={(e) => {

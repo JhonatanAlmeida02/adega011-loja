@@ -2,23 +2,23 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const baseCampo =
-  "w-full rounded-xl border border-borda bg-superficie-2 px-4 text-base text-branco placeholder:text-[#8f8f8f] transition-colors focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 aria-[invalid=true]:border-perigo disabled:opacity-60";
+  "w-full rounded-lg border border-borda bg-superficie-2 px-3 text-sm text-branco placeholder:text-[#8f8f8f] transition-colors focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 aria-[invalid=true]:border-perigo disabled:opacity-60";
 
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input data-slot="input" className={cn(baseCampo, "h-12", className)} {...props} />;
+  return <input data-slot="input" className={cn(baseCampo, "h-10", className)} {...props} />;
 }
 
 export function Textarea({
   className,
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea data-slot="textarea" className={cn(baseCampo, "min-h-24 py-3", className)} {...props} />;
+  return <textarea data-slot="textarea" className={cn(baseCampo, "min-h-20 py-2", className)} {...props} />;
 }
 
 export function Select({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="relative">
-      <select data-slot="select" className={cn(baseCampo, "h-12 appearance-none pr-10", className)} {...props}>
+      <select data-slot="select" className={cn(baseCampo, "h-10 appearance-none pr-10", className)} {...props}>
         {children}
       </select>
       <svg
@@ -33,7 +33,7 @@ export function Select({ className, children, ...props }: React.SelectHTMLAttrib
 }
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("rotulo mb-2 block text-suave", className)} {...props} />;
+  return <label className={cn("rotulo mb-1.5 block text-suave", className)} {...props} />;
 }
 
 export function Campo({
@@ -90,14 +90,14 @@ export function Interruptor({
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        "relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors disabled:opacity-50",
+        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors disabled:opacity-50",
         checked ? "border-rosa bg-rosa" : "border-borda bg-superficie-3",
       )}
     >
       <span
         className={cn(
-          "inline-block size-6 rounded-full bg-preto shadow transition-transform",
-          checked ? "translate-x-[1.6rem]" : "translate-x-0.5 bg-suave",
+          "inline-block size-5 rounded-full bg-preto shadow transition-transform",
+          checked ? "translate-x-[1.4rem]" : "translate-x-0.5 bg-suave",
         )}
       />
     </button>

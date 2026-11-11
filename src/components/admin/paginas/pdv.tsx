@@ -67,7 +67,7 @@ export function PaginaPdv() {
       sb
         .from("produtos")
         .select(
-          "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque,eh_kit,unidade_estoque,volume_unidade,unidades_pacote,vende_pacote,familia_id,familia_nome,variacao_atributo,variacao_nome," +
+          "id,categoria_id,nome,descricao,preco,foto_url,destaque,disponivel,ativo,ordem,controla_estoque,estoque,eh_kit,unidade_estoque,volume_unidade,unidades_pacote,vende_pacote,preco_pendente,familia_id,familia_nome,variacao_atributo,variacao_nome," +
             "grupos:grupos_opcoes(id,produto_id,nome,minimo,maximo,ordem,opcoes(id,grupo_id,nome,preco,disponivel,ordem))",
         )
         .eq("ativo", true)
@@ -273,7 +273,7 @@ function Venda({
                 return (
                   <li key={p.id}>
                     <button type="button" onClick={() => tocar(p)} disabled={!ok} aria-label={`Vender ${p.nome}`}
-                      className={cn("group flex min-h-14 w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-40", q > 0 && "bg-rosa/5")}>
+                      className={cn("group flex min-h-12 w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-40", q > 0 && "bg-rosa/5")}>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium leading-snug">{p.nome}</span>
                         {detalhe && <span className="mt-0.5 block text-[11px] text-suave">{detalhe}</span>}
@@ -354,7 +354,7 @@ function Venda({
         <SheetContent rotuloFechar="Fechar cupom" className="overflow-y-auto">
           {cupom && (
             <div className="px-5 pt-4 pb-6 pr-16 md:px-6">
-              <SheetTitle className="titulo text-4xl">Venda #{cupom.numero}</SheetTitle>
+              <SheetTitle className="titulo text-3xl">Venda #{cupom.numero}</SheetTitle>
               <SheetDescription className="mt-1 text-suave">
                 Total {formatarPreco(cupom.total)}
                 {cupom.pagamento === "dinheiro" && cupom.troco ? ` · Troco ${formatarPreco(cupom.troco)}` : ""}
@@ -461,7 +461,7 @@ function PainelVenda({
 
   return (
     <div className="flex h-[78dvh] max-h-[85dvh] min-h-0 flex-col lg:h-full lg:max-h-none" data-testid="pdv-venda">
-      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-borda px-4 pr-14 lg:pr-4">
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-borda px-4 pr-14 lg:pr-4">
         <div className="flex items-baseline gap-2"><SheetTitleSeguro>{recebimento ? "Pagamento" : "Venda atual"}</SheetTitleSeguro><span className="text-xs text-suave">{itens.reduce((q, i) => q + i.quantidade, 0)} {itens.reduce((q, i) => q + i.quantidade, 0) === 1 ? "item" : "itens"}</span></div>
         {recebimento ? <button type="button" disabled={finalizando} onClick={() => setRecebimento(false)} className="cursor-pointer text-xs text-suave hover:text-rosa">Voltar aos itens</button> : itens.length > 0 && <button type="button" onClick={() => { setDesconto(""); setRecebido(""); setCliente(""); onLimpar(); }} className="cursor-pointer text-xs text-suave hover:text-branco">Limpar venda</button>}
       </div>
@@ -577,7 +577,7 @@ function PainelVenda({
       </div> : <div className="flex min-h-0 flex-1 flex-col">
         <div aria-hidden className="flex shrink-0 items-center gap-3 border-b border-borda px-4 py-2 text-[11px] text-suave"><span className="flex-1">Produto</span><span className="w-[100px] text-center">Quantidade</span><span className="w-20 text-right">Total</span></div>
         <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto px-4">
-          {itens.map((i) => <li key={i.chave} className="flex min-h-16 items-center gap-3 py-2.5">
+          {itens.map((i) => <li key={i.chave} className="flex min-h-14 items-center gap-3 py-2.5">
             <div className="min-w-0 flex-1"><p className="text-sm font-medium leading-snug">{i.produto.nome}</p>{i.opcoes.length > 0 && <p className="mt-0.5 text-xs text-suave">+ {i.opcoes.map((o) => o.nome).join(", ")}</p>}<p className="mt-0.5 font-mono text-[11px] text-suave">{formatarPreco(unitario(i))} / {i.produto.vende_pacote ? "pct" : "un"}</p></div>
             <div className="flex w-[100px] shrink-0 items-center justify-center">
               <Button variant="fantasma" size="icone-sm" className="size-8 rounded-md text-suave" onClick={() => onAlterar(i.chave, -1)} aria-label={`Menos ${i.produto.nome}`}>{i.quantidade === 1 ? <Trash2 /> : <Minus />}</Button>
@@ -592,7 +592,7 @@ function PainelVenda({
       <footer className="shrink-0 space-y-3 border-t border-borda bg-superficie px-4 py-4">
         {valorDesconto > 0 && <dl className="space-y-1 text-xs text-suave"><div className="flex justify-between"><dt>Subtotal</dt><dd className="font-mono">{formatarPreco(subtotal)}</dd></div><div className="flex justify-between"><dt>Desconto</dt><dd className="font-mono">− {formatarPreco(valorDesconto)}</dd></div></dl>}
         <div className="flex items-baseline justify-between"><span className="text-sm text-suave">Total da venda</span><strong className="font-mono text-2xl font-semibold tabular-nums" data-testid="pdv-total">{formatarPreco(total)}</strong></div>
-        <Button size="sm" className="h-11 w-full rounded-lg text-sm font-semibold shadow-none" disabled={!itens.length || finalizando || (recebimento && (recebidoInsuficiente || recebidoInvalido))} onClick={(e) => { if (e.detail > 1) return; if (recebimento) void finalizar(); else setRecebimento(true); }}>
+        <Button size="sm" className="h-10 w-full rounded-lg text-sm font-semibold shadow-none" disabled={!itens.length || finalizando || (recebimento && (recebidoInsuficiente || recebidoInvalido))} onClick={(e) => { if (e.detail > 1) return; if (recebimento) void finalizar(); else setRecebimento(true); }}>
           {finalizando ? "Registrando…" : recebimento ? `Finalizar · ${formatarPreco(total)}` : "Ir para pagamento"}
         </Button>
       </footer>
@@ -687,7 +687,7 @@ function MovimentoCaixa({ onFeito }: { onFeito: () => void }) {
   };
   return (
     <form onSubmit={enviar} className="space-y-5 px-5 pt-4 pb-6 pr-16 md:px-6 md:pt-6">
-      <SheetTitle className="titulo text-4xl">Movimentar caixa</SheetTitle>
+      <SheetTitle className="titulo text-3xl">Movimentar caixa</SheetTitle>
       <SheetDescription className="text-suave">Sangria tira dinheiro da gaveta; suprimento coloca.</SheetDescription>
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de movimento">
         {(
@@ -748,7 +748,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-6 pr-16 md:px-6 md:pt-6">
-      <SheetTitle className="titulo text-4xl">{resultado ? "Caixa fechado" : "Fechar caixa"}</SheetTitle>
+      <SheetTitle className="titulo text-3xl">{resultado ? "Caixa fechado" : "Fechar caixa"}</SheetTitle>
       <SheetDescription className="text-suave">Aberto em {hora.format(new Date(caixa.aberto_em))}</SheetDescription>
 
       <dl className="divide-y divide-borda rounded-2xl border border-borda px-4 text-sm">

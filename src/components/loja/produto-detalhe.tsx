@@ -38,7 +38,7 @@ function DetalheVariacoes({ produto, categoria, onFechar }: { produto: Produto; 
   return <>
     {variacoes.length > 0 && <div className="mx-5 mt-16 rounded-xl border border-borda p-4 md:mx-6">
       <label htmlFor="det-variacao" className="mb-2 block text-sm font-medium">{produto.familia_nome} · {produto.variacao_atributo}</label>
-      <select id="det-variacao" value={id} onChange={(e) => setId(e.target.value)} className="h-12 w-full rounded-xl border border-borda bg-superficie-2 px-3 text-base">
+      <select id="det-variacao" value={id} onChange={(e) => setId(e.target.value)} className="h-10 w-full rounded-lg border border-borda bg-superficie-2 px-3 text-sm">
         {variacoes.map((v) => <option key={v.id} value={v.id}>{v.variacao_nome} · {formatarPreco(v.preco)}{!produtoDisponivel(v) ? " · Esgotado" : ""}</option>)}
       </select>
     </div>}
@@ -90,7 +90,7 @@ function Conteudo({ produto, categoria, onFechar }: { produto: Produto; categori
           {!disponivel && <SeloProduto tipo="esgotado" />}
           {disponivel && ultimas && <SeloProduto tipo="ultimas" texto={ultimas} />}
         </div>
-        <SheetTitle className="titulo text-4xl">{produto.nome}</SheetTitle>
+        <SheetTitle className="titulo text-3xl">{produto.nome}</SheetTitle>
         <SheetDescription className="text-base leading-relaxed text-suave">
           {produto.descricao || "Sem descrição."}
         </SheetDescription>

@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-bold transition-[transform,background-color,color,box-shadow] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0 cursor-pointer select-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-bold transition-[transform,background-color,color,box-shadow] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer select-none",
   {
     variants: {
       variant: {
@@ -18,11 +18,11 @@ const buttonVariants = cva(
         whatsapp: "bg-[#25D366] text-preto hover:bg-[#3ee07a]",
       },
       size: {
-        sm: "h-10 px-4 text-sm",
-        md: "h-12 px-5 text-base",
-        lg: "h-14 px-7 text-lg",
-        icone: "size-11",
-        "icone-sm": "size-9 [&_svg]:size-4",
+        sm: "h-8 px-3 text-xs",
+        md: "h-10 px-4 text-sm",
+        lg: "h-11 px-5 text-base",
+        icone: "size-9",
+        "icone-sm": "size-8 [&_svg]:size-4",
       },
     },
     defaultVariants: { variant: "primario", size: "md" },

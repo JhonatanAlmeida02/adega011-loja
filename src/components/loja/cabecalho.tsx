@@ -11,37 +11,37 @@ export function Cabecalho({ config }: { config: Configuracoes }) {
   const status = useStatusLoja(config);
 
   return (
-    <header className="mx-auto w-full max-w-6xl px-4 pt-4 pb-3 sm:pt-6">
-      <div className="flex items-center gap-3 sm:gap-4">
+    <header className="mx-auto w-full max-w-6xl px-4 pt-3 pb-2 sm:pt-4">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         <Image
           src="/logo-selo.svg"
           alt=""
-          width={64}
-          height={64}
+          width={48}
+          height={48}
           preload
-          className="size-14 shrink-0 sm:size-16"
+          className="size-10 shrink-0 sm:size-12"
         />
         <div className="min-w-0 flex-1">
-          <p className="titulo truncate text-3xl sm:text-4xl">{config.nome}</p>
-          <p className="rotulo truncate text-rosa">{config.slogan}</p>
+          <p className="titulo truncate text-2xl sm:text-3xl">{config.nome}</p>
+          <p className="rotulo truncate text-[.65rem] text-rosa">{config.slogan}</p>
         </div>
         {config.instagram && (
           <a
             href={`https://instagram.com/${config.instagram.replace(/^@/, "")}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="grid size-11 shrink-0 place-items-center rounded-full border border-borda text-branco transition-colors hover:border-rosa hover:text-rosa"
+            className="grid size-9 [@media(pointer:coarse)]:size-11 shrink-0 place-items-center rounded-full border border-borda text-branco transition-colors hover:border-rosa hover:text-rosa"
             aria-label={`Instagram @${config.instagram.replace(/^@/, "")} (abre em nova aba)`}
           >
-            <Instagram className="size-5" />
+            <Instagram className="size-4" />
           </a>
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2" aria-live="polite">
+      <div className="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
         <span
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-bold transition-colors",
+            "inline-flex h-7 items-center gap-2 rounded-full border px-2.5 text-xs font-bold transition-colors",
             !status && "border-borda text-suave",
             status?.aberta && "border-sucesso/50 bg-sucesso/10 text-sucesso",
             status && !status.aberta && "border-rosa/50 bg-rosa/10 text-rosa",
@@ -66,12 +66,12 @@ export function Cabecalho({ config }: { config: Configuracoes }) {
           )}
         </span>
         {config.tempo_entrega && (
-          <span className="rotulo inline-flex h-9 items-center gap-1.5 rounded-full border border-borda px-3 text-suave">
+          <span className="rotulo inline-flex h-7 items-center gap-1.5 rounded-full border border-borda px-2.5 text-[.65rem] text-suave">
             <Bike aria-hidden className="size-4" /> {config.tempo_entrega}
           </span>
         )}
         {config.pedido_minimo > 0 && (
-          <span className="rotulo inline-flex h-9 items-center gap-1.5 rounded-full border border-borda px-3 text-suave">
+          <span className="rotulo inline-flex h-7 items-center gap-1.5 rounded-full border border-borda px-2.5 text-[.65rem] text-suave">
             <Clock aria-hidden className="size-4" /> Mínimo {formatarPreco(config.pedido_minimo)}
           </span>
         )}

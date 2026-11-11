@@ -15,9 +15,11 @@ export function agruparVariacoes(produtos: Produto[]): Produto[] {
     if (vistos.has(p.familia_id)) return [];
     vistos.add(p.familia_id);
     const variacoes = familias.get(p.familia_id)!;
-    const vendaveis = variacoes.filter(produtoDisponivel);
+    const precificadas = variacoes.filter((v) => !v.preco_pendente);
+    const vendaveis = precificadas.filter(produtoDisponivel);
     return [{ ...p, id: `familia-${p.familia_id}`, nome: p.familia_nome || p.nome,
-      preco: Math.min(...(vendaveis.length ? vendaveis : variacoes).map((v) => v.preco)),
+      preco_pendente: precificadas.length === 0,
+      preco: Math.min(...(vendaveis.length ? vendaveis : precificadas.length ? precificadas : variacoes).map((v) => v.preco)),
       ativo: variacoes.some((v) => v.ativo), disponivel: vendaveis.length > 0, controla_estoque: false, eh_kit: false,
       destaque: variacoes.some((v) => v.destaque), variacoes }];
   });
