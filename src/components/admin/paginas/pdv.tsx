@@ -122,7 +122,7 @@ function AbrirCaixa({ onAberto }: { onAberto: () => void }) {
     <>
       <CabecalhoPagina titulo="PDV" descricao="Venda no balcão com baixa de estoque e cupom." />
       <Cartao className="mx-auto max-w-md text-center">
-        <Wallet className="mx-auto size-12 text-rosa" aria-hidden />
+        <Wallet className="mx-auto size-12 text-rosa-texto" aria-hidden />
         <h2 className="titulo mt-3 text-3xl">Abrir caixa</h2>
         <p className="mt-1 text-suave">Informe quanto tem de troco na gaveta para começar.</p>
         <form onSubmit={abrir} className="mt-5 space-y-4 text-left">
@@ -237,7 +237,7 @@ function Venda({
       <div className="pdv-shell print:hidden">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-borda pb-4">
           <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-lg bg-rosa/10 text-rosa"><ShoppingCart className="size-5" aria-hidden /></div>
+            <div className="grid size-9 place-items-center rounded-lg bg-rosa/10 text-rosa-texto"><ShoppingCart className="size-5" aria-hidden /></div>
             <div>
               <h1 className="text-lg font-semibold tracking-tight">Frente de caixa</h1>
               <p className="mt-0.5 flex items-center gap-2 text-xs text-suave"><span className="size-1.5 rounded-full bg-sucesso" aria-hidden />Caixa aberto · {hora.format(new Date(caixa.aberto_em))}</p>
@@ -258,7 +258,7 @@ function Venda({
                 <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
                 <Input type="search" aria-label="Buscar produto no PDV" placeholder="Buscar produto…"
                   value={busca} onChange={(e) => setBusca(e.target.value)} className="h-10 rounded-lg pl-10 text-sm" />
-              </div><Button type="button" variant="fantasma" size="icone-sm" aria-label="Filtrar categorias" aria-expanded={filtroAberto} aria-controls="pdv-categorias" className={cn("shrink-0 rounded-lg", (filtroAberto || cat !== "todas") && "bg-rosa/10 text-rosa")} onClick={() => setFiltroAberto((v) => !v)}><SlidersHorizontal /></Button></div>
+              </div><Button type="button" variant="fantasma" size="icone-sm" aria-label="Filtrar categorias" aria-expanded={filtroAberto} aria-controls="pdv-categorias" className={cn("shrink-0 rounded-lg", (filtroAberto || cat !== "todas") && "bg-rosa/10 text-rosa-texto")} onClick={() => setFiltroAberto((v) => !v)}><SlidersHorizontal /></Button></div>
               {filtroAberto && <Select id="pdv-categorias" aria-label="Filtrar produtos por categoria" value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-lg text-xs">
                 <option value="todas">Todas as categorias</option>
                 {categorias.filter((c) => c.ativa).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
@@ -279,7 +279,7 @@ function Venda({
                         {detalhe && <span className="mt-0.5 block text-[11px] text-suave">{detalhe}</span>}
                       </span>
                       <span className="shrink-0 text-right font-mono text-sm tabular-nums">{p.variacoes?.length && <span className="block font-sans text-[10px] text-suave">a partir de</span>}{formatarPreco(p.preco)}</span>
-                      <span className="grid size-7 shrink-0 place-items-center rounded-md text-suave group-hover:bg-rosa/10 group-hover:text-rosa"><Plus className="size-4" aria-hidden /></span>
+                      <span className="grid size-7 shrink-0 place-items-center rounded-md text-suave group-hover:bg-rosa/10 group-hover:text-rosa-texto"><Plus className="size-4" aria-hidden /></span>
                     </button>
                   </li>
                 );
@@ -463,7 +463,7 @@ function PainelVenda({
     <div className="flex h-[78dvh] max-h-[85dvh] min-h-0 flex-col lg:h-full lg:max-h-none" data-testid="pdv-venda">
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-borda px-4 pr-14 lg:pr-4">
         <div className="flex items-baseline gap-2"><SheetTitleSeguro>{recebimento ? "Pagamento" : "Venda atual"}</SheetTitleSeguro><span className="text-xs text-suave">{itens.reduce((q, i) => q + i.quantidade, 0)} {itens.reduce((q, i) => q + i.quantidade, 0) === 1 ? "item" : "itens"}</span></div>
-        {recebimento ? <button type="button" disabled={finalizando} onClick={() => setRecebimento(false)} className="cursor-pointer text-xs text-suave hover:text-rosa">Voltar aos itens</button> : itens.length > 0 && <button type="button" onClick={() => { setDesconto(""); setRecebido(""); setCliente(""); onLimpar(); }} className="cursor-pointer text-xs text-suave hover:text-branco">Limpar venda</button>}
+        {recebimento ? <button type="button" disabled={finalizando} onClick={() => setRecebimento(false)} className="cursor-pointer text-xs text-suave hover:text-rosa-texto">Voltar aos itens</button> : itens.length > 0 && <button type="button" onClick={() => { setDesconto(""); setRecebido(""); setCliente(""); onLimpar(); }} className="cursor-pointer text-xs text-suave hover:text-texto">Limpar venda</button>}
       </div>
 
       {recebimento ? <fieldset disabled={finalizando} className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -481,7 +481,7 @@ function PainelVenda({
                 onClick={() => setPagamento(p.id)}
                 className={cn(
                   "h-10 cursor-pointer rounded-lg border text-sm font-medium",
-                  pagamento === p.id ? "border-rosa bg-rosa/10 text-rosa" : "border-borda",
+                  pagamento === p.id ? "border-rosa bg-rosa/10 text-rosa-texto" : "border-borda",
                 )}
               >
                 {p.rotulo}
@@ -518,7 +518,7 @@ function PainelVenda({
                 ))}
               </div>
               {troco != null && (
-                <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-amarelo")} aria-live="polite">
+                <p className={cn("mt-2 text-right font-mono", recebidoInsuficiente ? "text-perigo" : "text-amarelo-texto")} aria-live="polite">
                   {recebidoInsuficiente ? `Faltam ${formatarPreco(-troco)}` : `Troco: ${formatarPreco(troco)}`}
                 </p>
               )}
@@ -573,7 +573,7 @@ function PainelVenda({
         </div>
       </fieldset> : itens.length === 0 ? <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-suave">
         <div className="grid size-12 place-items-center rounded-full bg-superficie-2"><ShoppingCart className="size-5" aria-hidden /></div>
-        <div><p className="text-sm font-medium text-branco">Sua venda começa aqui</p><p className="mt-1 text-xs">Busque um produto e adicione à venda.</p></div>
+        <div><p className="text-sm font-medium text-texto">Sua venda começa aqui</p><p className="mt-1 text-xs">Busque um produto e adicione à venda.</p></div>
       </div> : <div className="flex min-h-0 flex-1 flex-col">
         <div aria-hidden className="flex shrink-0 items-center gap-3 border-b border-borda px-4 py-2 text-[11px] text-suave"><span className="flex-1">Produto</span><span className="w-[100px] text-center">Quantidade</span><span className="w-20 text-right">Total</span></div>
         <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto px-4">
@@ -704,7 +704,7 @@ function MovimentoCaixa({ onFeito }: { onFeito: () => void }) {
             onClick={() => setTipo(id)}
             className={cn(
               "flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 font-bold",
-              tipo === id ? "border-rosa bg-rosa/10 text-rosa" : "border-borda",
+              tipo === id ? "border-rosa bg-rosa/10 text-rosa-texto" : "border-borda",
             )}
           >
             <Icone className="size-5" aria-hidden /> {rotulo}
@@ -796,7 +796,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
         </div>
         <div className="flex justify-between py-2 font-bold">
           <dt>Dinheiro esperado na gaveta</dt>
-          <dd className="whitespace-nowrap pl-3 font-mono text-amarelo">{formatarPreco(r.dinheiro_esperado)}</dd>
+          <dd className="whitespace-nowrap pl-3 font-mono text-amarelo-texto">{formatarPreco(r.dinheiro_esperado)}</dd>
         </div>
       </dl>
 
@@ -805,7 +805,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
           <p
             className={cn(
               "rounded-2xl p-4 text-center font-bold",
-              (resultado.diferenca ?? 0) === 0 ? "bg-sucesso/15 text-sucesso" : "bg-rosa/15 text-rosa",
+              (resultado.diferenca ?? 0) === 0 ? "bg-sucesso/15 text-sucesso" : "bg-rosa/15 text-rosa-texto",
             )}
           >
             Contado {formatarPreco(resultado.valor_contado ?? 0)} ·{" "}
@@ -829,7 +829,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
             />
           </Campo>
           {diferenca != null && (
-            <p className={cn("text-sm font-bold", diferenca === 0 ? "text-sucesso" : "text-rosa")} aria-live="polite">
+            <p className={cn("text-sm font-bold", diferenca === 0 ? "text-sucesso" : "text-rosa-texto")} aria-live="polite">
               {diferenca === 0 ? "Bate com o esperado." : `${diferenca > 0 ? "Sobra" : "Falta"} ${formatarPreco(Math.abs(diferenca))}`}
             </p>
           )}

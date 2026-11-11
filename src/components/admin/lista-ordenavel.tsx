@@ -116,7 +116,7 @@ function ItemOrdenavel({
         <button
           ref={setActivatorNodeRef}
           type="button"
-          className="grid size-11 shrink-0 cursor-grab touch-none place-items-center rounded-xl text-suave hover:bg-superficie-3 hover:text-branco active:cursor-grabbing"
+          className="grid size-11 shrink-0 cursor-grab touch-none place-items-center rounded-xl text-suave hover:bg-superficie-3 hover:text-texto active:cursor-grabbing"
           aria-label={`Arrastar ${rotulo}`}
           {...attributes}
           {...listeners}

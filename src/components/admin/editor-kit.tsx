@@ -41,7 +41,7 @@ export function EditorKit({ produtos, value, onChange, disabled = false }: {
         {produto && <p className="mt-3 text-xs text-suave">Saldo atual: {produto.estoque} {produto.unidade_estoque ?? "un"} · rende {linha.quantidade > 0 ? Math.max(0, Math.floor(produto.estoque / linha.quantidade)) : 0} kits</p>}
       </div>;
     })}
-    {produtos.length === 0 && <p className="text-sm text-amarelo">Cadastre um produto simples com controle de estoque para usá-lo na composição.</p>}
+    {produtos.length === 0 && <p className="text-sm text-amarelo-texto">Cadastre um produto simples com controle de estoque para usá-lo na composição.</p>}
     <Button type="button" size="sm" variant="suave" disabled={disabled || value.length >= 50} onClick={() => onChange([...value, { componente_id: "", quantidade: 1 }])}><Plus /> Adicionar componente</Button>
   </div>;
 }

@@ -68,7 +68,7 @@ export function FormLogin() {
         </Button>
         <Link
           href="/admin/recuperar"
-          className="block py-2 text-center text-sm font-bold text-rosa underline-offset-4 hover:underline"
+          className="block py-2 text-center text-sm font-bold text-rosa-texto underline-offset-4 hover:underline"
         >
           Esqueci minha senha
         </Link>

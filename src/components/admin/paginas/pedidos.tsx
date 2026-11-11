@@ -25,7 +25,7 @@ const CORES_STATUS: Record<StatusPedido, string> = {
   novo: "bg-amarelo text-preto",
   confirmado: "bg-rosa text-preto",
   em_entrega: "bg-[#7dd3fc] text-preto",
-  concluido: "bg-sucesso text-preto",
+  concluido: "bg-sucesso-vivo text-preto",
   cancelado: "bg-superficie-3 text-suave",
 };
 
@@ -168,7 +168,7 @@ export function PaginaPedidos() {
             }}
             className={cn(
               "rotulo h-11 shrink-0 cursor-pointer rounded-full border px-4 font-bold",
-              filtro === f.id ? "border-rosa bg-rosa text-preto" : "border-borda text-branco hover:border-rosa/60",
+              filtro === f.id ? "border-rosa bg-rosa text-preto" : "border-borda text-texto hover:border-rosa/60",
             )}
           >
             {f.rotulo}
@@ -228,7 +228,7 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
           <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
           {p.tipo === "entrega" ? (
             <span>
-              {p.endereco} <span className="text-branco/70">· {p.regiao_nome}</span>
+              {p.endereco} <span className="text-texto/70">· {p.regiao_nome}</span>
             </span>
           ) : p.tipo === "balcao" ? (
             "Venda no balcão"
@@ -242,7 +242,7 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
         {p.itens.map((it, i) => (
           <li key={`${it.produto_id}-${i}`} className="flex justify-between gap-3">
             <span>
-              <span className="font-mono font-bold text-rosa">{it.quantidade}x</span> {it.nome}
+              <span className="font-mono font-bold text-rosa-texto">{it.quantidade}x</span> {it.nome}
               {it.opcoes && it.opcoes.length > 0 && (
                 <span className="block pl-7 text-suave">+ {it.opcoes.map((o) => o.nome).join(", ")}</span>
               )}

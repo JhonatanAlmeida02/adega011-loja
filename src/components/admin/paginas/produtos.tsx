@@ -161,19 +161,19 @@ export function PaginaProdutos() {
                   const precos = membros.filter((v) => !v.preco_pendente).map((v) => v.preco);
                   return <tr key={p.id} className="bg-superficie transition-colors hover:bg-superficie-2">
                     <td className="min-w-64 px-3 py-2.5">
-                      <button onClick={() => router.push(`/admin/produtos/${membros[0].id}`)} className={cn("cursor-pointer text-left leading-snug hover:text-rosa", !p.ativo && "text-suave")}>
-                        {p.nome}{p.variacoes && <span className="ml-1 text-xs text-rosa">({p.variacoes.length} variações)</span>}
+                      <button onClick={() => router.push(`/admin/produtos/${membros[0].id}`)} className={cn("cursor-pointer text-left leading-snug hover:text-rosa-texto", !p.ativo && "text-suave")}>
+                        {p.nome}{p.variacoes && <span className="ml-1 text-xs text-rosa-texto">({p.variacoes.length} variações)</span>}
                       </button>
                       <span className="ml-2 inline-flex flex-wrap gap-x-2 text-[.7rem] text-suave">
-                        {p.eh_kit && <span className="text-rosa">Kit</span>}
-                        {p.preco_pendente && <span className="text-amarelo">Preço pendente</span>}
+                        {p.eh_kit && <span className="text-rosa-texto">Kit</span>}
+                        {p.preco_pendente && <span className="text-amarelo-texto">Preço pendente</span>}
                         {!p.ativo && <span>Oculto</span>}
                         {!p.disponivel && !p.preco_pendente && !p.variacoes && <span>Venda pausada</span>}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-suave">{codigo || "—"}</td>
                     <td className="px-3 py-2.5 text-xs">{p.eh_kit ? "KIT" : p.variacoes ? "VAR" : p.vende_pacote ? "PCT" : p.unidade_estoque === "ml" ? "GFA" : "UN"}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{precos.length ? faixa(precos) : <span className="text-xs text-amarelo">Pendente</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{precos.length ? faixa(precos) : <span className="text-xs text-amarelo-texto">Pendente</span>}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-suave tabular-nums">{custo}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{fisico === null ? "—" : `${fisico.toLocaleString("pt-BR")} ${[...unidades][0]}`}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums" title="Quantidade possível pelo estoque; a situação de venda é controlada separadamente.">{disponivel === null ? "—" : disponivel.toLocaleString("pt-BR")}</td>
@@ -184,7 +184,7 @@ export function PaginaProdutos() {
                           <DropdownMenu.Item onSelect={() => router.push(`/admin/produtos/${membros[0].id}`)} className="menu-produto-item"><Pencil className="size-4" />Editar produto</DropdownMenu.Item>
                           {!p.variacoes && <>
                             <DropdownMenu.Separator className="my-1 h-px bg-borda" />
-                            {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja'], ['ativo', 'Visível na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
+                            {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja'], ['ativo', 'Visível na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa-texto" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
                             <DropdownMenu.Separator className="my-1 h-px bg-borda" />
                             <Confirmar titulo="Excluir produto?" descricao={`“${p.nome}” será removido do cardápio. Isso não pode ser desfeito.`} onConfirmar={() => excluir(p)}>
                               <button type="button" className="menu-produto-item w-full text-perigo"><Trash2 className="size-4" />Excluir produto</button>

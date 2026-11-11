@@ -193,7 +193,7 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
   return (
     <div className="rounded-card border border-borda bg-superficie p-4">
       <p className="rotulo text-suave">{rotulo}</p>
-      <p className={cn("mt-1 font-mono text-xl font-bold tabular-nums sm:text-2xl", destaque && "text-amarelo")}>
+      <p className={cn("mt-1 font-mono text-xl font-bold tabular-nums sm:text-2xl", destaque && "text-amarelo-texto")}>
         {valor}
       </p>
     </div>
@@ -213,7 +213,7 @@ function GraficoDias({ dias }: { dias: { dia: string; pedidos: number; total: nu
           type="button"
           onClick={() => setTabela((t) => !t)}
           aria-pressed={tabela}
-          className="cursor-pointer text-sm text-suave underline-offset-4 hover:text-branco hover:underline"
+          className="cursor-pointer text-sm text-suave underline-offset-4 hover:text-texto hover:underline"
         >
           {tabela ? "Ver gráfico" : "Ver tabela"}
         </button>
@@ -254,7 +254,7 @@ function GraficoDias({ dias }: { dias: { dia: string; pedidos: number; total: nu
                 className="group relative flex h-full flex-1 cursor-default items-end outline-none"
               >
                 <div
-                  className="w-full rounded-t-[4px] bg-rosa transition-opacity group-hover:opacity-80 group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-amarelo"
+                  className="w-full rounded-t-[4px] bg-rosa transition-opacity group-hover:opacity-80 group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-foco"
                   style={{ height: d.total ? `${Math.max(2, (d.total / max) * 100)}%` : "0" }}
                 />
                 <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg border border-borda bg-superficie-2 px-2.5 py-1.5 text-xs shadow-xl group-hover:block group-focus-visible:block">

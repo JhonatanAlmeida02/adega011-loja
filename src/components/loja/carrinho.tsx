@@ -168,7 +168,7 @@ function EtapaItens({
           <button
             type="button"
             onClick={limpar}
-            className="ml-auto inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm text-suave hover:bg-superficie-3 hover:text-branco"
+            className="ml-auto inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm text-suave hover:bg-superficie-3 hover:text-texto"
           >
             <Trash2 className="size-4" /> Limpar
           </button>
@@ -177,7 +177,7 @@ function EtapaItens({
 
       {linhas.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
-          <ShoppingBag className="size-12 text-rosa" aria-hidden />
+          <ShoppingBag className="size-12 text-rosa-texto" aria-hidden />
           <p className="titulo text-3xl">Carrinho vazio</p>
           <p className="text-suave">Bora escolher alguma coisa gelada?</p>
           <Button onClick={onFechar}>Ver cardápio</Button>
@@ -203,7 +203,7 @@ function EtapaItens({
                       <button
                         type="button"
                         onClick={() => definir(l.chave, 0)}
-                        className="cursor-pointer text-sm font-bold text-rosa underline underline-offset-2"
+                        className="cursor-pointer text-sm font-bold text-rosa-texto underline underline-offset-2"
                       >
                         Remover
                       </button>
@@ -234,7 +234,7 @@ function EtapaItens({
               <div className="mb-4" role="status">
                 <div className="flex justify-between text-sm">
                   <span className="text-suave">Pedido mínimo {formatarPreco(minimo)}</span>
-                  <span className="font-bold text-amarelo">Faltam {formatarPreco(falta)}</span>
+                  <span className="font-bold text-amarelo-texto">Faltam {formatarPreco(falta)}</span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-superficie-3">
                   <div
@@ -279,7 +279,7 @@ function OpcaoRadio({
   return (
     <label
       className={cn(
-        "relative flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-amarelo",
+        "relative flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-foco",
         selecionado ? "border-rosa bg-rosa/10" : "border-borda bg-superficie-2 hover:border-rosa/50",
       )}
     >
@@ -425,7 +425,7 @@ function EtapaCheckout({
       <div className="flex-1 space-y-7 overflow-y-auto px-5 pt-4 pb-6 md:px-6">
         {fechada && (
           <p role="alert" className="rounded-2xl border border-rosa/50 bg-rosa/10 p-4 text-sm">
-            <strong className="text-rosa">Loja fechada agora.</strong> {status?.detalhe}. Você pode montar o pedido e enviar
+            <strong className="text-rosa-texto">Loja fechada agora.</strong> {status?.detalhe}. Você pode montar o pedido e enviar
             quando abrirmos.
           </p>
         )}
@@ -471,7 +471,7 @@ function EtapaCheckout({
                 valor="entrega"
                 selecionado={dados.tipo === "entrega"}
                 onSelecionar={() => set("tipo", "entrega")}
-                icone={<Bike className="size-5 text-rosa" aria-hidden />}
+                icone={<Bike className="size-5 text-rosa-texto" aria-hidden />}
               >
                 Entrega
               </OpcaoRadio>
@@ -482,7 +482,7 @@ function EtapaCheckout({
                 valor="retirada"
                 selecionado={dados.tipo === "retirada"}
                 onSelecionar={() => set("tipo", "retirada")}
-                icone={<Store className="size-5 text-rosa" aria-hidden />}
+                icone={<Store className="size-5 text-rosa-texto" aria-hidden />}
               >
                 Retirada
               </OpcaoRadio>
@@ -740,13 +740,13 @@ function EtapaEnviado({
       <CheckCircle2 className="size-16 animate-pulsar text-sucesso" aria-hidden />
       <SheetTitle className="titulo text-3xl">{numero ? `Pedido #${numero} pronto!` : "Pedido pronto!"}</SheetTitle>
       <SheetDescription className="max-w-xs text-suave">
-        Abrimos o WhatsApp com tudo preenchido. É só tocar em <strong className="text-branco">enviar</strong> por lá.
+        Abrimos o WhatsApp com tudo preenchido. É só tocar em <strong className="text-texto">enviar</strong> por lá.
       </SheetDescription>
       {pix && chave && (
         <div className="w-full max-w-xs rounded-2xl border border-borda bg-superficie-2 p-4 text-left">
           <p className="rotulo text-suave">Chave Pix</p>
           <div className="mt-1 flex items-center gap-2">
-            <code className="flex-1 break-all font-mono text-amarelo">{chave}</code>
+            <code className="flex-1 break-all font-mono text-amarelo-texto">{chave}</code>
             <Button
               type="button"
               size="icone-sm"

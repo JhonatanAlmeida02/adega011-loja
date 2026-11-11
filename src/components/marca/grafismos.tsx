@@ -114,7 +114,7 @@ export function Padrao011({ className, opacidade = 0.08 }: { className?: string;
           <circle cx="140" cy="40" r="8" fill="none" stroke="var(--color-rosa)" strokeWidth="2" />
           <rect x="20" y="110" width="70" height="10" rx="5" fill="var(--color-rosa)" />
           <rect x="20" y="130" width="44" height="10" rx="5" fill="var(--color-amarelo)" />
-          <circle cx="135" cy="135" r="26" fill="none" stroke="var(--color-branco)" strokeWidth="1.5" />
+          <circle cx="135" cy="135" r="26" fill="none" stroke="var(--color-texto)" strokeWidth="1.5" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#p${id})`} opacity={opacidade} />
