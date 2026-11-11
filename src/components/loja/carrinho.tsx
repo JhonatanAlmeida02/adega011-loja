@@ -2,12 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, Bike, CheckCircle2, Copy, ShoppingBag, Store, Trash2 } from "lucide-react";
+import { ArrowLeft, Bike, CheckCircle2, Copy, MapPin, ShoppingBag, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCarrinho } from "@/lib/carrinho";
 import {
   calcularSubtotal,
   calcularTotais,
+  cotacaoValida,
+  type CotacaoFrete,
   contarItens,
   linkWhatsApp,
   montarLinhas,
@@ -17,7 +19,8 @@ import {
   type ErrosCheckout,
   type LinhaCarrinho,
 } from "@/lib/pedido";
-import { abrirWhatsApp, registrarPedido } from "@/lib/registrar-pedido";
+import { atualizarVitrineAposPedido } from "@/app/admin/acoes";
+import { abrirWhatsApp, cotarFrete, registrarPedido } from "@/lib/registrar-pedido";
 import { NOMES_PAGAMENTO, type DadosLoja, type FormaPagamento } from "@/lib/tipos";
 import { cn, formatarPreco, mascararTelefone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +41,8 @@ function dadosIniciais(loja: DadosLoja): DadosCheckout {
     tipo: loja.config.aceita_entrega ? "entrega" : "retirada",
     regiaoId: "",
     endereco: "",
+    bairro: "",
+    cidade: loja.config.cidade_padrao,
     complemento: "",
     pagamento: loja.config.pagamentos.length === 1 ? loja.config.pagamentos[0] : "",
     troco: "",
@@ -45,7 +50,7 @@ function dadosIniciais(loja: DadosLoja): DadosCheckout {
   };
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE_CLIENTE) ?? "{}");
-    return { ...base, ...salvo, troco: "", observacoes: "" };
+    return { ...base, ...salvo, cidade: salvo.cidade || base.cidade, troco: "", observacoes: "" };
   } catch {
     return base;
   }
@@ -181,7 +186,7 @@ function EtapaItens({
         <>
           <ul className="mt-4 flex-1 divide-y divide-borda overflow-y-auto px-5 md:px-6">
             {linhas.map((l) => (
-              <li key={l.produto.id} className={cn("flex gap-3 py-4", l.indisponivel && "opacity-70")}>
+              <li key={l.chave} className={cn("flex gap-3 py-4", l.indisponivel && "opacity-70")}>
                 <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-superficie-2">
                   {l.produto.foto_url && (
                     <Image src={l.produto.foto_url} alt="" fill sizes="64px" className={cn("object-cover", l.indisponivel && "grayscale")} />
@@ -189,12 +194,15 @@ function EtapaItens({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-bold leading-snug">{l.produto.nome}</p>
+                  {l.opcoes.length > 0 && (
+                    <p className="text-sm text-suave">+ {l.opcoes.map((o) => o.nome).join(", ")}</p>
+                  )}
                   {l.indisponivel ? (
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="text-sm text-perigo">Esgotado — não entra no pedido</span>
+                      <span className="text-sm text-perigo">{l.motivo} — não entra no pedido</span>
                       <button
                         type="button"
-                        onClick={() => definir(l.produto.id, 0)}
+                        onClick={() => definir(l.chave, 0)}
                         className="cursor-pointer text-sm font-bold text-rosa underline underline-offset-2"
                       >
                         Remover
@@ -202,13 +210,14 @@ function EtapaItens({
                     </div>
                   ) : (
                     <>
-                      <p className="font-mono text-sm text-suave">{formatarPreco(l.produto.preco)} cada</p>
+                      <p className="font-mono text-sm text-suave">{formatarPreco(l.unitario)} cada</p>
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <SeletorQuantidade
                           nome={l.produto.nome}
                           quantidade={l.quantidade}
-                          onMais={() => adicionar(l.produto.id)}
-                          onMenos={() => remover(l.produto.id)}
+                          maximo={l.produto.controla_estoque ? l.produto.estoque : undefined}
+                          onMais={() => adicionar(l.produto.id, l.opcoes.map((o) => o.id))}
+                          onMenos={() => remover(l.chave)}
                           className="w-32"
                         />
                         <span className="preco">{formatarPreco(l.total)}</span>
@@ -309,10 +318,34 @@ function EtapaCheckout({
   const [dados, setDados] = useState<DadosCheckout>(() => dadosIniciais(loja));
   const [erros, setErros] = useState<ErrosCheckout>({});
   const [enviando, setEnviando] = useState(false);
+  const [cotacao, setCotacao] = useState<CotacaoFrete | null>(null);
+  const [cotando, setCotando] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const porDistancia = config.modo_frete === "distancia";
   const regioesAtivas = regioes.filter((r) => r.ativa);
-  const totais = calcularTotais(subtotal, dados, regioes);
+  const totais = calcularTotais(subtotal, dados, regioes, config, cotacao);
+  const freteOk = cotacaoValida(cotacao, dados);
+
+  const calcularFrete = async () => {
+    const faltando: ErrosCheckout = {};
+    if (dados.endereco.trim().length < 5 || !/\d/.test(dados.endereco)) faltando.endereco = "Informe rua e número.";
+    if (dados.bairro.trim().length < 2) faltando.bairro = "Informe o bairro.";
+    if (faltando.endereco || faltando.bairro) {
+      setErros((e) => ({ ...e, ...faltando }));
+      return;
+    }
+    setCotando(true);
+    const r = await cotarFrete(dados);
+    setCotando(false);
+    if (!r.ok) {
+      setCotacao(null);
+      setErros((e) => ({ ...e, frete: r.mensagem }));
+      return;
+    }
+    setCotacao(r.cotacao);
+    setErros((e) => ({ ...e, frete: undefined, endereco: undefined, bairro: undefined }));
+  };
   const fechada = status ? !status.aberta : false;
 
   const set = <K extends keyof DadosCheckout>(k: K, v: DadosCheckout[K]) => {
@@ -342,7 +375,7 @@ function EtapaCheckout({
     const janela = celular ? null : window.open("", "_blank");
 
     setEnviando(true);
-    const r = await registrarPedido(dados, linhas);
+    const r = await registrarPedido(dados, linhas, config, cotacao);
     setEnviando(false);
 
     if (!r.ok) {
@@ -359,12 +392,19 @@ function EtapaCheckout({
     const url = linkWhatsApp(config.whatsapp, mensagem);
 
     try {
-      const { nome, telefone, tipo, regiaoId, endereco, complemento } = dados;
-      localStorage.setItem(CHAVE_CLIENTE, JSON.stringify({ nome, telefone, tipo, regiaoId, endereco, complemento }));
+      const { nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento } = dados;
+      localStorage.setItem(
+        CHAVE_CLIENTE,
+        JSON.stringify({ nome, telefone, tipo, regiaoId, endereco, bairro, cidade, complemento }),
+      );
     } catch {
       /* sem armazenamento disponível */
     }
 
+    // Atualiza a vitrine (estoque) antes de sair para o WhatsApp; no máximo 1,5 s de espera
+    if (linhas.some((l) => l.produto.controla_estoque)) {
+      await Promise.race([atualizarVitrineAposPedido().catch(() => null), new Promise((ok) => setTimeout(ok, 1500))]);
+    }
     limpar();
     onEnviado({ numero: r.numero, url, pix: dados.pagamento === "pix" });
     abrirWhatsApp(url, janela);
@@ -452,6 +492,86 @@ function EtapaCheckout({
 
           {dados.tipo === "entrega" ? (
             <div className="space-y-4 pt-1">
+              {porDistancia ? (
+                <>
+                  <Campo label="Rua e número" htmlFor="endereco" erro={erros.endereco}>
+                    <Input
+                      id="endereco"
+                      name="endereco"
+                      autoComplete="address-line1"
+                      placeholder="Ex.: Rua das Flores, 120"
+                      value={dados.endereco}
+                      onChange={(e) => set("endereco", e.target.value)}
+                      aria-invalid={!!erros.endereco}
+                      aria-describedby={erros.endereco ? "endereco-erro" : undefined}
+                      maxLength={150}
+                      required
+                    />
+                  </Campo>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Campo label="Bairro" htmlFor="bairro" erro={erros.bairro}>
+                      <Input
+                        id="bairro"
+                        name="bairro"
+                        autoComplete="address-level3"
+                        value={dados.bairro}
+                        onChange={(e) => set("bairro", e.target.value)}
+                        aria-invalid={!!erros.bairro}
+                        aria-describedby={erros.bairro ? "bairro-erro" : undefined}
+                        maxLength={80}
+                        required
+                      />
+                    </Campo>
+                    <Campo label="Cidade" htmlFor="cidade">
+                      <Input
+                        id="cidade"
+                        name="cidade"
+                        autoComplete="address-level2"
+                        value={dados.cidade}
+                        onChange={(e) => set("cidade", e.target.value)}
+                        maxLength={80}
+                      />
+                    </Campo>
+                  </div>
+                  <div className="rounded-2xl border border-borda bg-superficie-2 p-4" aria-live="polite">
+                    {freteOk && cotacao ? (
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-bold">
+                            {cotacao.km.toFixed(1).replace(".", ",")} km · <span className="preco">{formatarPreco(cotacao.taxa)}</span>
+                          </p>
+                          <p className="mt-1 text-sm text-suave">Entrega em: {cotacao.endereco_formatado}</p>
+                        </div>
+                        <Button type="button" variant="fantasma" size="sm" onClick={calcularFrete} disabled={cotando}>
+                          Recalcular
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant="contorno"
+                          className="w-full"
+                          onClick={calcularFrete}
+                          disabled={cotando}
+                          name="frete"
+                        >
+                          <MapPin /> {cotando ? "Calculando…" : "Calcular entrega"}
+                        </Button>
+                        <p className="mt-2 text-center text-xs text-suave">
+                          {formatarPreco(config.taxa_base)} + {formatarPreco(config.taxa_por_km)} por km rodado
+                        </p>
+                      </>
+                    )}
+                    {erros.frete && (
+                      <p role="alert" className="mt-2 text-sm text-perigo">
+                        {erros.frete}
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
               <Campo label="Região / bairro" htmlFor="regiaoId" erro={erros.regiaoId}>
                 <Select
                   id="regiaoId"
@@ -483,6 +603,8 @@ function EtapaCheckout({
                   required
                 />
               </Campo>
+                </>
+              )}
               <Campo label="Complemento / referência (opcional)" htmlFor="complemento">
                 <Input
                   id="complemento"
@@ -564,9 +686,15 @@ function EtapaCheckout({
           </div>
           {dados.tipo === "entrega" && (
             <div className="flex justify-between">
-              <dt className="text-suave">Taxa de entrega</dt>
+              <dt className="text-suave">Taxa de entrega{totais.km != null && ` (${totais.km.toFixed(1).replace(".", ",")} km)`}</dt>
               <dd className="font-mono" aria-live="polite">
-                {totais.regiao ? (totais.taxa ? formatarPreco(totais.taxa) : "Grátis") : "Escolha a região"}
+                {totais.taxaDefinida
+                  ? totais.taxa
+                    ? formatarPreco(totais.taxa)
+                    : "Grátis"
+                  : porDistancia
+                    ? "Calcule acima"
+                    : "Escolha a região"}
               </dd>
             </div>
           )}

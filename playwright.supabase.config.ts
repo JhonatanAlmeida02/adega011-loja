@@ -11,7 +11,7 @@ export default defineConfig({
   testDir: "tests/e2e-supabase",
   timeout: 90_000,
   workers: 1,
-  use: { baseURL: `http://localhost:${PORTA}`, trace: "off" },
+  use: { baseURL: `http://localhost:${PORTA}`, trace: "off", actionTimeout: 15_000 },
   projects: [{ name: "celular", use: { ...devices["Pixel 7"] } }],
   webServer: {
     command: `npm run build && npx next start -p ${PORTA}`,
