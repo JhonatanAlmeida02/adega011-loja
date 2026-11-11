@@ -158,7 +158,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
-        pathname.startsWith("/admin/pdv") ? "max-w-none md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
+        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>{children}</main>
 
       {/* Navegação inferior (celular) */}

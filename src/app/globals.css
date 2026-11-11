@@ -377,3 +377,7 @@ body {
   .produtos-ferramentas > div:not(.produtos-busca) { flex: 1 1 9rem; min-width: 0; }
   .produto-tipo { min-width: 5rem; padding-inline: .75rem; }
 }
+
+/* Elementos presos ao pé da tela no painel: ficam acima do menu inferior do celular */
+.acima-nav-celular { bottom: calc(3.75rem + max(1rem, env(safe-area-inset-bottom)) + 1px); }
+@media (min-width: 768px) { .acima-nav-celular { bottom: 0; } }

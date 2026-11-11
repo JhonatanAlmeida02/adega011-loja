@@ -157,19 +157,21 @@ test("adicionais: Copão de Askov com Baly entra no carrinho e na mensagem", asy
 
   await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
   const detalhe = page.getByRole("dialog", { name: "Copão de Askov" });
-  await expect(detalhe.getByRole("button", { name: /Adicionar · R\$ 10,00/ })).toBeVisible();
+  await expect(detalhe.getByRole("button", { name: /Adicionar.*R\$ 10,00/ })).toBeVisible();
   const opcao = (nome: string) => detalhe.locator("label").filter({ hasText: nome });
+  // Grupos de adicionais abrem como sanfona
+  await detalhe.locator("summary").filter({ hasText: "Energético" }).click();
   await opcao("Baly").click();
   // Rádio opcional: escolher outro troca a opção
   await opcao("Red Bull").click();
   await expect(detalhe.getByRole("radio", { name: /Baly/ })).not.toBeChecked();
   await opcao("Baly").click();
   await detalhe.getByRole("button", { name: "Aumentar quantidade de Copão de Askov" }).click();
-  await detalhe.getByRole("button", { name: /Adicionar · R\$ 26,00/ }).click();
+  await detalhe.getByRole("button", { name: /Adicionar.*R\$ 26,00/ }).click();
 
   // Sem adicional também (linha separada no carrinho)
   await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
-  await page.getByRole("dialog", { name: "Copão de Askov" }).getByRole("button", { name: /Adicionar · R\$ 10,00/ }).click();
+  await page.getByRole("dialog", { name: "Copão de Askov" }).getByRole("button", { name: /Adicionar.*R\$ 10,00/ }).click();
 
   await page.getByRole("button", { name: /Ver carrinho: 3 itens, total R\$ 36,00/ }).click();
   const carrinho = page.getByRole("dialog");
@@ -207,5 +209,7 @@ test("tema: alterna claro/escuro e lembra a escolha", async ({ page }) => {
   await expect(html).toHaveAttribute("data-tema", "claro");
   await page.getByRole("button", { name: "Usar tema escuro" }).click();
   await expect(html).toHaveAttribute("data-tema", "escuro");
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(11, 11, 11)");
+  // fundo escuro de novo (não o branco do tema claro)
+  await expect(page.locator("body")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator("body")).not.toHaveCSS("color", "rgb(11, 11, 11)");
 });

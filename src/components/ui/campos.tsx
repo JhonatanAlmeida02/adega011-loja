@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 const baseCampo =
   "w-full rounded-lg border border-borda bg-superficie-2 px-3 text-sm text-texto placeholder:text-suave/70 transition-colors focus-visible:border-rosa focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rosa/40 aria-[invalid=true]:border-perigo disabled:opacity-60";
 
-export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return <input data-slot="input" className={cn(baseCampo, "h-10", className)} {...props} />;
 }
 
