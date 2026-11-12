@@ -142,7 +142,7 @@ export function PaginaProdutos() {
         {visiveis.length === 0 ? <Vazio titulo="Nenhum produto encontrado" texto="Ajuste a pesquisa ou os filtros para encontrar um produto." /> : ordenando && podeOrdenar ? (
           <ListaOrdenavel itens={visiveis} rotulo={(p) => p.nome} onReordenar={reordenar} renderizar={(p) => <span className="text-sm">{p.nome}</span>} />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-borda" tabIndex={0} role="region" aria-label="Tabela de produtos">
+          <div className="relative overflow-x-auto rounded-lg border border-borda" tabIndex={0} role="region" aria-label="Tabela de produtos">
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
               <caption className="sr-only">Produtos cadastrados e seus estoques</caption>
               <thead className="bg-superficie-2 text-xs text-suave">
