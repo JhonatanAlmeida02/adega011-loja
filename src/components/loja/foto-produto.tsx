@@ -40,3 +40,25 @@ export function FotoProduto({
     </div>
   );
 }
+
+/**
+ * Miniatura quadrada de tamanho fixo: a foto aparece inteira (reduzida, sem
+ * cortar) sobre fundo branco; sem foto, o selo da marca bem clarinho.
+ */
+export function MiniaturaFoto({ src, alt = "", sizes = "56px", className }: { src: string | null; alt?: string; sizes?: string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-borda",
+        src ? "bg-white" : "bg-superficie-3",
+        className,
+      )}
+    >
+      {src ? (
+        <Image src={src} alt={alt} fill sizes={sizes} className="object-contain p-1.5" />
+      ) : (
+        <LogoTema {...SELO_SIMPLES} alt="" width={40} height={40} className="w-[55%] opacity-25" />
+      )}
+    </span>
+  );
+}

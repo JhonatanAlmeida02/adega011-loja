@@ -41,7 +41,9 @@ async function main() {
   const grupos = PRODUTOS_EXEMPLO.flatMap((p) => p.grupos ?? []);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   await upsert("grupos_opcoes", grupos.map(({ opcoes, ...g }) => g));
-  await upsert("opcoes", grupos.flatMap((g) => g.opcoes));
+  // foto_url das opções é só da vitrine (vem do produto ligado), não é coluna da tabela
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  await upsert("opcoes", grupos.flatMap((g) => g.opcoes.map(({ foto_url, ...o }) => o)));
   await upsert("regioes_entrega", REGIOES_EXEMPLO);
   console.log("\nPronto! Loja populada com 4 categorias, 10 produtos e 3 regiões.");
 }

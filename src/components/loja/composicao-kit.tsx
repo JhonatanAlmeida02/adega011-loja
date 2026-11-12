@@ -1,6 +1,6 @@
 import type { ItemComposicao } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
-import { FotoProduto } from "./foto-produto";
+import { MiniaturaFoto } from "./foto-produto";
 
 const rotulo = (i: ItemComposicao) => (i.quantidade && i.quantidade > 1 ? `${i.quantidade}x ${i.nome}` : i.nome);
 
@@ -14,8 +14,8 @@ export function ComposicaoKit({ itens, idBase }: { itens: ItemComposicao[]; idBa
       </h3>
       <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
         {itens.map((item, i) => (
-          <li key={`${item.nome}-${i}`} className="rounded-lg border border-borda bg-superficie-2 p-2">
-            <FotoProduto src={item.foto_url} alt="" sizes="120px" className="aspect-square w-full rounded-md" />
+          <li key={`${item.nome}-${i}`}>
+            <MiniaturaFoto src={item.foto_url} sizes="120px" className="aspect-square size-auto w-full" />
             <span className="mt-1.5 line-clamp-2 block text-center text-xs leading-tight">{rotulo(item)}</span>
           </li>
         ))}
@@ -35,7 +35,7 @@ export function MiniaturasKit({ itens, className }: { itens: ItemComposicao[]; c
       <ul className="flex -space-x-2" aria-label={`Vem no kit: ${itens.map(rotulo).join(", ")}`}>
         {visiveis.map((item, i) => (
           <li key={`${item.nome}-${i}`} title={rotulo(item)}>
-            <FotoProduto src={item.foto_url} alt="" sizes="28px" className="size-7 rounded-full border-2 border-superficie" />
+            <MiniaturaFoto src={item.foto_url} sizes="28px" className="size-7 rounded-full border-2 border-superficie [&_img]:p-0.5" />
           </li>
         ))}
         {resto > 0 && (
