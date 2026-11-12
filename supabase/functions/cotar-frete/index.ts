@@ -7,6 +7,7 @@
 //
 // Segredos (Supabase > Edge Functions > Secrets):
 //   GOOGLE_MAPS_API_KEY  chave com Geocoding API e Routes API ativadas
+//                        (e Maps Static API, para o mapa do trajeto: função mapa-frete)
 //   MAPS_FAKE=1          (só testes) inventa os km sem chamar o Google
 // Sem dependências externas: fala com o banco pela API REST (PostgREST).
 
@@ -75,14 +76,17 @@ async function geocodificar(endereco: string, chave: string): Promise<Ponto | nu
   return { lat: res.geometry.location.lat, lng: res.geometry.location.lng, formatado: res.formatted_address };
 }
 
-async function distanciaMetros(a: Ponto, b: Ponto, chave: string): Promise<number> {
+type Rota = { metros: number; minutos: number | null; polilinha: string | null };
+
+/** Trajeto de carro: distância, tempo estimado e o desenho do caminho (polilinha). */
+async function rotaDeCarro(a: Ponto, b: Ponto, chave: string): Promise<Rota> {
   const r = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
     method: "POST",
     signal: AbortSignal.timeout(8000),
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": chave,
-      "X-Goog-FieldMask": "routes.distanceMeters",
+      "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
     },
     body: JSON.stringify({
       origin: { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
@@ -95,9 +99,15 @@ async function distanciaMetros(a: Ponto, b: Ponto, chave: string): Promise<numbe
   });
   const d = await r.json();
   if (!r.ok) throw new Error(`Routes: ${r.status} ${JSON.stringify(d).slice(0, 200)}`);
-  const m = d.routes?.[0]?.distanceMeters;
+  const rota = d.routes?.[0];
+  const m = rota?.distanceMeters;
   if (typeof m !== "number") throw new Error("Routes: sem rota");
-  return m;
+  const segundos = Number(String(rota.duration ?? "").replace(/s$/, ""));
+  return {
+    metros: m,
+    minutos: Number.isFinite(segundos) && segundos > 0 ? Math.max(1, Math.round(segundos / 60)) : null,
+    polilinha: typeof rota.polyline?.encodedPolyline === "string" ? rota.polyline.encodedPolyline : null,
+  };
 }
 
 // Modo de teste: "[km=4.2]" no endereço define os km; senão um valor fixo por endereço.
@@ -152,10 +162,16 @@ Deno.serve(async (req) => {
 
   let km: number;
   let formatado: string;
+  let minutos: number | null = null;
+  let rota: string | null = null;
+  let destinoLat: number | null = null;
+  let destinoLng: number | null = null;
   try {
     if (Deno.env.get("MAPS_FAKE") === "1") {
       km = kmFalso(endereco);
       formatado = endereco;
+      minutos = Math.max(1, Math.round(km * 2.5));
+      rota = "teste"; // mapa-frete devolve um desenho simulado em MAPS_FAKE
     } else {
       const chave = Deno.env.get("GOOGLE_MAPS_API_KEY");
       if (!chave) return resposta(503, { erro: "Cálculo de frete ainda não configurado." });
@@ -178,7 +194,12 @@ Deno.serve(async (req) => {
       if (!destino) {
         return resposta(422, { erro: "Não encontramos esse endereço. Confira a rua, o número e o bairro." });
       }
-      km = Math.ceil((await distanciaMetros(origem, destino, chave)) / 100) / 10;
+      const trajeto = await rotaDeCarro(origem, destino, chave);
+      km = Math.ceil(trajeto.metros / 100) / 10;
+      minutos = trajeto.minutos;
+      rota = trajeto.polilinha;
+      destinoLat = destino.lat;
+      destinoLng = destino.lng;
       formatado = destino.formatado;
     }
   } catch (e) {
@@ -198,10 +219,20 @@ Deno.serve(async (req) => {
   const rCot = await banco("cotacoes_frete?select=id,km,taxa,expira_em", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ endereco: normalizar(endereco), endereco_formatado: formatado, km, taxa, ip }),
+    body: JSON.stringify({
+      endereco: normalizar(endereco),
+      endereco_formatado: formatado,
+      km,
+      taxa,
+      ip,
+      minutos,
+      rota,
+      destino_lat: destinoLat,
+      destino_lng: destinoLng,
+    }),
   });
   const cot = rCot.ok ? rCot.dados?.[0] : null;
   if (!cot) return resposta(500, { erro: "Não foi possível salvar a cotação." });
 
-  return resposta(200, { ...cot, km: Number(cot.km), endereco, endereco_formatado: formatado });
+  return resposta(200, { ...cot, km: Number(cot.km), endereco, endereco_formatado: formatado, minutos, mapa: !!rota });
 });

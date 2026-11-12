@@ -519,6 +519,12 @@ test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a
   await expect(loja.getByLabel("Cidade")).toHaveValue("Itatiba - SP");
   await loja.getByRole("button", { name: /Calcular entrega/ }).click();
   await expect(loja.getByText(/6,0 km/).first()).toBeVisible();
+  await expect(loja.getByText(/~15 min de carro/)).toBeVisible();
+  // Mapa do trajeto (imagem da função mapa-frete) carregou de verdade
+  const mapa = loja.getByRole("img", { name: /Mapa do trajeto da loja até/ });
+  await expect(mapa).toBeVisible();
+  await expect.poll(() => mapa.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(loja.getByRole("link", { name: "Abrir rota no Google Maps" })).toHaveAttribute("href", /google\.com\/maps\/dir\/.*travelmode=driving/);
   await expect(loja.getByTestId("total")).toHaveText("R$ 130,90"); // 119,90 + 2,00 + 6 × 1,50
   // Mudou o endereço depois do cálculo: precisa calcular de novo
   await loja.getByLabel("Bairro").fill("Outro");

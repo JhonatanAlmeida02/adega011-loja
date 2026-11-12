@@ -28,6 +28,7 @@ import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { IconeWhatsApp } from "@/components/marca/icones";
 import { cidadeComUf, type EnderecoCep } from "@/lib/cep";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 import { CampoCep } from "./campo-cep";
 import { SeletorQuantidade } from "./seletor-quantidade";
 import { useStatusLoja } from "./use-status-loja";
@@ -57,6 +58,41 @@ function dadosIniciais(loja: DadosLoja): DadosCheckout {
   } catch {
     return base;
   }
+}
+
+/** Mapa do trajeto (loja → cliente) e link para abrir a rota no Google Maps. */
+function MapaTrajeto({ cotacao, origem }: { cotacao: CotacaoFrete; origem: string }) {
+  const [falhou, setFalhou] = useState(false);
+  const rota = new URL("https://www.google.com/maps/dir/");
+  rota.searchParams.set("api", "1");
+  rota.searchParams.set("origin", origem.replace(/\s*·\s*/g, ", "));
+  rota.searchParams.set("destination", cotacao.endereco_formatado);
+  rota.searchParams.set("travelmode", "driving");
+  return (
+    <div className="mt-3 space-y-2">
+      {cotacao.mapa && SUPABASE_URL && !falhou && (
+        // Imagem gerada no servidor (a chave do Google não vai para o navegador)
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`${SUPABASE_URL}/functions/v1/mapa-frete?id=${cotacao.id}`}
+          alt={`Mapa do trajeto da loja até ${cotacao.endereco_formatado} (${cotacao.km.toFixed(1).replace(".", ",")} km)`}
+          width={640}
+          height={320}
+          loading="lazy"
+          onError={() => setFalhou(true)}
+          className="aspect-[2/1] w-full rounded-xl border border-borda bg-superficie-3 object-cover"
+        />
+      )}
+      <a
+        href={rota.toString()}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-sm text-suave underline underline-offset-4 hover:text-rosa-texto"
+      >
+        <MapPin className="size-4" aria-hidden /> Abrir rota no Google Maps
+      </a>
+    </div>
+  );
 }
 
 export function Carrinho({ loja }: { loja: DadosLoja }) {
@@ -562,17 +598,22 @@ function EtapaCheckout({
                   </div>
                   <div className="rounded-2xl border border-borda bg-superficie-2 p-4" aria-live="polite">
                     {freteOk && cotacao ? (
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-bold">
-                            {cotacao.km.toFixed(1).replace(".", ",")} km · <span className="preco">{formatarPreco(cotacao.taxa)}</span>
-                          </p>
-                          <p className="mt-1 text-sm text-suave">Entrega em: {cotacao.endereco_formatado}</p>
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold">
+                              {cotacao.km.toFixed(1).replace(".", ",")} km
+                              {cotacao.minutos ? <span className="font-normal text-suave"> · ~{cotacao.minutos} min de carro</span> : null}
+                            </p>
+                            <p className="preco mt-0.5 whitespace-nowrap text-lg">Entrega {formatarPreco(cotacao.taxa)}</p>
+                            <p className="mt-1 text-sm text-suave">Entrega em: {cotacao.endereco_formatado}</p>
+                          </div>
+                          <Button type="button" variant="fantasma" size="sm" onClick={calcularFrete} disabled={cotando}>
+                            Recalcular
+                          </Button>
                         </div>
-                        <Button type="button" variant="fantasma" size="sm" onClick={calcularFrete} disabled={cotando}>
-                          Recalcular
-                        </Button>
-                      </div>
+                        <MapaTrajeto cotacao={cotacao} origem={config.endereco} />
+                      </>
                     ) : (
                       <>
                         <Button

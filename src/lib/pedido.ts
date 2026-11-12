@@ -71,6 +71,8 @@ export interface CotacaoFrete {
   endereco: string; // "Rua X, 10, Bairro, Cidade" (o pedido precisa começar com isso)
   endereco_formatado: string;
   expira_em: string;
+  minutos?: number | null; // tempo estimado de carro
+  mapa?: boolean; // tem trajeto para desenhar (função mapa-frete)
 }
 
 export interface DadosCheckout {
