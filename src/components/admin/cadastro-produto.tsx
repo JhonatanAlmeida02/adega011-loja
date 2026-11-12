@@ -17,6 +17,7 @@ import { EditorKit, type ComponenteKit } from "./editor-kit";
 import { EditorAdicionais } from "./editor-adicionais";
 import { Carregando, UploadImagem } from "./ui";
 import { MiniaturaProduto } from "./miniatura-produto";
+import { VincularProdutoVariacao } from "./vincular-produto-variacao";
 
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
 interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[]; custos: Record<string, number> }
@@ -36,7 +37,7 @@ function resumoCusto(preco: string, custo: number | undefined): { valor: string;
     prejuizo: lucro < 0,
   };
 }
-interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean }
+interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean; vinculadoAgora?: boolean }
 
 export function CadastroProduto({ produtoId }: { produtoId?: string }) {
   const params = useSearchParams();
@@ -104,6 +105,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   })));
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
   const [fotoVariacaoId, setFotoVariacaoId] = useState(dados.variacoes[0]?.id ?? "");
+  const [custosVinculados, setCustosVinculados] = useState<Record<string, number>>({});
   const fotoVariacao = variacoes.find((v) => v.id === fotoVariacaoId) ?? variacoes[0];
   const [componentes, setComponentes] = useState(dados.componentes);
   const [aba, setAba] = useState("gerais");
@@ -115,6 +117,23 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const emSalvar = useRef(false);
   const montado = useRef(true);
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setF((x) => ({ ...x, [k]: v }));
+
+  const vincularProduto = (p: Produto) => {
+    if (variacoes.length >= 50 || variacoes.some((v) => v.id === p.id)) return;
+    const prefixo = f.nome.trim().toLocaleUpperCase();
+    const nome = prefixo && p.nome.toLocaleUpperCase().startsWith(`${prefixo} `)
+      ? p.nome.slice(prefixo.length).replace(/^[\s·–-]+/, "") : p.nome;
+    setVariacoes((vs) => vs.some((v) => v.id === p.id) ? vs : [...vs.filter((v) => v.id !== f.id || v.existente || v.nome.trim() || v.preco || v.foto_url), {
+      id: p.id, nome: nome.slice(0, 35), foto_url: p.foto_url,
+      preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1,
+      unidades_pacote: p.unidades_pacote ?? 1, ativo: p.ativo, disponivel: p.disponivel,
+      estoque: p.estoque, existente: true, vinculadoAgora: true,
+    }]);
+    void supabaseNavegador().from("produto_importacao").select("custo").eq("produto_id", p.id).maybeSingle().then(({ data }) => {
+      if (montado.current && data?.custo != null) setCustosVinculados((c) => ({ ...c, [p.id]: data.custo }));
+    });
+    toast.success("Produto vinculado à grade. Defina o nome da variação e salve o cadastro.");
+  };
 
   useEffect(() => {
     montado.current = true;
@@ -250,6 +269,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         {comVariacoes && <Tabs.Content value="variacoes" forceMount className={painel}>
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-semibold">Variações do produto</h2><p className="mt-1 text-xs text-suave">Defina as opções e os preços de cada variação.</p></div><Button type="button" variant="suave" size="sm" disabled={variacoes.length >= 50} onClick={() => setVariacoes((vs) => [...vs, { foto_url: null, id: crypto.randomUUID(), nome: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: true, disponivel: true, estoque: 0, existente: false }])}><Plus /> Adicionar variação</Button></div>
           <div className="max-w-xs"><Campo label="Tipo da variação" htmlFor="v-atributo" ajuda="Ex.: Sabor, Tamanho ou Sabor / tamanho."><Input id="v-atributo" maxLength={30} value={atributo} onChange={(e) => setAtributo(e.target.value)} /></Campo></div>
+          {variacoes.length < 50 && <VincularProdutoVariacao excluidos={[f.id, ...variacoes.map((v) => v.id)].join(",")} unidade={f.unidade_estoque ?? "un"} vendePacote={!!f.vende_pacote} onVincular={vincularProduto} />}
           {erros.variacoes && <p role="alert" className="text-sm text-perigo">{erros.variacoes}</p>}
           <div className="border-t border-borda pt-5"><h3 className="mb-3 font-medium">Grade de variações <span className="ml-1 text-xs font-normal text-suave">({variacoes.length})</span></h3>
             <div className="relative overflow-x-auto rounded-lg border border-borda">
@@ -260,7 +280,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
                   <td className="px-3 py-2"><Input id={`v-nome-${i}`} aria-label={`Nome da variação ${i + 1}`} maxLength={35} placeholder="Melancia, 269 ml…" value={v.nome} onChange={(e) => alterarVariacao(v.id, { nome: e.target.value })} aria-invalid={!!erros.variacoes && !v.nome.trim()} /></td>
                   <td className="px-3 py-2"><Input id={`v-preco-${i}`} aria-label={`Preço da variação ${i + 1} (R$)`} className="font-mono" inputMode="decimal" placeholder="0,00" value={v.preco} onChange={(e) => alterarVariacao(v.id, { preco: e.target.value.replace(/[^\d,.]/g, "") })} aria-invalid={!!erros.variacoes && paraCentavos(v.preco) === null} /></td>
                   <td className="px-3 py-2">{(() => {
-                    const c = resumoCusto(v.preco, dados.custos[v.id]);
+                    const c = resumoCusto(v.preco, dados.custos[v.id] ?? custosVinculados[v.id]);
                     return <span title={c.detalhe}><span className="block font-mono">{c.valor}</span><span className={cn("block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></span>;
                   })()}</td>
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
@@ -268,7 +288,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-suave">{v.estoque} <span className="text-[11px]">{f.unidade_estoque ?? "un"}</span></td>
                   <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Visível: ${v.nome || `variação ${i + 1}`}`} checked={v.ativo} onChange={(ativo) => alterarVariacao(v.id, { ativo })} /></td>
                   <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Disponível: ${v.nome || `variação ${i + 1}`}`} checked={v.disponivel} onChange={(disponivel) => alterarVariacao(v.id, { disponivel })} /></td>
-                  <td className="px-2 py-2"><Button type="button" size="icone-sm" variant="fantasma" disabled={v.existente} title={v.existente ? "Desative a visibilidade para retirar esta opção da loja" : "Remover variação"} aria-label={`Remover variação ${i + 1}`} onClick={() => setVariacoes((vs) => vs.filter((x) => x.id !== v.id))}><Trash2 /></Button></td>
+                  <td className="px-2 py-2"><Button type="button" size="icone-sm" variant="fantasma" disabled={v.existente && !v.vinculadoAgora} title={v.vinculadoAgora ? "Retirar da grade sem excluir o produto" : v.existente ? "Desative a visibilidade para retirar esta opção da loja" : "Remover variação"} aria-label={`Remover variação ${i + 1}`} onClick={() => setVariacoes((vs) => vs.filter((x) => x.id !== v.id))}><Trash2 /></Button></td>
                 </tr>)}</tbody>
               </table>
             </div>
