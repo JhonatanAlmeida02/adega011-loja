@@ -31,6 +31,7 @@ export function FotoProduto({
           fill
           sizes={sizes}
           loading={carregarJa ? "eager" : "lazy"}
+          fetchPriority={carregarJa ? "high" : "auto"}
           onError={() => setFotoComErro(src)}
           className={cn(
             "object-cover transition-transform duration-500 group-hover:scale-[1.04]",
