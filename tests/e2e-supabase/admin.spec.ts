@@ -513,6 +513,39 @@ test("PDV no celular: só a busca no topo e a venda ocupa a tela", async ({ page
   await fechar.getByRole("button", { name: "Fechar caixa" }).click();
 });
 
+test("produtos: clicar no título da coluna ordena de A a Z e de Z a A", async ({ page }) => {
+  await entrar(page);
+  await irPara(page, "Produtos");
+  const tabela = page.getByRole("region", { name: "Tabela de produtos" });
+  const nomes = async () => (await tabela.locator("tbody tr td:first-child button").allInnerTexts()).map((t) => t.replace(/\s*\(\d+ variações\)$/, ""));
+  const precos = async () =>
+    (await tabela.locator("tbody tr td:nth-child(4)").allInnerTexts())
+      .filter((t) => t.includes("R$"))
+      .map((t) => Number(t.replace(/[^\d,]/g, "").replace(",", ".")));
+  const emOrdem = (v: number[]) => v.every((x, i) => i === 0 || v[i - 1] <= x);
+  const porNome = (a: string, b: string) => a.localeCompare(b, "pt-BR");
+
+  const descricao = tabela.getByRole("columnheader", { name: "Descrição" });
+  await descricao.getByRole("button").click();
+  await expect(descricao).toHaveAttribute("aria-sort", "ascending");
+  const az = await nomes();
+  expect(az).toEqual([...az].sort(porNome));
+  await descricao.getByRole("button").click();
+  await expect(descricao).toHaveAttribute("aria-sort", "descending");
+  expect(await nomes()).toEqual([...az].sort(porNome).reverse());
+
+  const preco = tabela.getByRole("columnheader", { name: "Preço" });
+  await preco.getByRole("button").click();
+  await expect(preco).toHaveAttribute("aria-sort", "ascending");
+  await expect(descricao).not.toHaveAttribute("aria-sort", /.+/);
+  expect(emOrdem(await precos())).toBe(true);
+  await preco.getByRole("button").click();
+  expect(emOrdem((await precos()).reverse())).toBe(true);
+  // Terceiro clique volta à ordem do catálogo
+  await preco.getByRole("button").click();
+  await expect(preco).not.toHaveAttribute("aria-sort", /.+/);
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
