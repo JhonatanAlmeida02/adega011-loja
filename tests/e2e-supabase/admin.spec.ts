@@ -546,6 +546,72 @@ test("produtos: clicar no título da coluna ordena de A a Z e de Z a A", async (
   await expect(preco).not.toHaveAttribute("aria-sort", /.+/);
 });
 
+test("SKU no cadastro: produto simples e variações, aparece na tabela e na busca", async ({ page }) => {
+  const sufixo = Date.now().toString(36).slice(-5).toUpperCase();
+  await entrar(page);
+  await irPara(page, "Produtos");
+
+  // Produto simples com SKU
+  await page.getByRole("button", { name: "Novo produto" }).first().click();
+  // O Next mantém a tela anterior montada (oculta); usa sempre o formulário visível
+  const form = page.locator('[data-testid="cadastro-produto"]:visible');
+  await form.getByLabel("Nome", { exact: true }).fill(`Tônica ${sufixo}`);
+  await form.getByLabel("Preço (R$)").fill("7,00");
+  await form.getByLabel("SKU (código)").fill(`TON-${sufixo}`);
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+  const busca = page.getByLabel("Buscar produto");
+  await busca.fill(`TON-${sufixo}`);
+  const tabela = page.getByRole("region", { name: "Tabela de produtos" });
+  await expect(tabela.locator("tbody tr")).toHaveCount(1);
+  await expect(tabela.locator("tbody tr").first()).toContainText(`Tônica ${sufixo}`);
+  await expect(tabela.locator("tbody tr").first()).toContainText(`TON-${sufixo}`);
+
+  // Reabre: o SKU vem preenchido
+  await tabela.getByRole("button", { name: `Tônica ${sufixo}`, exact: true }).click();
+  await expect(form.getByLabel("SKU (código)")).toHaveValue(`TON-${sufixo}`);
+
+  // Produto com variações: SKU do produto e de cada variação
+  // (página nova carregada do zero: reabrir "Novo produto" pelo menu reaproveita a tela oculta e a recarrega)
+  await page.goto("/admin/produtos/novo");
+  await form.getByLabel("Nome", { exact: true }).fill(`Suco ${sufixo}`);
+  await form.getByLabel("Tipo de produto").selectOption("variacoes");
+  await form.getByLabel("SKU do produto").fill(`SUC-${sufixo}`);
+  await form.getByRole("tab", { name: "Variações", exact: true }).click();
+  await form.getByLabel("Nome da variação 1").fill("Uva");
+  await form.getByLabel("Preço da variação 1 (R$)").fill("6,00");
+  await form.getByLabel("SKU da variação 1").fill(`SUC-${sufixo}-UVA`);
+  await form.getByRole("button", { name: "Adicionar variação" }).click();
+  await form.getByLabel("Nome da variação 2").fill("Laranja");
+  await form.getByLabel("Preço da variação 2 (R$)").fill("6,00");
+  await form.getByLabel("SKU da variação 2").fill(`SUC-${sufixo}-UVA`);
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(form.getByText("Use um SKU diferente em cada variação.")).toBeVisible();
+  await form.getByLabel("SKU da variação 2").fill(`SUC-${sufixo}-LAR`);
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+
+  // Na tabela o produto mostra o SKU geral; a busca acha pelo SKU da variação
+  const buscaLista = page.getByLabel("Buscar produto");
+  await buscaLista.fill(`SUC-${sufixo}-LAR`);
+  await expect(tabela.locator("tbody tr")).toHaveCount(1);
+  await expect(tabela.locator("tbody tr").first()).toContainText(`SUC-${sufixo}`);
+  await tabela.getByRole("button", { name: new RegExp(`^Suco ${sufixo}`) }).click();
+  await form.getByRole("tab", { name: "Variações", exact: true }).click();
+  await expect(form.getByLabel("SKU da variação 1")).toHaveValue(`SUC-${sufixo}-UVA`);
+  await expect(form.getByLabel("SKU da variação 2")).toHaveValue(`SUC-${sufixo}-LAR`);
+  await form.getByRole("tab", { name: "Dados gerais", exact: true }).click();
+  await expect(form.getByLabel("SKU do produto")).toHaveValue(`SUC-${sufixo}`);
+
+  // SKU já usado por outro produto é recusado com o nome do dono
+  await page.goto("/admin/produtos/novo");
+  await form.getByLabel("Nome", { exact: true }).fill(`Repetido ${sufixo}`);
+  await form.getByLabel("Preço (R$)").fill("1,00");
+  await form.getByLabel("SKU (código)").fill(`ton-${sufixo}`);
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(form.getByRole("alert")).toContainText(`já está em uso por "Tônica ${sufixo}"`);
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
