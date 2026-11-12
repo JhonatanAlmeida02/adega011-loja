@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/campos";
 import { ListaOrdenavel } from "../lista-ordenavel";
 import { CabecalhoPagina, Carregando, Confirmar, Vazio } from "../ui";
+import { MiniaturaProduto } from "../miniatura-produto";
 
 export function PaginaProdutos() {
   const produtos = useTabela<Produto>("produtos");
@@ -175,6 +176,9 @@ export function PaginaProdutos() {
                   const custo = custos ? faixa(custos) : "—";
                   return <tr key={p.id} className="bg-superficie transition-colors hover:bg-superficie-2">
                     <td className="min-w-64 px-3 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <MiniaturaProduto foto={p.foto_url || membros.find((v) => v.foto_url)?.foto_url} />
+                        <div className="min-w-0">
                       <button onClick={() => router.push(`/admin/produtos/${membros[0].id}`)} className={cn("cursor-pointer text-left leading-snug hover:text-rosa-texto", !p.ativo && "text-suave")}>
                         {p.nome}{p.variacoes && <span className="ml-1 text-xs text-rosa-texto">({p.variacoes.length} variações)</span>}
                       </button>
@@ -184,6 +188,8 @@ export function PaginaProdutos() {
                         {!p.ativo && <span>Oculto</span>}
                         {!p.disponivel && !p.preco_pendente && !p.variacoes && <span>Venda pausada</span>}
                       </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-suave">{codigo || "—"}</td>
                     <td className="px-3 py-2.5 text-xs">{unidade}</td>

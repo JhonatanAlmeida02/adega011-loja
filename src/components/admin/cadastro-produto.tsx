@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, ImagePlus, Package, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
@@ -16,6 +16,7 @@ import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { EditorKit, type ComponenteKit } from "./editor-kit";
 import { EditorAdicionais } from "./editor-adicionais";
 import { Carregando, UploadImagem } from "./ui";
+import { MiniaturaProduto } from "./miniatura-produto";
 
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
 interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[]; custos: Record<string, number> }
@@ -180,6 +181,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     ...(existente ? [{ id: "adicionais", nome: "Adicionais" }] : []),
   ];
   const painel = "cadastro-painel space-y-5 data-[state=inactive]:hidden";
+  const fotoCabecalho = comVariacoes ? variacoes.find((v) => v.foto_url)?.foto_url ?? null : f.foto_url;
 
   return <form ref={formRef} onSubmit={enviar} noValidate data-testid="cadastro-produto" className="cadastro-erp mx-auto min-w-0 max-w-[1120px] text-sm">
     <div className="mb-5 flex items-center gap-2 text-xs text-suave">
@@ -189,7 +191,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button type="button" variant="suave" size="icone-sm" disabled={salvando} aria-label="Voltar para produtos" onClick={() => router.push("/admin/produtos")}><ArrowLeft /></Button>
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-rosa/20 bg-rosa/10 text-rosa-texto"><Package className="size-5" aria-hidden /></div>
+        <MiniaturaProduto foto={fotoCabecalho} tamanho={40} />
         <div className="min-w-0"><h1 className="truncate text-lg font-semibold" title={f.nome}>{f.nome.trim() || (existente ? "Editar produto" : "Novo produto")}</h1><p className="mt-0.5 text-xs text-suave">{tipoAtual} · {existente ? "Editar produto" : "Novo produto"}</p></div>
       </div>
       <Button type="submit" size="sm" className="rounded-lg shadow-none" disabled={salvando}><Check />{salvando ? "Salvando…" : "Salvar produto"}</Button>
