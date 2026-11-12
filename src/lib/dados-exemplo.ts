@@ -81,7 +81,14 @@ const p = (
 });
 
 export const PRODUTOS_EXEMPLO: Produto[] = [
-  p(1, combos, "Combo Gin Tônica", "Gin London Dry 750 ml + 4 tônicas 350 ml + gelo 2 kg. É só montar o copo.", 14990, "combo-gin", { destaque: true }),
+  p(1, combos, "Combo Gin Tônica", "Gin London Dry 750 ml + 4 tônicas 350 ml + gelo 2 kg. É só montar o copo.", 14990, "combo-gin", {
+    destaque: true,
+    composicao: [
+      { nome: "Gin London Dry 750 ml", foto_url: "/produtos/gin.svg", quantidade: 1 },
+      { nome: "Tônica 350 ml", foto_url: null, quantidade: 4 },
+      { nome: "Gelo 2 kg", foto_url: null, quantidade: 1 },
+    ],
+  }),
   p(11, combos, "Copão de Askov", "Copão de 700 ml com Askov e gelo. Quer turbinar? Escolhe o energético.", 1000, "combo-vodka", {
     ordem: 0,
     destaque: true,

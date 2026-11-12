@@ -253,3 +253,16 @@ test("CEP preenche o endereço e vai na mensagem do pedido", async ({ page }) =>
   const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
   expect(texto).toContain("Endereço: Rua Coronel Camilo Pires, 100 · CEP 13250-000");
 });
+
+test("kit mostra as fotos do que vem dentro (card e detalhe)", async ({ page }) => {
+  await abrirLoja(page);
+  const card = page.getByRole("article", { name: "Combo Gin Tônica" });
+  await expect(card.getByRole("list", { name: "Vem no kit: Gin London Dry 750 ml, 4x Tônica 350 ml, Gelo 2 kg" })).toBeVisible();
+
+  await card.getByRole("button", { name: "Ver detalhes de Combo Gin Tônica" }).click();
+  const detalhe = page.getByRole("dialog", { name: "Combo Gin Tônica" });
+  const kit = detalhe.getByRole("region", { name: "Vem no kit" });
+  await expect(kit.getByRole("listitem")).toHaveCount(3);
+  await expect(kit).toContainText("4x Tônica 350 ml");
+  await expect(kit.locator('img[src*="gin.svg"]')).toBeVisible();
+});

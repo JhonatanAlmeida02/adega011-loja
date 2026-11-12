@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { FotoProduto } from "./foto-produto";
 import { SeletorQuantidade } from "./seletor-quantidade";
 import { avisoEstoque, SeloProduto } from "./card-produto";
+import { ComposicaoKit } from "./composicao-kit";
 import { acrescimo, EscolhaOpcoes, opcoesEscolhidas, pendencia, type Selecao } from "./escolha-opcoes";
 
 export function ProdutoDetalhe({
@@ -106,6 +107,7 @@ function Conteudo({ produto, categoria, onFechar }: { produto: Produto; categori
           {produto.descricao || "Sem descrição."}
         </SheetDescription>
         <p className="preco text-xl">{formatarPreco(produto.preco)}</p>
+        {produto.composicao && <ComposicaoKit itens={produto.composicao} idBase={`det-${produto.id}`} />}
         {temOpcoes && disponivel && (
           <div className="pt-2">
             <EscolhaOpcoes grupos={grupos} selecao={selecao} onChange={setSelecao} idBase={`det-${produto.id}`} />
