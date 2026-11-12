@@ -101,8 +101,8 @@ export const PRODUTOS_EXEMPLO: Produto[] = [
         maximo: 1,
         ordem: 0,
         opcoes: [
-          { id: id(1, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Baly", preco: 300, disponivel: true, ordem: 0 },
-          { id: id(2, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Red Bull", preco: 700, disponivel: true, ordem: 1 },
+          { id: id(1, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Baly", preco: 300, disponivel: true, ordem: 0, foto_url: null },
+          { id: id(2, "d0000000"), grupo_id: id(1, "b0000000"), nome: "Red Bull", preco: 700, disponivel: true, ordem: 1, foto_url: "/produtos/cerveja-lata.svg" },
         ],
       },
     ],

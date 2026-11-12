@@ -266,3 +266,19 @@ test("kit mostra as fotos do que vem dentro (card e detalhe)", async ({ page }) 
   await expect(kit).toContainText("4x Tônica 350 ml");
   await expect(kit.locator('img[src*="gin.svg"]')).toBeVisible();
 });
+
+test("escolhas ligadas a produtos mostram miniatura do mesmo tamanho", async ({ page }) => {
+  await abrirLoja(page);
+  await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
+  const detalhe = page.getByRole("dialog", { name: "Copão de Askov" });
+  await detalhe.locator("summary").filter({ hasText: "Energético" }).click();
+  const baly = detalhe.locator("label").filter({ hasText: "Baly" });
+  const redBull = detalhe.locator("label").filter({ hasText: "Red Bull" });
+  // Red Bull tem foto (inteira, sem cortar); Baly ainda não (selo no lugar)
+  await expect(redBull.locator('img[src*="cerveja-lata"]')).toHaveCSS("object-fit", "contain");
+  await expect(baly.locator('img[src*="logo-selo-simples"]').first()).toBeAttached();
+  const tamanho = async (l: typeof baly) => (await l.locator("span.relative.grid").first().boundingBox())!;
+  const [a, b] = [await tamanho(baly), await tamanho(redBull)];
+  expect(Math.round(a.width)).toBe(Math.round(b.width));
+  expect(Math.round(a.height)).toBe(Math.round(a.width));
+});
