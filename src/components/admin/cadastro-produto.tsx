@@ -10,7 +10,7 @@ import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { removerImagem, useUploadsPendentes } from "@/lib/admin/imagens";
 import { revalidarLoja } from "@/app/admin/acoes";
 import type { Categoria, Produto } from "@/lib/tipos";
-import { centavosParaCampo, paraCentavos } from "@/lib/utils";
+import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { EditorKit, type ComponenteKit } from "./editor-kit";
@@ -18,7 +18,23 @@ import { EditorAdicionais } from "./editor-adicionais";
 import { Carregando, UploadImagem } from "./ui";
 
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
-interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[] }
+interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[]; custos: Record<string, number> }
+
+/** Custo (da planilha importada) e margem sobre o preço digitado. */
+function resumoCusto(preco: string, custo: number | undefined): { valor: string; detalhe: string; curto: string; prejuizo: boolean } {
+  if (custo == null) return { valor: "—", detalhe: "Sem custo cadastrado", curto: "sem custo", prejuizo: false };
+  const venda = paraCentavos(preco);
+  if (!venda) return { valor: centavosParaCampo(custo), detalhe: "Informe o preço para ver a margem", curto: "sem preço", prejuizo: false };
+  const lucro = venda - custo;
+  const margem = Math.round((lucro / venda) * 1000) / 10;
+  const pct = `${margem.toLocaleString("pt-BR")}%`;
+  return {
+    valor: centavosParaCampo(custo),
+    detalhe: `${lucro >= 0 ? "Lucro" : "Prejuízo"} ${formatarPreco(Math.abs(lucro))} · margem ${pct}`,
+    curto: `${lucro >= 0 ? "+" : "−"}${formatarPreco(Math.abs(lucro))} · ${pct}`,
+    prejuizo: lucro < 0,
+  };
+}
 interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean }
 
 export function CadastroProduto({ produtoId }: { produtoId?: string }) {
@@ -55,7 +71,17 @@ export function CadastroProduto({ produtoId }: { produtoId?: string }) {
         if (grupo.error) return setErro(`Não foi possível carregar as variações: ${grupo.error.message}`);
         variacoes = (grupo.data ?? []) as Produto[];
       }
-      setDados({ variacoes, produto: (produto.data as Produto | null) ?? novo, categorias: cats,
+      // Custo de cada SKU (vem da importação da planilha; só administradores leem)
+      const ids = [produtoId, ...variacoes.map((v) => v.id)].filter((x): x is string => !!x);
+      const custos: Record<string, number> = {};
+      if (ids.length) {
+        const c = await sb.from("produto_importacao").select("produto_id,custo").in("produto_id", ids);
+        if (!ativo) return;
+        for (const linha of (c.data ?? []) as { produto_id: string; custo: number | null }[]) {
+          if (linha.custo != null) custos[linha.produto_id] = linha.custo;
+        }
+      }
+      setDados({ variacoes, custos, produto: (produto.data as Produto | null) ?? novo, categorias: cats,
         bases: ((bases.data ?? []) as Produto[]).filter((p) => p.id !== produtoId),
         componentes: (componentes.data ?? []) as ComponenteKit[] });
     }).catch(() => { if (ativo) setErro("Sem conexão para carregar o cadastro. Tente novamente."); });
@@ -191,6 +217,10 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
             }}><option value="simples">Produto simples</option><option value="variacoes">Produto com variações</option><option value="kit">Kit / fardo / copão</option></Select></Campo>
             <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
+            {!comVariacoes && !f.eh_kit && (() => {
+              const c = resumoCusto(f.preco, dados.custos[f.id]);
+              return <Campo label="Custo (R$)" htmlFor="p-custo" ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" readOnly tabIndex={-1} value={c.valor} title="Custo da planilha importada" className="cursor-default font-mono text-suave" /></Campo>;
+            })()}
           </div>
           <Campo label="Descrição" htmlFor="p-desc" ajuda={`${f.descricao.length}/500 caracteres`}><Textarea id="p-desc" value={f.descricao} onChange={(e) => set("descricao", e.target.value)} maxLength={500} rows={3} /></Campo>
           <div className="flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-borda pt-4">
@@ -221,12 +251,16 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
           {erros.variacoes && <p role="alert" className="text-sm text-perigo">{erros.variacoes}</p>}
           <div className="border-t border-borda pt-5"><h3 className="mb-3 font-medium">Grade de variações <span className="ml-1 text-xs font-normal text-suave">({variacoes.length})</span></h3>
             <div className="relative overflow-x-auto rounded-lg border border-borda">
-              <table className="w-full min-w-[690px] border-collapse text-left text-[13px]">
-                <thead className="bg-superficie-2 text-xs font-normal text-suave"><tr><th scope="col" className="w-16 px-3 py-2.5 font-medium">Foto</th><th scope="col" className="px-3 py-2.5 font-medium">Variação</th><th scope="col" className="w-36 px-3 py-2.5 font-medium">Preço (R$)</th>{f.unidade_estoque === "ml" && <th scope="col" className="w-32 px-3 py-2.5 font-medium">ml / venda</th>}{f.unidade_estoque !== "ml" && <th scope="col" className="w-28 px-3 py-2.5 font-medium">UN / pacote</th>}<th scope="col" className="w-24 px-3 py-2.5 text-right font-medium">Estoque</th><th scope="col" className="w-20 px-3 py-2.5 text-center font-medium">Visível</th><th scope="col" className="w-24 px-3 py-2.5 text-center font-medium">Disponível</th><th scope="col" className="w-12"><span className="sr-only">Ações</span></th></tr></thead>
+              <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
+                <thead className="bg-superficie-2 text-xs font-normal text-suave"><tr><th scope="col" className="w-16 px-3 py-2.5 font-medium">Foto</th><th scope="col" className="px-3 py-2.5 font-medium">Variação</th><th scope="col" className="w-36 px-3 py-2.5 font-medium">Preço (R$)</th><th scope="col" className="w-40 px-3 py-2.5 font-medium">Custo (R$)</th>{f.unidade_estoque === "ml" && <th scope="col" className="w-32 px-3 py-2.5 font-medium">ml / venda</th>}{f.unidade_estoque !== "ml" && <th scope="col" className="w-28 px-3 py-2.5 font-medium">UN / pacote</th>}<th scope="col" className="w-24 px-3 py-2.5 text-right font-medium">Estoque</th><th scope="col" className="w-20 px-3 py-2.5 text-center font-medium">Visível</th><th scope="col" className="w-24 px-3 py-2.5 text-center font-medium">Disponível</th><th scope="col" className="w-12"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody className="divide-y divide-borda">{variacoes.map((v, i) => <tr key={v.id} className="bg-superficie/40 hover:bg-superficie-2/60">
                   <td className="px-3 py-2"><button type="button" aria-label={`Foto de ${v.nome || `variação ${i + 1}`}`} onClick={() => { setFotoVariacaoId(v.id); setAba("fotos"); }} className="relative grid size-9 cursor-pointer place-items-center overflow-hidden rounded-lg border border-borda bg-superficie-2 text-suave hover:border-rosa hover:text-rosa-texto">{v.foto_url ? <Image src={v.foto_url} alt="" fill sizes="36px" className="object-cover" /> : <ImagePlus className="size-4" aria-hidden />}</button></td>
                   <td className="px-3 py-2"><Input id={`v-nome-${i}`} aria-label={`Nome da variação ${i + 1}`} maxLength={35} placeholder="Melancia, 269 ml…" value={v.nome} onChange={(e) => alterarVariacao(v.id, { nome: e.target.value })} aria-invalid={!!erros.variacoes && !v.nome.trim()} /></td>
                   <td className="px-3 py-2"><Input id={`v-preco-${i}`} aria-label={`Preço da variação ${i + 1} (R$)`} className="font-mono" inputMode="decimal" placeholder="0,00" value={v.preco} onChange={(e) => alterarVariacao(v.id, { preco: e.target.value.replace(/[^\d,.]/g, "") })} aria-invalid={!!erros.variacoes && paraCentavos(v.preco) === null} /></td>
+                  <td className="px-3 py-2">{(() => {
+                    const c = resumoCusto(v.preco, dados.custos[v.id]);
+                    return <span title={c.detalhe}><span className="block font-mono">{c.valor}</span><span className={cn("block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></span>;
+                  })()}</td>
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
                   {f.unidade_estoque !== "ml" && <td className="px-3 py-2"><Input aria-label={`Unidades por pacote da variação ${i + 1}`} type="number" min={1} max={1000000} step={1} value={v.unidades_pacote} onChange={(e) => alterarVariacao(v.id, { unidades_pacote: Number(e.target.value) })} /></td>}
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-suave">{v.estoque} <span className="text-[11px]">{f.unidade_estoque ?? "un"}</span></td>
