@@ -15,7 +15,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   images: {
-    formats: ["image/avif", "image/webp"],
+    // WebP keeps the size reduction without the slower first AVIF encoding.
+    formats: ["image/webp"],
     remotePatterns: [
       supabase
         ? {
