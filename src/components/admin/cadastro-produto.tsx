@@ -22,7 +22,7 @@ import { VincularProdutoVariacao } from "./vincular-produto-variacao";
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
 interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[]; custos: Record<string, number> }
 
-/** Custo (da planilha importada) e margem sobre o preço digitado. */
+/** Custo cadastrado e margem sobre o preço digitado. */
 function resumoCusto(preco: string, custo: number | undefined): { valor: string; detalhe: string; curto: string; prejuizo: boolean } {
   if (custo == null) return { valor: "—", detalhe: "Sem custo cadastrado", curto: "sem custo", prejuizo: false };
   const venda = paraCentavos(preco);
@@ -38,6 +38,11 @@ function resumoCusto(preco: string, custo: number | undefined): { valor: string;
   };
 }
 interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean; vinculadoAgora?: boolean }
+
+function custoInvalido(valor: string): boolean {
+  const centavos = paraCentavos(valor);
+  return !!valor.trim() && (centavos === null || centavos > 2147483647);
+}
 
 export function CadastroProduto({ produtoId }: { produtoId?: string }) {
   const params = useSearchParams();
@@ -79,6 +84,7 @@ export function CadastroProduto({ produtoId }: { produtoId?: string }) {
       if (ids.length) {
         const c = await sb.from("produto_importacao").select("produto_id,custo").in("produto_id", ids);
         if (!ativo) return;
+        if (c.error) return setErro(`Não foi possível carregar os custos: ${c.error.message}`);
         for (const linha of (c.data ?? []) as { produto_id: string; custo: number | null }[]) {
           if (linha.custo != null) custos[linha.produto_id] = linha.custo;
         }
@@ -106,6 +112,12 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
   const [fotoVariacaoId, setFotoVariacaoId] = useState(dados.variacoes[0]?.id ?? "");
   const [custosVinculados, setCustosVinculados] = useState<Record<string, number>>({});
+  const [custosEditados, setCustosEditados] = useState<Record<string, string>>({});
+  const valorCusto = (id: string) => {
+    const custo = dados.custos[id] ?? custosVinculados[id];
+    return custosEditados[id] ?? (custo == null ? "" : centavosParaCampo(custo));
+  };
+  const alterarCusto = (id: string, valor: string) => setCustosEditados((c) => ({ ...c, [id]: valor.replace(/[^\d,.-]/g, "") }));
   const fotoVariacao = variacoes.find((v) => v.id === fotoVariacaoId) ?? variacoes[0];
   const [componentes, setComponentes] = useState(dados.componentes);
   const [aba, setAba] = useState("gerais");
@@ -145,6 +157,9 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     if (emSalvar.current) return;
     const preco = paraCentavos(f.preco);
     const novos: Record<string, string> = {};
+    const idsCadastro = new Set(comVariacoes ? variacoes.map((v) => v.id) : [f.id]);
+    const custosParaSalvar = Object.entries(custosEditados).filter(([id]) => idsCadastro.has(id));
+    if (custosParaSalvar.some(([, valor]) => custoInvalido(valor))) novos.custo = "Informe um custo válido, positivo ou zero.";
     if (!f.nome.trim()) novos.nome = "Informe o nome.";
     if (!comVariacoes && preco === null) novos.preco = "Informe um preço válido (ex.: 49,90).";
     if (!comVariacoes && !f.eh_kit && f.unidade_estoque === "ml" && (!Number.isInteger(f.volume_unidade) || (f.volume_unidade ?? 0) < 1 || (f.volume_unidade ?? 0) > 1000000)) novos.volume = "Informe o volume inteiro consumido por venda em ml.";
@@ -159,7 +174,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     }
     setErros(novos);
     if (Object.keys(novos).length) {
-      setAba(novos.nome || novos.preco || novos.volume || novos.pacote ? "gerais" : novos.variacoes ? "variacoes" : novos.kit ? "composicao" : "gerais");
+      setAba(novos.nome || novos.preco || novos.volume || novos.pacote ? "gerais" : novos.variacoes || novos.custo && comVariacoes ? "variacoes" : novos.kit ? "composicao" : "gerais");
       requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]:not([type="hidden"])')?.focus());
       toast.error("Confira os campos destacados."); return;
     }
@@ -171,10 +186,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         controla_estoque: f.controla_estoque, eh_kit: !!f.eh_kit,
         unidade_estoque: f.unidade_estoque ?? "un", volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, vende_pacote: !!f.vende_pacote };
       const sb = supabaseNavegador();
-      const { data, error } = comVariacoes
-        ? await sb.rpc("salvar_produto_variacoes", { p_familia: f.familia_id ?? f.id, p_dados, p_atributo: atributo.trim(),
-          p_variacoes: variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) })
-        : await sb.rpc("salvar_produto_com_kit", { p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [] });
+      const { data, error } = await sb.rpc("salvar_cadastro_produto", {
+        p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [],
+        p_familia: comVariacoes ? f.familia_id ?? f.id : null,
+        p_atributo: atributo.trim(),
+        p_variacoes: comVariacoes ? variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) : [],
+        p_custos: custosParaSalvar.map(([produto_id, valor]) => ({ produto_id, custo: valor.trim() ? paraCentavos(valor) : null })),
+      });
       if (error || !data) { setErros({ geral: error?.message ?? "Não foi possível salvar." }); return; }
       salvo = true;
       uploads.concluir(comVariacoes ? variacoes.map((v) => v.foto_url) : f.foto_url);
@@ -238,9 +256,9 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
             }}><option value="simples">Produto simples</option><option value="variacoes">Produto com variações</option><option value="kit">Kit / fardo / copão</option></Select></Campo>
             <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
-            {!comVariacoes && !f.eh_kit && (() => {
-              const c = resumoCusto(f.preco, dados.custos[f.id]);
-              return <Campo label="Custo (R$)" htmlFor="p-custo" ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" readOnly tabIndex={-1} value={c.valor} title="Custo da planilha importada" className="cursor-default font-mono text-suave" /></Campo>;
+            {!comVariacoes && (() => {
+              const c = resumoCusto(f.preco, paraCentavos(valorCusto(f.id)) ?? undefined);
+              return <Campo label="Custo (R$)" htmlFor="p-custo" erro={erros.custo} ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" inputMode="decimal" placeholder="0,00" maxLength={16} value={valorCusto(f.id)} onChange={(e) => alterarCusto(f.id, e.target.value)} aria-invalid={!!erros.custo} className="font-mono" /></Campo>;
             })()}
           </div>
           <Campo label="Descrição" htmlFor="p-desc" ajuda={`${f.descricao.length}/500 caracteres`}><Textarea id="p-desc" value={f.descricao} onChange={(e) => set("descricao", e.target.value)} maxLength={500} rows={3} /></Campo>
@@ -271,6 +289,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
           <div className="max-w-xs"><Campo label="Tipo da variação" htmlFor="v-atributo" ajuda="Ex.: Sabor, Tamanho ou Sabor / tamanho."><Input id="v-atributo" maxLength={30} value={atributo} onChange={(e) => setAtributo(e.target.value)} /></Campo></div>
           {variacoes.length < 50 && <VincularProdutoVariacao excluidos={[f.id, ...variacoes.map((v) => v.id)].join(",")} unidade={f.unidade_estoque ?? "un"} vendePacote={!!f.vende_pacote} onVincular={vincularProduto} />}
           {erros.variacoes && <p role="alert" className="text-sm text-perigo">{erros.variacoes}</p>}
+          {erros.custo && <p role="alert" className="text-sm text-perigo">{erros.custo}</p>}
           <div className="border-t border-borda pt-5"><h3 className="mb-3 font-medium">Grade de variações <span className="ml-1 text-xs font-normal text-suave">({variacoes.length})</span></h3>
             <div className="relative overflow-x-auto rounded-lg border border-borda">
               <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
@@ -280,8 +299,8 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
                   <td className="px-3 py-2"><Input id={`v-nome-${i}`} aria-label={`Nome da variação ${i + 1}`} maxLength={35} placeholder="Melancia, 269 ml…" value={v.nome} onChange={(e) => alterarVariacao(v.id, { nome: e.target.value })} aria-invalid={!!erros.variacoes && !v.nome.trim()} /></td>
                   <td className="px-3 py-2"><Input id={`v-preco-${i}`} aria-label={`Preço da variação ${i + 1} (R$)`} className="font-mono" inputMode="decimal" placeholder="0,00" value={v.preco} onChange={(e) => alterarVariacao(v.id, { preco: e.target.value.replace(/[^\d,.]/g, "") })} aria-invalid={!!erros.variacoes && paraCentavos(v.preco) === null} /></td>
                   <td className="px-3 py-2">{(() => {
-                    const c = resumoCusto(v.preco, dados.custos[v.id] ?? custosVinculados[v.id]);
-                    return <span title={c.detalhe}><span className="block font-mono">{c.valor}</span><span className={cn("block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></span>;
+                    const c = resumoCusto(v.preco, paraCentavos(valorCusto(v.id)) ?? undefined);
+                    return <div title={c.detalhe}><Input aria-label={`Custo da variação ${i + 1} (R$)`} inputMode="decimal" placeholder="0,00" maxLength={16} value={valorCusto(v.id)} onChange={(e) => alterarCusto(v.id, e.target.value)} aria-invalid={!!erros.custo && custoInvalido(valorCusto(v.id))} className="font-mono" /><span className={cn("mt-1 block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></div>;
                   })()}</td>
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
                   {f.unidade_estoque !== "ml" && <td className="px-3 py-2"><Input aria-label={`Unidades por pacote da variação ${i + 1}`} type="number" min={1} max={1000000} step={1} value={v.unidades_pacote} onChange={(e) => alterarVariacao(v.id, { unidades_pacote: Number(e.target.value) })} /></td>}
