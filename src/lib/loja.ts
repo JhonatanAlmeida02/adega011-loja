@@ -9,7 +9,7 @@ import {
   PRODUTOS_EXEMPLO,
   REGIOES_EXEMPLO,
 } from "./dados-exemplo";
-import { aplicarSaldos, type Categoria, type Configuracoes, type DadosLoja, type Produto, type RegiaoEntrega } from "./tipos";
+import { aplicarComposicao, aplicarSaldos, type LinhaComposicao, type Categoria, type Configuracoes, type DadosLoja, type Produto, type RegiaoEntrega } from "./tipos";
 
 export const TAG_LOJA = "loja";
 
@@ -33,7 +33,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
   }
 
   const sb = supabasePublico();
-  const [config, categorias, produtos, regioes, saldos, saldosOpcoes] = await Promise.all([
+  const [config, categorias, produtos, regioes, saldos, saldosOpcoes, composicao] = await Promise.all([
     sb.from("configuracoes").select("*").eq("id", 1).maybeSingle(),
     sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
     sb
@@ -46,7 +46,10 @@ export async function carregarLoja(): Promise<DadosLoja> {
     sb.from("regioes_entrega").select("id,nome,taxa,ordem,ativa").order("ordem"),
     sb.rpc("saldos_venda"),
     sb.rpc("saldos_opcoes"),
+    sb.rpc("composicao_vitrine"),
   ]);
+  // Fotos da composição são um extra: se a função faltar, a loja abre sem elas.
+  if (composicao.error) console.error("[loja] composicao_vitrine:", composicao.error.message);
 
   const erro = config.error ?? categorias.error ?? produtos.error ?? regioes.error ?? saldos.error ?? saldosOpcoes.error;
   if (erro || !config.data) {
@@ -73,7 +76,10 @@ export async function carregarLoja(): Promise<DadosLoja> {
   return {
     config: { ...CONFIG_EXEMPLO, ...cfg },
     categorias: (categorias.data ?? []) as Categoria[],
-    produtos: aplicarSaldos(((produtos.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? [], saldosOpcoes.data ?? []),
+    produtos: aplicarComposicao(
+      aplicarSaldos(((produtos.data ?? []) as unknown as Produto[]).map(ordenarGrupos), saldos.data ?? [], saldosOpcoes.data ?? []),
+      (composicao.data ?? []) as LinhaComposicao[],
+    ),
     regioes: (regioes.data ?? []) as RegiaoEntrega[],
     modoDemo: false,
   };

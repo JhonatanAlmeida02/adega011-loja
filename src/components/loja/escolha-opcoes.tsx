@@ -3,6 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import type { GrupoOpcoes } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
+import { FotoProduto } from "./foto-produto";
 
 export type Selecao = Record<string, string[]>; // grupoId -> opções escolhidas
 
@@ -93,6 +94,9 @@ export function EscolhaOpcoes({
                         }
                       }}
                     />
+                    {g.opcoes.some((x) => x.foto_url) && (
+                      <FotoProduto src={o.foto_url ?? null} alt="" sizes="44px" className="size-11 shrink-0 rounded-md" />
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{o.nome}</span>
                       <span className={cn("mt-1 block text-xs", !o.disponivel ? "text-suave" : o.preco ? "text-rosa-texto" : "text-suave")}>

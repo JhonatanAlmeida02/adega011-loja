@@ -37,7 +37,7 @@ async function main() {
   await upsert("configuracoes", { id: 1, ...CONFIG_EXEMPLO });
   await upsert("categorias", CATEGORIAS_EXEMPLO);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  await upsert("produtos", PRODUTOS_EXEMPLO.map(({ grupos, estoque, ...p }) => p));
+  await upsert("produtos", PRODUTOS_EXEMPLO.map(({ grupos, estoque, composicao, ...p }) => p));
   const grupos = PRODUTOS_EXEMPLO.flatMap((p) => p.grupos ?? []);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   await upsert("grupos_opcoes", grupos.map(({ opcoes, ...g }) => g));

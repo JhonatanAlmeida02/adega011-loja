@@ -58,6 +58,8 @@ export interface Opcao {
   componente_id?: string | null;
   quantidade_consumo?: number | null;
   saldo?: number;
+  /** Foto do produto ligado à escolha (vitrine) */
+  foto_url?: string | null;
   id: string;
   grupo_id: string;
   nome: string;
@@ -106,6 +108,8 @@ export interface Produto {
   variacao_nome?: string | null;
   /** Agrupamento somente para exibição; carrinho e estoque usam os SKUs. */
   variacoes?: Produto[];
+  /** O que vem no kit, com foto (vitrine; vem de composicao_vitrine) */
+  composicao?: ItemComposicao[];
 
 }
 
@@ -130,6 +134,42 @@ export function aplicarSaldos(produtos: Produto[], saldos: { produto_id: string;
   return produtos.map((p) => ({ ...p, saldo_venda: mapa.get(p.id), grupos: p.grupos?.map((g) => ({ ...g,
     opcoes: g.opcoes.map((o) => ({ ...o, saldo: mapaOpcoes.get(o.id), disponivel: o.disponivel && (mapaOpcoes.get(o.id) ?? 1) > 0 })),
   })) }));
+}
+
+/** Item do kit mostrado ao cliente: nome e foto (quantidade só em unidades). */
+export interface ItemComposicao {
+  nome: string;
+  foto_url: string | null;
+  quantidade: number | null;
+}
+
+export interface LinhaComposicao extends ItemComposicao {
+  tipo: "kit" | "opcao";
+  dono_id: string;
+}
+
+/** Junta a composição dos kits e as fotos das escolhas aos produtos da vitrine. */
+export function aplicarComposicao(produtos: Produto[], linhas: LinhaComposicao[]): Produto[] {
+  if (!linhas.length) return produtos;
+  const porKit = new Map<string, ItemComposicao[]>();
+  const fotoOpcao = new Map<string, string | null>();
+  for (const l of linhas) {
+    if (l.tipo === "kit") {
+      const lista = porKit.get(l.dono_id) ?? [];
+      lista.push({ nome: l.nome, foto_url: l.foto_url, quantidade: l.quantidade });
+      porKit.set(l.dono_id, lista);
+    } else if (!fotoOpcao.has(l.dono_id)) {
+      fotoOpcao.set(l.dono_id, l.foto_url);
+    }
+  }
+  return produtos.map((p) => ({
+    ...p,
+    composicao: porKit.get(p.id) ?? p.composicao,
+    grupos: p.grupos?.map((g) => ({
+      ...g,
+      opcoes: g.opcoes.map((o) => (fotoOpcao.has(o.id) ? { ...o, foto_url: fotoOpcao.get(o.id) ?? null } : o)),
+    })),
+  }));
 }
 
 export interface RegiaoEntrega {

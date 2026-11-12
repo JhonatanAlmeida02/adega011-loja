@@ -6,6 +6,7 @@ import { produtoDisponivel, controlaSaldo, saldoVendavel, type Produto } from "@
 import { cn, formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FotoProduto } from "./foto-produto";
+import { MiniaturasKit } from "./composicao-kit";
 import { SeletorQuantidade } from "./seletor-quantidade";
 
 export function SeloProduto({ tipo, texto }: { tipo: "destaque" | "esgotado" | "ultimas"; texto?: string }) {
@@ -85,6 +86,7 @@ export function CardProduto({
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="text-sm font-bold leading-snug">{produto.nome}</h3>
         {temVariacoes && <p className="text-xs text-rosa-texto">{produto.variacoes!.length} opções · {produto.variacao_atributo}</p>}
+        {produto.composicao && <MiniaturasKit itens={produto.composicao} className="mt-0.5" />}
         {produto.descricao && (
           <p className="line-clamp-2 text-[0.82rem] leading-snug text-suave sm:text-sm">{produto.descricao}</p>
         )}
