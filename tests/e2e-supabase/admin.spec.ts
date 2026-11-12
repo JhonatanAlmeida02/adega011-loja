@@ -425,6 +425,8 @@ test("PDV: abre caixa, vende com adicional e desconto, imprime cupom e fecha", a
 
   await page.getByRole("button", { name: "Vender Copão de Askov" }).click();
   const opcoes = page.getByRole("dialog", { name: "Copão de Askov" });
+  // Grupos de adicionais abrem como sanfona
+  await opcoes.getByRole("heading", { name: "Energético" }).click();
   await opcoes.locator("label").filter({ hasText: "Baly" }).click();
   await opcoes.getByRole("button", { name: /Adicionar · R\$ 13,00/ }).click();
   await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
@@ -456,6 +458,40 @@ test("PDV: abre caixa, vende com adicional e desconto, imprime cupom e fecha", a
   await expect(page.getByText(/faltou R\$ 2,00/)).toBeVisible();
 });
 
+test("PDV no celular: só a busca no topo e a venda ocupa a tela", async ({ page }) => {
+  await entrar(page);
+  await page.getByRole("link", { name: "PDV", exact: true }).click();
+  await page.getByLabel("Troco inicial (R$)").fill("0");
+  await page.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(page.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+
+  // Sem busca, nenhum produto listado; a venda aparece direto (sem gaveta)
+  await expect(page.getByRole("button", { name: "Vender IPA 473 ml" })).toBeHidden();
+  const venda = page.getByRole("complementary", { name: "Venda atual" });
+  await expect(venda).toBeVisible();
+
+  const busca = page.getByLabel("Buscar produto no PDV");
+  await busca.fill("ipa");
+  await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+  // Escolheu: a busca limpa, a lista some e o item aparece na venda
+  await expect(busca).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Vender IPA 473 ml" })).toBeHidden();
+  await expect(venda).toContainText("IPA 473 ml");
+  await expect(venda.getByTestId("pdv-total")).toHaveText("R$ 14,90");
+  await expect(venda.getByRole("button", { name: "Ir para pagamento" })).toBeInViewport();
+
+  await venda.getByRole("button", { name: "Ir para pagamento" }).click();
+  await venda.getByRole("radio", { name: "Pix" }).click();
+  await venda.getByRole("button", { name: "Finalizar · R$ 14,90" }).click();
+  await page.getByRole("dialog", { name: /Venda #/ }).getByRole("button", { name: "Nova venda" }).click();
+
+  // Fecha o caixa para não afetar outros testes
+  await page.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = page.getByRole("dialog", { name: "Fechar caixa" });
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("0");
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
@@ -483,6 +519,12 @@ test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a
   await expect(loja.getByLabel("Cidade")).toHaveValue("Itatiba - SP");
   await loja.getByRole("button", { name: /Calcular entrega/ }).click();
   await expect(loja.getByText(/6,0 km/).first()).toBeVisible();
+  await expect(loja.getByText(/~15 min de carro/)).toBeVisible();
+  // Mapa do trajeto (imagem da função mapa-frete) carregou de verdade
+  const mapa = loja.getByRole("img", { name: /Mapa do trajeto da loja até/ });
+  await expect(mapa).toBeVisible();
+  await expect.poll(() => mapa.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(loja.getByRole("link", { name: "Abrir rota no Google Maps" })).toHaveAttribute("href", /google\.com\/maps\/dir\/.*travelmode=driving/);
   await expect(loja.getByTestId("total")).toHaveText("R$ 130,90"); // 119,90 + 2,00 + 6 × 1,50
   // Mudou o endereço depois do cálculo: precisa calcular de novo
   await loja.getByLabel("Bairro").fill("Outro");

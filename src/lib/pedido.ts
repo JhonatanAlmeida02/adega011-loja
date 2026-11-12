@@ -71,6 +71,8 @@ export interface CotacaoFrete {
   endereco: string; // "Rua X, 10, Bairro, Cidade" (o pedido precisa começar com isso)
   endereco_formatado: string;
   expira_em: string;
+  minutos?: number | null; // tempo estimado de carro
+  mapa?: boolean; // tem trajeto para desenhar (função mapa-frete)
 }
 
 export interface DadosCheckout {
@@ -82,6 +84,7 @@ export interface DadosCheckout {
   bairro: string;
   cidade: string;
   complemento: string;
+  cep?: string; // "13250-000" (opcional; preenche o endereço pela busca de CEP)
   pagamento: FormaPagamento | "";
   troco: string; // "100,00" ou vazio = sem troco
   observacoes: string;
@@ -168,7 +171,10 @@ export function validarCheckout(dados: DadosCheckout, config: Configuracoes, tot
 /** Endereço completo gravado no pedido. */
 export function enderecoCompleto(dados: DadosCheckout, config: Pick<Configuracoes, "modo_frete">): string {
   const base = config.modo_frete === "distancia" ? enderecoParaCotacao(dados) : dados.endereco.trim();
-  return [base, dados.complemento.trim()].filter(Boolean).join(" — ");
+  // O CEP vem depois do endereço: o servidor confere se o endereço do pedido começa
+  // com o endereço do frete calculado.
+  const cep = dados.cep?.replace(/\D/g, "").length === 8 ? ` · CEP ${dados.cep}` : "";
+  return [base + cep, dados.complemento.trim()].filter(Boolean).join(" — ");
 }
 
 const km = (n: number) => `${n.toFixed(1).replace(".", ",")} km`;

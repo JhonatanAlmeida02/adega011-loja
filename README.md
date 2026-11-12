@@ -128,15 +128,21 @@ Depois é só entrar em `/admin/login`. Se esquecer a senha, use **“Esqueci mi
 
 A taxa é **taxa inicial + valor por km rodado** (ex.: R$ 2,00 + R$ 1,50/km), com a distância pela rua da loja até o cliente. Quem calcula é a Edge Function [`cotar-frete`](supabase/functions/cotar-frete/index.ts), que roda no Supabase e grava a cotação no banco. O pedido só aceita a taxa de uma cotação gravada (válida por 45 min e para o mesmo endereço), então ninguém consegue mudar o frete pelo navegador.
 
-1. **Chave do Google**: no [Google Cloud Console](https://console.cloud.google.com/), crie um projeto e ative as APIs **Geocoding API** e **Routes API**. Em **APIs e serviços → Credenciais**, crie uma **chave de API** e restrinja-a a essas duas APIs. O Google pede um cartão, mas tem cota gratuita mensal que uma adega dificilmente ultrapassa.
-2. **Publicar a função** (uma vez):
+1. **Chave do Google**: no [Google Cloud Console](https://console.cloud.google.com/), crie um projeto e ative as APIs **Geocoding API**, **Routes API** e **Maps Static API** (esta última desenha o mapa do trajeto). Em **APIs e serviços → Credenciais**, crie uma **chave de API** e, em "Restrições de API", restrinja-a a essas três APIs. Não use restrição por site nem por IP: quem chama o Google é o servidor do Supabase. O Google pede um cartão, mas tem cota gratuita mensal que uma adega dificilmente ultrapassa.
+2. **Publicar as funções** (uma vez):
 
    ```bash
    npx supabase functions deploy cotar-frete --no-verify-jwt
    ```
 
+   ```bash
+   npx supabase functions deploy mapa-frete --no-verify-jwt
+   ```
+
 3. **Guardar a chave** em **Supabase → Edge Functions → Secrets** com o nome `GOOGLE_MAPS_API_KEY`. A chave fica só no Supabase, nunca no site.
 4. No painel, em **Entrega → Como cobrar a entrega**, escolha **Por km rodado** e confira a taxa inicial, o valor por km, o raio máximo e a cidade padrão.
+
+No checkout, depois do cálculo, o cliente vê a distância, o tempo estimado de carro, o **mapa do trajeto** (imagem gerada pela função [`mapa-frete`](supabase/functions/mapa-frete/index.ts), sem expor a chave) e um link para abrir a rota no Google Maps. O CEP preenche rua, bairro e cidade sozinho (ViaCEP, gratuito).
 
 > O endereço da loja (em **Painel → Loja**) é o ponto de partida. Ele é localizado uma vez e guardado; se mudar, é localizado de novo automaticamente.
 

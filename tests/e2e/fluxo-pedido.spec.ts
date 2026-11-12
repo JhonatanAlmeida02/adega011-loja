@@ -157,19 +157,21 @@ test("adicionais: Copão de Askov com Baly entra no carrinho e na mensagem", asy
 
   await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
   const detalhe = page.getByRole("dialog", { name: "Copão de Askov" });
-  await expect(detalhe.getByRole("button", { name: /Adicionar · R\$ 10,00/ })).toBeVisible();
+  await expect(detalhe.getByRole("button", { name: /Adicionar.*R\$ 10,00/ })).toBeVisible();
   const opcao = (nome: string) => detalhe.locator("label").filter({ hasText: nome });
+  // Grupos de adicionais abrem como sanfona
+  await detalhe.locator("summary").filter({ hasText: "Energético" }).click();
   await opcao("Baly").click();
   // Rádio opcional: escolher outro troca a opção
   await opcao("Red Bull").click();
   await expect(detalhe.getByRole("radio", { name: /Baly/ })).not.toBeChecked();
   await opcao("Baly").click();
   await detalhe.getByRole("button", { name: "Aumentar quantidade de Copão de Askov" }).click();
-  await detalhe.getByRole("button", { name: /Adicionar · R\$ 26,00/ }).click();
+  await detalhe.getByRole("button", { name: /Adicionar.*R\$ 26,00/ }).click();
 
   // Sem adicional também (linha separada no carrinho)
   await page.getByRole("button", { name: "Escolher Copão de Askov" }).click();
-  await page.getByRole("dialog", { name: "Copão de Askov" }).getByRole("button", { name: /Adicionar · R\$ 10,00/ }).click();
+  await page.getByRole("dialog", { name: "Copão de Askov" }).getByRole("button", { name: /Adicionar.*R\$ 10,00/ }).click();
 
   await page.getByRole("button", { name: /Ver carrinho: 3 itens, total R\$ 36,00/ }).click();
   const carrinho = page.getByRole("dialog");
@@ -207,5 +209,47 @@ test("tema: alterna claro/escuro e lembra a escolha", async ({ page }) => {
   await expect(html).toHaveAttribute("data-tema", "claro");
   await page.getByRole("button", { name: "Usar tema escuro" }).click();
   await expect(html).toHaveAttribute("data-tema", "escuro");
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(11, 11, 11)");
+  // fundo escuro de novo (não o branco do tema claro)
+  await expect(page.locator("body")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator("body")).not.toHaveCSS("color", "rgb(11, 11, 11)");
+});
+
+test("CEP preenche o endereço e vai na mensagem do pedido", async ({ page }) => {
+  await abrirLoja(page);
+  const whatsapp = await capturarWhatsApp(page);
+  // Busca de CEP simulada (sem depender do ViaCEP de verdade)
+  await page.context().route(/^https:\/\/viacep\.com\.br\/ws\/(\d{8})\/json\/$/, (route) => {
+    const cep = route.request().url().match(/ws\/(\d{8})/)![1];
+    const corpo =
+      cep === "13250000"
+        ? { cep: "13250-000", logradouro: "Rua Coronel Camilo Pires", bairro: "Centro", localidade: "Itatiba", uf: "SP" }
+        : { erro: true };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(corpo) });
+  });
+
+  await page.getByRole("button", { name: "Adicionar Tinto Malbec 750 ml" }).click();
+  await page.getByRole("button", { name: /Ver carrinho/ }).click();
+  await page.getByRole("button", { name: "Finalizar pedido" }).click();
+
+  // CEP que não existe: avisa e deixa preencher à mão
+  const cep = page.getByRole("textbox", { name: "CEP", exact: true });
+  await cep.fill("99999999");
+  await expect(page.getByText("CEP não encontrado.", { exact: false })).toBeVisible();
+
+  await cep.fill("13250000");
+  await expect(cep).toHaveValue("13250-000");
+  await expect(page.getByText("Rua Coronel Camilo Pires, Centro · Itatiba/SP", { exact: false })).toBeVisible();
+  const rua = page.getByLabel("Endereço (rua e número)");
+  await expect(rua).toHaveValue("Rua Coronel Camilo Pires, ");
+  await expect(rua).toBeFocused();
+  await page.keyboard.type("100");
+
+  await page.getByLabel("Nome").fill("Cliente CEP");
+  await page.getByLabel("WhatsApp / telefone").fill("11912345678");
+  await page.getByLabel("Região / bairro").selectOption({ label: "Região A · até 3 km — R$ 5,00" });
+  await page.getByRole("dialog").getByRole("radio", { name: "Pix" }).check({ force: true });
+  await page.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
+  await expect.poll(() => whatsapp.url, { timeout: 10_000 }).toContain("https://wa.me/");
+  const texto = new URL(whatsapp.url).searchParams.get("text") ?? "";
+  expect(texto).toContain("Endereço: Rua Coronel Camilo Pires, 100 · CEP 13250-000");
 });

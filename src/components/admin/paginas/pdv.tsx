@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, Lock, Minus, Plus, Printer, Search, ShoppingCart, SlidersHorizontal, Trash2, Wallet } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowDownToLine, ArrowUpFromLine, Lock, Minus, Plus, Printer, Search, ShoppingCart, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { textoBuscaProduto } from "@/lib/variacoes";
 import { combina } from "@/lib/busca";
@@ -167,7 +167,7 @@ function Venda({
   const [filtroAberto, setFiltroAberto] = useState(false);
   const [itens, setItens] = useState<ItemVenda[]>([]);
   const [escolhendo, setEscolhendo] = useState<Produto | null>(null);
-  const [carrinhoAberto, setCarrinhoAberto] = useState(false);
+  const campoBusca = useRef<HTMLInputElement>(null);
   const [cupom, setCupom] = useState<DadosCupom | null>(null);
   const [painelCaixa, setPainelCaixa] = useState<"movimento" | "fechar" | null>(null);
 
@@ -192,18 +192,26 @@ function Venda({
     });
   };
 
+  // Celular: a lista só aparece enquanto busca (ou com categoria escolhida)
+  const listaNoCelular = busca.trim() !== "" || cat !== "todas";
+
   const tocar = (p: Produto) => {
     if (!produtoDisponivel(p)) return;
     if ((p.grupos?.length ?? 0) > 0) setEscolhendo(p);
     else adicionar(p);
+    // No celular: fecha a lista e o teclado para mostrar a venda. No computador a busca continua.
+    if (!window.matchMedia("(min-width: 1024px)").matches) {
+      setBusca("");
+      setCat("todas");
+      setFiltroAberto(false);
+      campoBusca.current?.blur();
+    }
   };
 
-  const totalItens = itens.reduce((s, i) => s + i.quantidade, 0);
   const subtotal = itens.reduce((s, i) => s + unitario(i) * i.quantidade, 0);
 
   const finalizado = (c: DadosCupom) => {
     setItens([]);
-    setCarrinhoAberto(false);
     setCupom(c);
     void revalidarLoja().catch(() => null);
     onMudou();
@@ -234,37 +242,47 @@ function Venda({
   return (
     <>
       <div className="pdv-shell print:hidden">
-        <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-borda pb-4">
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-lg bg-rosa/10 text-rosa-texto"><ShoppingCart className="size-5" aria-hidden /></div>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight">Frente de caixa</h1>
-              <p className="mt-0.5 flex items-center gap-2 text-xs text-suave"><span className="size-1.5 rounded-full bg-sucesso" aria-hidden />Caixa aberto · {hora.format(new Date(caixa.aberto_em))}</p>
+        <header className="mb-3 flex items-center justify-between gap-3 border-b border-borda pb-3 lg:mb-5 lg:flex-wrap lg:pb-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="hidden size-9 place-items-center rounded-lg bg-rosa/10 text-rosa-texto lg:grid"><ShoppingCart className="size-5" aria-hidden /></div>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight lg:text-lg">Frente de caixa</h1>
+              <p className="mt-0.5 flex items-center gap-2 text-xs text-suave"><span className="size-1.5 rounded-full bg-sucesso" aria-hidden />Caixa aberto<span className="hidden sm:inline"> · {hora.format(new Date(caixa.aberto_em))}</span></p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {/* No celular os botões ficam só com ícone (o nome continua para leitores de tela) */}
+          <div className="flex shrink-0 items-center gap-1 lg:gap-2">
             <span className="mr-2 hidden text-xs text-suave xl:block">{caixa.quantidade_vendas} vendas · {formatarPreco(caixa.total_vendas)}</span>
-            <Button variant="suave" size="sm" className="rounded-lg" onClick={() => setPainelCaixa("movimento")}><Wallet /> Movimentar</Button>
-            <Button variant="fantasma" size="sm" className="rounded-lg text-suave" onClick={() => setPainelCaixa("fechar")}><Lock /> Fechar caixa</Button>
+            <Button variant="suave" size="sm" className="rounded-lg px-3" title="Movimentar caixa" onClick={() => setPainelCaixa("movimento")}><Wallet /><span className="sr-only lg:not-sr-only">Movimentar</span></Button>
+            <Button variant="fantasma" size="sm" className="rounded-lg px-3 text-suave" title="Fechar caixa" onClick={() => setPainelCaixa("fechar")}><Lock /><span className="sr-only lg:not-sr-only">Fechar caixa</span></Button>
           </div>
         </header>
 
-        <div className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100dvh-8rem)] lg:min-h-[520px] lg:grid-cols-[minmax(240px,0.6fr)_minmax(420px,1.4fr)]">
-          <section aria-label="Produtos para venda" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-borda bg-superficie">
-            <div className="shrink-0 space-y-3 border-b border-borda p-3">
-              <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Produtos</h2><span className="text-xs text-suave">{lista.length} encontrados</span></div>
+        <div className="grid min-w-0 grid-cols-1 gap-2 lg:gap-4 lg:h-[calc(100dvh-8rem)] lg:min-h-[520px] lg:grid-cols-[minmax(240px,0.6fr)_minmax(420px,1.4fr)]">
+          <section aria-label="Produtos para venda" className="sticky top-[4.05rem] z-20 -mx-4 flex min-h-0 min-w-0 flex-col bg-fundo/95 px-4 py-2 backdrop-blur md:top-0 md:-mx-6 md:px-6 lg:static lg:z-auto lg:mx-0 lg:overflow-hidden lg:rounded-xl lg:border lg:border-borda lg:bg-superficie lg:p-0 lg:backdrop-blur-none">
+            <div className="shrink-0 space-y-3 lg:border-b lg:border-borda lg:p-3">
+              <div className="hidden items-center justify-between lg:flex"><h2 className="text-sm font-semibold">Produtos</h2><span className="text-xs text-suave">{lista.length} encontrados</span></div>
               <div className="flex items-center gap-2"><div className="relative min-w-0 flex-1">
                 <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-suave" />
-                <Input type="search" aria-label="Buscar produto no PDV" placeholder="Buscar produto…"
-                  value={busca} onChange={(e) => setBusca(e.target.value)} className="h-10 rounded-lg pl-10 text-sm" />
+                <Input ref={campoBusca} type="search" aria-label="Buscar produto no PDV" placeholder="Buscar produto…"
+                  value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setBusca(""); }}
+                  className="h-10 rounded-lg pl-10 pr-10 text-sm [&::-webkit-search-cancel-button]:hidden" />
+                {busca && <button type="button" aria-label="Limpar busca" onClick={() => { setBusca(""); campoBusca.current?.focus(); }}
+                  className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md text-suave hover:text-texto"><X className="size-4" /></button>}
               </div><Button type="button" variant="fantasma" size="icone-sm" aria-label="Filtrar categorias" aria-expanded={filtroAberto} aria-controls="pdv-categorias" className={cn("shrink-0 rounded-lg", (filtroAberto || cat !== "todas") && "bg-rosa/10 text-rosa-texto")} onClick={() => setFiltroAberto((v) => !v)}><SlidersHorizontal /></Button></div>
               {filtroAberto && <Select id="pdv-categorias" aria-label="Filtrar produtos por categoria" value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-lg text-xs">
                 <option value="todas">Todas as categorias</option>
                 {categorias.filter((c) => c.ativa).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </Select>}
             </div>
-            <div className="flex shrink-0 justify-between border-b border-borda px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-suave"><span>Produto</span><span className="pr-12">Preço</span></div>
-            <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto pb-24 lg:pb-0">
+            <div className="hidden shrink-0 justify-between border-b border-borda px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-suave lg:flex"><span>Produto</span><span className="pr-12">Preço</span></div>
+            {/* Celular: resultados em lista suspensa sobre a venda. Computador: lista fixa na coluna. */}
+            <ul aria-label="Resultados da busca" className={cn(
+              "min-h-0 divide-y divide-borda overflow-y-auto lg:static lg:block lg:max-h-none lg:flex-1 lg:rounded-none lg:border-0 lg:shadow-none",
+              listaNoCelular
+                ? "absolute inset-x-4 top-full max-h-[60dvh] md:inset-x-6 rounded-xl border border-borda bg-superficie shadow-2xl"
+                : "hidden",
+            )}>
               {lista.map((p) => {
                 const ok = produtoDisponivel(p);
                 const q = qtdNoCarrinho(p.id);
@@ -287,28 +305,10 @@ function Venda({
             </ul>
           </section>
 
-          <aside aria-label="Venda atual" className="hidden min-h-0 min-w-0 overflow-hidden rounded-xl border border-borda bg-superficie lg:block">
+          <aside aria-label="Venda atual" className="min-h-0 min-w-0 rounded-xl border border-borda bg-superficie lg:overflow-hidden">
             {painelVenda}
           </aside>
         </div>
-
-        {/* Venda: barra + gaveta no celular */}
-        {totalItens > 0 && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 px-4 md:left-[var(--sidebar-width)] md:bottom-4 lg:hidden">
-            <button
-              type="button"
-              onClick={() => setCarrinhoAberto(true)}
-              className="pointer-events-auto flex h-14 w-full cursor-pointer items-center gap-3 rounded-full bg-rosa pl-2 pr-5 text-preto shadow-xl"
-            >
-              <span className="grid size-10 place-items-center rounded-full bg-preto font-mono font-bold text-rosa">{totalItens}</span>
-              <span className="flex-1 text-left font-bold">Ver venda</span>
-              <span className="font-mono font-bold">{formatarPreco(subtotal)}</span>
-            </button>
-          </div>
-        )}
-        <Sheet open={carrinhoAberto} onOpenChange={setCarrinhoAberto}>
-          <SheetContent rotuloFechar="Fechar venda"><SheetTitle className="sr-only">Venda atual</SheetTitle><SheetDescription className="sr-only">Itens e pagamento da venda no balcão.</SheetDescription>{painelVenda}</SheetContent>
-        </Sheet>
       </div>
 
       <EscolherOpcoes
@@ -398,7 +398,7 @@ function PainelVenda({
   const [recebido, setRecebido] = useState("");
   const [cliente, setCliente] = useState("");
   const [finalizando, setFinalizando] = useState(false);
-  // O painel existe na coluna (computador) e na gaveta (celular): ids únicos por instância
+  // ids únicos por instância do painel
   const uid = useId();
   const ids = { desconto: `${uid}-desconto`, recebido: `${uid}-recebido`, cliente: `${uid}-cliente` };
 
@@ -447,13 +447,13 @@ function PainelVenda({
     .slice(0, 4);
 
   return (
-    <div className="flex h-[78dvh] max-h-[85dvh] min-h-0 flex-col lg:h-full lg:max-h-none" data-testid="pdv-venda">
-      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-borda px-4 pr-14 lg:pr-4">
+    <div className="flex min-h-[45dvh] flex-col lg:h-full lg:min-h-0" data-testid="pdv-venda">
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-borda px-4">
         <div className="flex items-baseline gap-2"><SheetTitleSeguro>{recebimento ? "Pagamento" : "Venda atual"}</SheetTitleSeguro><span className="text-xs text-suave">{itens.reduce((q, i) => q + i.quantidade, 0)} {itens.reduce((q, i) => q + i.quantidade, 0) === 1 ? "item" : "itens"}</span></div>
         {recebimento ? <button type="button" disabled={finalizando} onClick={() => setRecebimento(false)} className="cursor-pointer text-xs text-suave hover:text-rosa-texto">Voltar aos itens</button> : itens.length > 0 && <button type="button" onClick={() => { setDesconto(""); setRecebido(""); setCliente(""); onLimpar(); }} className="cursor-pointer text-xs text-suave hover:text-texto">Limpar venda</button>}
       </div>
 
-      {recebimento ? <fieldset disabled={finalizando} className="min-h-0 flex-1 overflow-y-auto p-5">
+      {recebimento ? <fieldset disabled={finalizando} className="min-h-0 flex-1 p-5 lg:overflow-y-auto">
         <legend className="sr-only">Recebimento da venda</legend>
         <div className="mx-auto max-w-lg space-y-5">
           <p className="text-sm text-suave">Escolha a forma de pagamento para concluir.</p>
@@ -562,8 +562,8 @@ function PainelVenda({
         <div className="grid size-12 place-items-center rounded-full bg-superficie-2"><ShoppingCart className="size-5" aria-hidden /></div>
         <div><p className="text-sm font-medium text-texto">Sua venda começa aqui</p><p className="mt-1 text-xs">Busque um produto e adicione à venda.</p></div>
       </div> : <div className="flex min-h-0 flex-1 flex-col">
-        <div aria-hidden className="flex shrink-0 items-center gap-3 border-b border-borda px-4 py-2 text-[11px] text-suave"><span className="flex-1">Produto</span><span className="w-[100px] text-center">Quantidade</span><span className="w-20 text-right">Total</span></div>
-        <ul className="min-h-0 flex-1 divide-y divide-borda overflow-y-auto px-4">
+        <div aria-hidden className="hidden shrink-0 items-center gap-3 border-b border-borda px-4 py-2 text-[11px] text-suave lg:flex"><span className="flex-1">Produto</span><span className="w-[100px] text-center">Quantidade</span><span className="w-20 text-right">Total</span></div>
+        <ul className="min-h-0 flex-1 divide-y divide-borda px-4 lg:overflow-y-auto">
           {itens.map((i) => <li key={i.chave} className="flex min-h-14 items-center gap-3 py-2.5">
             <div className="min-w-0 flex-1"><p className="text-sm font-medium leading-snug">{i.produto.nome}</p>{i.opcoes.length > 0 && <p className="mt-0.5 text-xs text-suave">+ {i.opcoes.map((o) => o.nome).join(", ")}</p>}<p className="mt-0.5 font-mono text-[11px] text-suave">{formatarPreco(unitario(i))} / {i.produto.vende_pacote ? "pct" : "un"}</p></div>
             <div className="flex w-[100px] shrink-0 items-center justify-center">
@@ -576,12 +576,14 @@ function PainelVenda({
         </ul>
       </div>}
 
-      <footer className="shrink-0 space-y-3 border-t border-borda bg-superficie px-4 py-4">
+      <footer className="acima-nav-celular sticky z-10 shrink-0 space-y-3 rounded-b-xl border-t border-borda bg-superficie px-4 py-3 lg:static lg:rounded-none lg:py-4">
         {valorDesconto > 0 && <dl className="space-y-1 text-xs text-suave"><div className="flex justify-between"><dt>Subtotal</dt><dd className="font-mono">{formatarPreco(subtotal)}</dd></div><div className="flex justify-between"><dt>Desconto</dt><dd className="font-mono">− {formatarPreco(valorDesconto)}</dd></div></dl>}
-        <div className="flex items-baseline justify-between"><span className="text-sm text-suave">Total da venda</span><strong className="font-mono text-2xl font-semibold tabular-nums" data-testid="pdv-total">{formatarPreco(total)}</strong></div>
-        <Button size="sm" className="h-10 w-full rounded-lg text-sm font-semibold shadow-none" disabled={!itens.length || finalizando || (recebimento && (recebidoInsuficiente || recebidoInvalido))} onClick={(e) => { if (e.detail > 1) return; if (recebimento) void finalizar(); else setRecebimento(true); }}>
+        <div className="flex items-center gap-3 lg:block lg:space-y-3">
+        <div className="min-w-0 lg:flex lg:items-baseline lg:justify-between"><span className="block text-xs text-suave lg:text-sm">Total da venda</span><strong className="whitespace-nowrap font-mono text-xl font-semibold tabular-nums lg:text-2xl" data-testid="pdv-total">{formatarPreco(total)}</strong></div>
+        <Button size="sm" className="h-11 flex-1 rounded-lg text-sm font-semibold shadow-none lg:h-10 lg:w-full" disabled={!itens.length || finalizando || (recebimento && (recebidoInsuficiente || recebidoInvalido))} onClick={(e) => { if (e.detail > 1) return; if (recebimento) void finalizar(); else setRecebimento(true); }}>
           {finalizando ? "Registrando…" : recebimento ? `Finalizar · ${formatarPreco(total)}` : "Ir para pagamento"}
         </Button>
+        </div>
       </footer>
     </div>
   );
