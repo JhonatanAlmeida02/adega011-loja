@@ -67,11 +67,11 @@ Abra http://localhost:3000. Sem `.env.local`, a loja roda em modo demonstração
 ## 2. Criar o projeto no Supabase
 
 1. Crie uma conta em [supabase.com](https://supabase.com) e clique em **New project**. Escolha a região **South America (São Paulo)**.
-2. No menu **SQL Editor**, rode **em ordem** cada arquivo de [`supabase/migrations/`](supabase/migrations) (cole o conteúdo inteiro e clique em **Run**):
-   1. `20261110000000_schema.sql`: tabelas, regras de segurança (RLS), função de pedidos, bucket de fotos e Realtime;
-   2. `20261111000100_adicionais_estoque.sql`: adicionais e estoque;
-   3. `20261111000200_frete_pedidos_pdv.sql`: frete por km, pedido v2, PDV/caixa e relatórios.
-   4. `20261111000300_permissoes_servico.sql`: permissões da função de frete (cotar-frete).
+2. No menu **SQL Editor**, rode **em ordem de nome** todos os arquivos de [`supabase/migrations/`](supabase/migrations) (cole o conteúdo inteiro e clique em **Run**). Os nomes começam com data e hora, então a ordem alfabética é a ordem certa. Os principais:
+   - `20261110000000_schema.sql`: tabelas, regras de segurança (RLS), função de pedidos, bucket de fotos e Realtime;
+   - `20261111000100_adicionais_estoque.sql` e `20261111000200_frete_pedidos_pdv.sql`: adicionais, estoque, frete por km, PDV/caixa e relatórios;
+   - `20261111031052_kits_estoque_ml.sql` em diante: kits, estoque em ml, variações, entrada por pacotes, venda por embalagem, importação de planilha;
+   - `20261111170000_mensagem_estoque.sql`, `20261111190000_rota_frete.sql` e `20261112*_composicao_*.sql`: mensagem de falta de estoque, mapa do trajeto e fotos do que vem no kit.
 
    Com a [CLI do Supabase](https://supabase.com/docs/guides/cli) dá para aplicar tudo com `npx supabase db push`.
 3. Coloque os dados de exemplo usando **uma** destas opções:
@@ -182,7 +182,19 @@ npm run lint
 npm run typecheck
 ```
 
-Testes de ponta a ponta em modo demonstração (fluxo de compra, taxa, link do WhatsApp, loja fechada e acessibilidade):
+Testes unitários (CEP, composição dos kits, estoque, variações):
+
+```bash
+npm run test:unit
+```
+
+Testes do banco (rode cada arquivo de `tests/sql/` num banco de testes, com um admin cadastrado; cada um desfaz o que fez e termina com `PASS`):
+
+```bash
+psql -v ON_ERROR_STOP=1 -f tests/sql/kits_estoque.sql
+```
+
+Testes de ponta a ponta em modo demonstração (fluxo de compra, taxa, link do WhatsApp, CEP, kits, tema claro/escuro, loja fechada e acessibilidade):
 
 ```bash
 npm run test:e2e
@@ -194,7 +206,7 @@ Testes de integração com um Supabase **local**. Precisa do Docker e usa `supab
 npm run test:e2e:supabase
 ```
 
-Para o frete, rode também `npx supabase functions serve --env-file supabase/functions/.env` com `MAPS_FAKE=1` nesse arquivo (o modo de teste inventa os km, sem gastar a cota do Google). Esses testes cobrem PDV com caixa, estoque, frete por km, relatórios, login, recuperação de senha (lendo o e-mail no Mailpit do `supabase start`), pedido em tempo real, edição, upload e limpeza de fotos, reordenação, taxa, banner, loja fechada e RLS. No `supabase/config.toml` local, use `site_url = "http://localhost:3200"` e `additional_redirect_urls = ["http://localhost:3200/**"]`. Eles alteram dados, então use um banco de testes e rode `npx supabase db reset` antes.
+Para o frete, rode também `npx supabase functions serve --env-file supabase/functions/.env` com `MAPS_FAKE=1` nesse arquivo (o modo de teste inventa os km, sem gastar a cota do Google). Esses testes cobrem PDV com caixa (também no celular), estoque, frete por km, relatórios, login, recuperação de senha (lendo o e-mail no Mailpit do `supabase start`), pedido em tempo real, edição, upload e limpeza de fotos, reordenação, taxa, banner, loja fechada e RLS. No `supabase/config.toml` local, use `site_url = "http://localhost:3200"` e `additional_redirect_urls = ["http://localhost:3200/**"]`. Eles alteram dados, então use um banco de testes e rode `npx supabase db reset` antes.
 
 ## Estrutura
 

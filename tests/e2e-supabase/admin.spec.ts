@@ -22,6 +22,26 @@ async function irPara(page: Page, nome: string) {
   await page.getByRole("dialog").getByRole("link", { name: nome, exact: true }).click();
 }
 
+/** Abre o menu "Ações de <produto>" na tabela de produtos. */
+async function abrirAcoes(page: Page, produto: string) {
+  await page.getByRole("button", { name: `Ações de ${produto}`, exact: true }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+}
+
+/** Abre a página de edição do produto pelo menu de ações. */
+async function editarProduto(page: Page, produto: string) {
+  await abrirAcoes(page, produto);
+  await page.getByRole("menuitem", { name: "Editar produto" }).click();
+  await expect(page.getByTestId("cadastro-produto")).toBeVisible();
+}
+
+/** Liga/desliga "Disponível para venda" pelo menu de ações. */
+async function alternarDisponivel(page: Page, produto: string) {
+  await abrirAcoes(page, produto);
+  await page.getByRole("menuitemcheckbox", { name: /Disponível para venda/ }).click();
+  await page.keyboard.press("Escape");
+}
+
 async function abrirLoja(page: Page) {
   await page.clock.setFixedTime(SEXTA_20H);
   await page.addInitScript(() => localStorage.setItem("adega011:maior-de-idade", "sim"));
@@ -79,13 +99,13 @@ test("pedido da loja é registrado e aparece no painel em tempo real", async ({ 
 
 test("editar preço e esgotar produto reflete na loja", async ({ page, browser }) => {
   await entrar(page);
-  await page.getByRole("link", { name: "Produtos" }).click();
-  await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
-  await page.getByLabel("Preço (R$)").fill("16,50");
+  await irPara(page, "Produtos");
+  await editarProduto(page, "IPA 473 ml");
+  await page.getByTestId("cadastro-produto").getByLabel("Preço (R$)").fill("16,50");
   await page.getByRole("button", { name: "Salvar produto" }).click();
   await expect(page.getByText("Produto atualizado")).toBeVisible();
-  await page.getByRole("switch", { name: "Disponível: Vodka Premium 1 L" }).click();
-  await expect(page.getByRole("switch", { name: "Disponível: Vodka Premium 1 L" })).toHaveAttribute("aria-checked", "false");
+  await alternarDisponivel(page, "Vodka Premium 1 L");
+  await expect(page.getByText("Venda pausada").first()).toBeVisible();
 
   const loja = await (await browser.newContext()).newPage();
   await abrirLoja(loja);
@@ -94,9 +114,9 @@ test("editar preço e esgotar produto reflete na loja", async ({ page, browser }
   await expect(loja.getByRole("article", { name: "Vodka Premium 1 L" })).toContainText("Esgotado");
 
   // Desfaz para não afetar outros testes
-  await page.getByRole("switch", { name: "Disponível: Vodka Premium 1 L" }).click();
-  await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
-  await page.getByLabel("Preço (R$)").fill("14,90");
+  await alternarDisponivel(page, "Vodka Premium 1 L");
+  await editarProduto(page, "IPA 473 ml");
+  await page.getByTestId("cadastro-produto").getByLabel("Preço (R$)").fill("14,90");
   await page.getByRole("button", { name: "Salvar produto" }).click();
   await expect(page.getByText("Produto atualizado").first()).toBeVisible();
 });
@@ -329,7 +349,8 @@ test("foto enviada e descartada (ou substituída) é apagada do Storage", async 
   expect(await existe(segunda)).toBe(true);
 
   // 3) Excluir o produto apaga a foto
-  await page.getByRole("button", { name: `Excluir ${nome}` }).click();
+  await abrirAcoes(page, nome);
+  await page.getByRole("button", { name: "Excluir produto" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Excluir" }).click();
   await expect(page.getByText("Produto excluído")).toBeVisible();
   await expect.poll(() => existe(segunda)).toBe(false);
@@ -339,8 +360,8 @@ test("importar foto por link (e recusar link que não é imagem)", async ({ page
   // Precisa de internet. Imagem pública e estável usada só para o teste.
   const LINK = process.env.LINK_IMAGEM_TESTE ?? "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png";
   await entrar(page);
-  await page.getByRole("link", { name: "Produtos", exact: true }).click();
-  await page.getByRole("button", { name: "Editar IPA 473 ml" }).click();
+  await irPara(page, "Produtos");
+  await editarProduto(page, "IPA 473 ml");
   const form = page.getByTestId("cadastro-produto");
 
   await form.getByRole("tab", { name: "Fotos", exact: true }).click();
@@ -372,12 +393,13 @@ test("importar foto por link (e recusar link que não é imagem)", async ({ page
 test("estoque: entrada, esgota com pedidos e volta ao cancelar", async ({ page, browser }) => {
   await entrar(page);
   await page.getByRole("link", { name: "Estoque", exact: true }).click();
-  await page.getByRole("button", { name: /Todos os produtos/ }).click();
+  await page.getByLabel("Filtrar por estoque").selectOption("todos");
+  await page.getByLabel("Buscar produto no estoque").fill("Whisky 12");
   await page.getByRole("switch", { name: "Controlar estoque de Whisky 12 anos 1 L" }).click();
   await page.getByRole("button", { name: "Entrada de Whisky 12 anos 1 L" }).click();
   await page.getByLabel("Quantas unidades chegaram?").fill("2");
   await page.getByRole("button", { name: "Registrar entrada" }).click();
-  await expect(page.getByText("Whisky 12 anos 1 L: 2 em estoque")).toBeVisible();
+  await expect(page.getByText("Whisky 12 anos 1 L: 2 un em estoque")).toBeVisible();
 
   const loja = await (await browser.newContext()).newPage();
   await loja.context().route(/^https:\/\/(wa\.me|api\.whatsapp\.com)\//, (r) => r.fulfill({ status: 200, body: "ok" }));
@@ -409,9 +431,8 @@ test("estoque: entrada, esgota com pedidos e volta ao cancelar", async ({ page, 
   await pedido.getByLabel(`Alterar status do pedido ${numero}`).selectOption("cancelado");
   await expect(page.getByText(`Pedido #${numero}: Cancelado`)).toBeVisible();
   await page.goto("/admin/estoque");
-  await expect(
-    page.getByRole("main").getByRole("listitem").filter({ hasText: "Whisky 12 anos 1 L" }).filter({ hasText: "em estoque" }),
-  ).toContainText("2 em estoque");
+  await page.getByLabel("Buscar produto no estoque").fill("Whisky 12");
+  await expect(page.getByRole("row").filter({ hasText: "Whisky 12 anos 1 L" })).toContainText("2 un");
 });
 
 test("PDV: abre caixa, vende com adicional e desconto, imprime cupom e fecha", async ({ browser }) => {

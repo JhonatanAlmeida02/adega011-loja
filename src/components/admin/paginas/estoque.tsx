@@ -170,7 +170,7 @@ export function PaginaEstoque() {
             <Button variant="suave" size="sm" onClick={() => { setBusca(""); setBuscaAplicada(""); setTipo("todos"); setFiltro("todos"); setSituacao("todos"); setCategoria("todas"); setPagina(1); }}>Limpar filtros</Button>
           } />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-borda" tabIndex={0} role="region" aria-label="Tabela de estoque" aria-busy={filtrando}>
+          <div className="relative overflow-x-auto rounded-lg border border-borda" tabIndex={0} role="region" aria-label="Tabela de estoque" aria-busy={filtrando}>
             <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
               <caption className="sr-only">Estoque por produto, com situação e ações de movimentação</caption>
               <thead className="bg-superficie-2 text-xs text-suave">

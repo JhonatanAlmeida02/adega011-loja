@@ -17,6 +17,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # Testes unitários (CEP, composição dos kits, estoque, variações…)
+      - run: npm run test:unit
       - run: npx playwright install --with-deps chromium
       # Build + testes de ponta a ponta em modo demonstração (sem Supabase)
       - run: npm run test:e2e

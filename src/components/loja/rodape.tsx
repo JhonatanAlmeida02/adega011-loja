@@ -80,6 +80,13 @@ export function Rodape({ config }: { config: Configuracoes }) {
         <p className="rotulo border-t border-borda pt-6 text-suave sm:col-span-2 lg:col-span-4">
           Venda proibida para menores de 18 anos · Se beber, não dirija · Beba com moderação
         </p>
+        <p className="text-xs text-suave sm:col-span-2 lg:col-span-4">
+          Algumas fotos de produtos:{" "}
+          <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-rosa-texto">
+            Open Food Facts
+          </a>{" "}
+          (CC BY-SA).
+        </p>
       </div>
     </footer>
   );
