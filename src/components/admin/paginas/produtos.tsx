@@ -10,6 +10,7 @@ import { combina } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { removerImagem } from "@/lib/admin/imagens";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
+import { idsDaCategoria, ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { saldoVendavel, type Categoria, type Produto } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -54,10 +55,12 @@ export function PaginaProdutos() {
     kits: agrupados.filter((p) => p.eh_kit).length,
     variacoes: agrupados.filter((p) => p.variacoes).length,
   }), [agrupados]);
+  // Filtrar uma categoria principal mostra também as suas subcategorias
+  const doFiltro = useMemo(() => idsDaCategoria(filtro, categorias.dados), [filtro, categorias.dados]);
   const visiveis = useMemo(() => {
     const lista = agrupados.filter((p) => {
       const membros = p.variacoes ?? [p];
-      if (filtro === "sem" ? !!p.categoria_id : filtro !== "todas" && p.categoria_id !== filtro) return false;
+      if (filtro === "sem" ? !!p.categoria_id : filtro !== "todas" && !doFiltro.has(p.categoria_id ?? "")) return false;
       if (tipo === "kits" && !p.eh_kit || tipo === "variacoes" && !p.variacoes || tipo === "simples" && (p.eh_kit || p.variacoes)) return false;
       if (situacao !== "todas" && !membros.some((v) => situacao === "pendente" ? v.preco_pendente : situacao === "ativos" ? v.ativo : !v.ativo)) return false;
       return combina(`${textoBuscaProduto(p)} ${membros.map((v) => `${metadata.get(v.id)?.codigo ?? ""} ${metadata.get(v.id)?.codigo_pai ?? ""}`).join(" ")}`, busca);
@@ -66,7 +69,7 @@ export function PaginaProdutos() {
     if (ordem === "preco") lista.sort((a, b) => a.preco - b.preco);
     if (coluna) lista.sort((a, b) => compararColuna(valores.get(a.id)!, valores.get(b.id)!, a.nome, b.nome, coluna.chave, coluna.desc));
     return lista;
-  }, [agrupados, filtro, busca, tipo, situacao, ordem, metadata, coluna, valores]);
+  }, [agrupados, filtro, busca, tipo, situacao, ordem, metadata, coluna, valores, doFiltro]);
   const podeOrdenar = filtro !== "todas" && !busca.trim() && tipo === "todos" && situacao === "todas" && ordem === "cadastro" && !coluna;
   // Clique no título: A→Z (menor primeiro), de novo Z→A, de novo volta à ordem anterior
   const ordenarPor = (chave: Coluna) => {
@@ -130,7 +133,7 @@ export function PaginaProdutos() {
           </div>
           <Select aria-label="Filtrar por categoria" value={filtro} onChange={(e) => { setFiltro(e.target.value); setOrdenando(false); }}>
             <option value="todas">Todas as categorias</option>
-            {categorias.dados.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {ordenarArvore(categorias.dados).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, categorias.dados)}</option>)}
             <option value="sem">Sem categoria</option>
           </Select>
           <Select aria-label="Filtrar por situação" value={situacao} onChange={(e) => { setSituacao(e.target.value); setOrdenando(false); }}>

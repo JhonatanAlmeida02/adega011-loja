@@ -45,7 +45,7 @@ async function main() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   await upsert("opcoes", grupos.flatMap((g) => g.opcoes.map(({ foto_url, ...o }) => o)));
   await upsert("regioes_entrega", REGIOES_EXEMPLO);
-  console.log("\nPronto! Loja populada com 4 categorias, 10 produtos e 3 regiões.");
+  console.log(`\nPronto! Loja populada com ${CATEGORIAS_EXEMPLO.length} categorias, ${PRODUTOS_EXEMPLO.length} produtos e 3 regiões.`);
 }
 
 main().catch((e) => {

@@ -164,6 +164,17 @@ No checkout, depois do cálculo, o cliente vê a distância, o tempo estimado de
 
 > Sempre que mudar uma variável `NEXT_PUBLIC_*`, faça um novo deploy: elas entram no código no momento do build.
 
+### Render (plano gratuito): manter o site acordado
+
+No plano gratuito do Render o site "dorme" após 15 min sem visitas, e o primeiro cliente espera ~30 s. As 750 h gratuitas por mês são da conta inteira (somam todos os serviços gratuitos), então deixar acordado 24 h gastaria quase tudo. A migration `20261113020000_manter_servidor_acordado.sql` faz o próprio Supabase chamar `/api/saude` a cada 10 min **só no horário de funcionamento** (de 30 min antes de abrir até 15 min depois de fechar, lendo os horários do painel). Com a loja "Fechada" no painel, não chama. Depois de aplicar a migration, agende uma vez no SQL Editor, com o endereço do seu site:
+
+```sql
+select cron.schedule('manter-servidor-acordado', '*/10 * * * *',
+  $$select privado.manter_servidor_acordado('https://SEU-SITE.onrender.com/api/saude')$$);
+```
+
+Para parar: `select cron.unschedule('manter-servidor-acordado');`. Fora do horário o site volta a dormir; num plano pago do Render ele não dorme e isso não é necessário.
+
 ## 7. Personalizar
 
 - **Dados reais da loja** (WhatsApp, endereço, horário, pedido mínimo, regiões e taxas): edite pelo painel em `/admin/loja` e `/admin/entrega`. Os valores iniciais ficam em [`src/lib/dados-exemplo.ts`](src/lib/dados-exemplo.ts). Se mudar esse arquivo, rode `npm run seed:sql` para atualizar o `seed.sql`.

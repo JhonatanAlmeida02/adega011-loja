@@ -35,7 +35,7 @@ export async function carregarLoja(): Promise<DadosLoja> {
   const sb = supabasePublico();
   const [config, categorias, produtos, regioes, saldos, saldosOpcoes, composicao] = await Promise.all([
     sb.from("configuracoes").select("*").eq("id", 1).maybeSingle(),
-    sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
+    sb.from("categorias").select("id,nome,slug,ordem,ativa,pai_id").order("ordem"),
     sb
       .from("produtos")
       .select(

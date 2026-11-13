@@ -612,6 +612,45 @@ test("SKU no cadastro: produto simples e variações, aparece na tabela e na bus
   await expect(form.getByRole("alert")).toContainText(`já está em uso por "Tônica ${sufixo}"`);
 });
 
+test("subcategorias: criar dentro de outra, usar no produto, filtrar e ver na loja", async ({ page, browser }) => {
+  const sufixo = Date.now().toString(36).slice(-4).toUpperCase();
+  const principal = `Destilados ${sufixo}`;
+  const sub = `Rum ${sufixo}`;
+  await entrar(page);
+  await irPara(page, "Categorias");
+  await page.getByLabel("Nome da nova categoria").fill(principal);
+  await page.getByRole("button", { name: "Adicionar categoria" }).click();
+  await expect(page.getByText("Categoria criada")).toBeVisible();
+  await page.getByLabel("Nome da nova categoria").fill(sub);
+  await page.getByLabel("Dentro de (opcional)").selectOption({ label: `Dentro de ${principal}` });
+  await page.getByRole("button", { name: "Adicionar categoria" }).click();
+  await expect(page.getByLabel(`${sub} fica dentro de`)).toHaveValue(/.+/);
+  // A principal agora mostra que tem subcategoria e não pode virar sub
+  await expect(page.getByRole("listitem").filter({ hasText: principal }).filter({ hasNotText: sub }).getByText("1 subcategoria")).toBeVisible();
+  await expect(page.getByLabel(`${principal} fica dentro de`)).toHaveCount(0);
+
+  // Produto na subcategoria: o select mostra "Principal › Sub"
+  await page.goto("/admin/produtos/novo");
+  const form = page.locator('[data-testid="cadastro-produto"]:visible');
+  await form.getByLabel("Nome", { exact: true }).fill(`Rum Ouro ${sufixo}`);
+  await form.getByLabel("Preço (R$)").fill("45,00");
+  await form.getByLabel("Categoria").selectOption({ label: `${principal} › ${sub}` });
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+
+  // Filtrar pela principal mostra o produto da subcategoria
+  await page.getByLabel("Filtrar por categoria").selectOption({ label: principal });
+  await expect(page.getByRole("region", { name: "Tabela de produtos" }).locator("tbody tr")).toHaveCount(1);
+
+  // Na loja: a principal na barra e a subcategoria dentro dela
+  const loja = await (await browser.newContext()).newPage();
+  await abrirLoja(loja);
+  await loja.getByRole("navigation", { name: "Categorias" }).getByRole("button", { name: principal }).click();
+  const secao = loja.getByRole("region", { name: principal });
+  await expect(secao.getByRole("navigation", { name: `Tipos de ${principal}` }).getByRole("button", { name: new RegExp(sub) })).toBeVisible();
+  await expect(secao.getByRole("article", { name: `Rum Ouro ${sufixo}` })).toBeVisible();
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
