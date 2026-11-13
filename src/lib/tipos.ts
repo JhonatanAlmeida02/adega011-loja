@@ -52,6 +52,8 @@ export interface Categoria {
   slug: string;
   ordem: number;
   ativa: boolean;
+  /** Categoria principal, quando esta é uma subcategoria (ex.: Vodka dentro de Destilados). */
+  pai_id?: string | null;
 }
 
 export interface Opcao {

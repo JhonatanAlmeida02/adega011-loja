@@ -7,6 +7,7 @@ import { ArrowLeft, Check, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
+import { ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { removerImagem, useUploadsPendentes } from "@/lib/admin/imagens";
 import { revalidarLoja } from "@/app/admin/acoes";
 import type { Categoria, Produto } from "@/lib/tipos";
@@ -269,7 +270,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
               if (tipo !== "variacoes" && comVariacoes && !sku && variacoes.length === 1) setSku(variacoes[0].codigo);
               if (kit && !componentes.length) setComponentes([{ componente_id: "", quantidade: 1 }]);
             }}><option value="simples">Produto simples</option><option value="variacoes">Produto com variações</option><option value="kit">Kit / fardo / copão</option></Select></Campo>
-            <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Campo>
+            <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{ordenarArvore(dados.categorias).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, dados.categorias)}</option>)}</Select></Campo>
             <Campo label={comVariacoes ? "SKU do produto" : "SKU (código)"} htmlFor="p-sku" erro={erros.sku} ajuda={comVariacoes ? "Código geral. Cada variação tem o seu SKU na aba Variações." : "Opcional. Código interno para achar o produto na busca."}><Input id="p-sku" value={sku} onChange={(e) => setSku(e.target.value)} maxLength={100} autoComplete="off" spellCheck={false} className="font-mono" aria-invalid={!!erros.sku} /></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
             {!comVariacoes && (() => {

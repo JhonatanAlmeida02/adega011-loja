@@ -9,6 +9,7 @@ import { revalidarLoja } from "@/app/admin/acoes";
 import { useConfiguracoes } from "@/lib/admin/config";
 import { ordenarGrupos } from "@/lib/loja-ordenacao";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
+import { idsDaCategoria, ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { NOMES_ORIGEM, produtoDisponivel, controlaSaldo, saldoVendavel, aplicarSaldos, type Categoria, type FormaPagamento, type Opcao, type Produto } from "@/lib/tipos";
 import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export function PaginaPdv() {
         )
         .eq("ativo", true)
         .order("ordem"),
-      sb.from("categorias").select("id,nome,slug,ordem,ativa").order("ordem"),
+      sb.from("categorias").select("id,nome,slug,ordem,ativa,pai_id").order("ordem"),
       sb.rpc("saldos_venda"),
       sb.rpc("saldos_opcoes"),
     ]).then(([r, p, c, saldos, saldosOpcoes]) => {
@@ -173,10 +174,10 @@ function Venda({
 
   const lista = useMemo(() => {
     let l = produtos;
-    if (cat !== "todas") l = l.filter((p) => p.categoria_id === cat);
+    if (cat !== "todas") { const ids = idsDaCategoria(cat, categorias); l = l.filter((p) => ids.has(p.categoria_id ?? "")); }
     if (busca.trim()) l = l.filter((p) => combina(`${textoBuscaProduto(p)} ${p.familia_nome ?? ""} ${p.variacao_nome ?? ""}`, busca));
     return l;
-  }, [produtos, cat, busca]);
+  }, [produtos, cat, busca, categorias]);
 
   const qtdNoCarrinho = (id: string) => itens.filter((i) => i.produto.id === id).reduce((s, i) => s + i.quantidade, 0);
 
@@ -272,7 +273,7 @@ function Venda({
               </div><Button type="button" variant="fantasma" size="icone-sm" aria-label="Filtrar categorias" aria-expanded={filtroAberto} aria-controls="pdv-categorias" className={cn("shrink-0 rounded-lg", (filtroAberto || cat !== "todas") && "bg-rosa/10 text-rosa-texto")} onClick={() => setFiltroAberto((v) => !v)}><SlidersHorizontal /></Button></div>
               {filtroAberto && <Select id="pdv-categorias" aria-label="Filtrar produtos por categoria" value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-lg text-xs">
                 <option value="todas">Todas as categorias</option>
-                {categorias.filter((c) => c.ativa).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                {ordenarArvore(categorias).filter((c) => c.ativa).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, categorias)}</option>)}
               </Select>}
             </div>
             <div className="hidden shrink-0 justify-between border-b border-borda px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-suave lg:flex"><span>Produto</span><span className="pr-12">Preço</span></div>

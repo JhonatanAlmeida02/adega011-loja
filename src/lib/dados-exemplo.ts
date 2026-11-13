@@ -51,9 +51,13 @@ export const CATEGORIAS_EXEMPLO: Categoria[] = [
   { id: id(2, "c0000000"), nome: "Vinhos", slug: "vinhos", ordem: 1, ativa: true },
   { id: id(3, "c0000000"), nome: "Destilados", slug: "destilados", ordem: 2, ativa: true },
   { id: id(4, "c0000000"), nome: "Cervejas", slug: "cervejas", ordem: 3, ativa: true },
+  // Subcategorias de Destilados
+  { id: id(5, "c0000000"), nome: "Gin", slug: "gin", ordem: 4, ativa: true, pai_id: id(3, "c0000000") },
+  { id: id(6, "c0000000"), nome: "Vodka", slug: "vodka", ordem: 5, ativa: true, pai_id: id(3, "c0000000") },
+  { id: id(7, "c0000000"), nome: "Whisky", slug: "whisky", ordem: 6, ativa: true, pai_id: id(3, "c0000000") },
 ];
 
-const [combos, vinhos, destilados, cervejas] = CATEGORIAS_EXEMPLO.map((c) => c.id);
+const [combos, vinhos, , cervejas, gin, vodka, whisky] = CATEGORIAS_EXEMPLO.map((c) => c.id);
 
 const p = (
   n: number,
@@ -111,9 +115,9 @@ export const PRODUTOS_EXEMPLO: Produto[] = [
   p(3, vinhos, "Tinto Malbec 750 ml", "Argentino, encorpado, com notas de ameixa e baunilha. Vai bem com carne e papo longo.", 6990, "vinho-tinto", { destaque: true }),
   p(4, vinhos, "Branco Sauvignon Blanc 750 ml", "Chileno, fresco e cítrico. Gelado é outra coisa.", 5490, "vinho-branco"),
   p(5, vinhos, "Espumante Brut Rosé 750 ml", "Serra Gaúcha, borbulha fina e fruta vermelha. Pra brindar qualquer coisa.", 7990, "espumante", { disponivel: false }),
-  p(6, destilados, "Gin London Dry 750 ml", "Seco, cítrico e com zimbro marcado. Base perfeita pro seu drink.", 11990, "gin", { destaque: true }),
-  p(7, destilados, "Vodka Premium 1 L", "Destilada cinco vezes, lisa e neutra. Combina com tudo.", 8990, "vodka"),
-  p(8, destilados, "Whisky 12 anos 1 L", "Blended escocês, notas de mel, malte e um defumado leve.", 18990, "whisky"),
+  p(6, gin, "Gin London Dry 750 ml", "Seco, cítrico e com zimbro marcado. Base perfeita pro seu drink.", 11990, "gin", { destaque: true }),
+  p(7, vodka, "Vodka Premium 1 L", "Destilada cinco vezes, lisa e neutra. Combina com tudo.", 8990, "vodka"),
+  p(8, whisky, "Whisky 12 anos 1 L", "Blended escocês, notas de mel, malte e um defumado leve.", 18990, "whisky"),
   p(9, cervejas, "IPA 473 ml", "Lata de IPA artesanal paulistana: amarga na medida, aroma de maracujá.", 1490, "cerveja-lata"),
   p(10, cervejas, "Pilsen 350 ml · pack 12", "Doze latas de pilsen trincando. O clássico que não falha.", 5490, "cerveja-pack", { destaque: true }),
 ];

@@ -5,7 +5,8 @@ import { Search, X } from "lucide-react";
 import { combina } from "@/lib/busca";
 import type { DadosLoja, Produto } from "@/lib/tipos";
 import { textoBuscaProduto } from "@/lib/variacoes";
-import { montarSecoes } from "@/lib/catalogo-secoes";
+import { montarSecoes, type Secao } from "@/lib/catalogo-secoes";
+import { rotuloCategoria } from "@/lib/categorias";
 import { cn } from "@/lib/utils";
 import { DivisorRua } from "@/components/marca/grafismos";
 import { CardProduto } from "./card-produto";
@@ -14,7 +15,7 @@ import { ProdutoDetalhe } from "./produto-detalhe";
 export function Catalogo({ loja }: { loja: DadosLoja }) {
   const secoes = useMemo(() => montarSecoes(loja.categorias, loja.produtos), [loja.categorias, loja.produtos]);
   const nomeCategoria = useMemo(
-    () => new Map(loja.categorias.map((c) => [c.id, c.nome])),
+    () => new Map(loja.categorias.map((c) => [c.id, rotuloCategoria(c, loja.categorias)])),
     [loja.categorias],
   );
   const [busca, setBusca] = useState("");
@@ -49,9 +50,15 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
   }, [secoes, buscando]);
 
   // Mantém o chip ativo visível na barra horizontal.
+  // Rola SÓ a barra: scrollIntoView também mexia na página (no celular puxava a tela
+  // de volta para a categoria e interrompia o movimento do dedo).
   useEffect(() => {
-    const chip = barraChips.current?.querySelector<HTMLElement>(`[data-cat="${ativa}"]`);
-    chip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const barra = barraChips.current;
+    const chip = barra?.querySelector<HTMLElement>(`[data-cat="${ativa}"]`);
+    if (!barra || !chip) return;
+    const deslocamento = chip.getBoundingClientRect().left - barra.getBoundingClientRect().left;
+    const alvo = barra.scrollLeft + deslocamento - (barra.clientWidth - chip.offsetWidth) / 2;
+    barra.scrollTo({ left: Math.max(0, alvo), behavior: "smooth" });
   }, [ativa]);
 
   const irPara = (id: string) => {
@@ -161,7 +168,7 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
                 </span>
               </div>
               <DivisorRua className="mt-2 h-6 opacity-80" />
-              <Grade produtos={s.produtos} onAbrir={setAberto} carregarJa={i === 0} />
+              <GruposSecao secao={s} onAbrir={setAberto} carregarJa={i === 0} />
             </section>
           ))
         )}
@@ -173,6 +180,47 @@ export function Catalogo({ loja }: { loja: DadosLoja }) {
         onFechar={() => setAberto(null)}
       />
     </div>
+  );
+}
+
+/** Produtos da seção; com subcategorias, atalhos no topo e um subtítulo para cada uma. */
+function GruposSecao({ secao, onAbrir, carregarJa }: { secao: Secao; onAbrir: (p: Produto) => void; carregarJa?: boolean }) {
+  const subs = secao.grupos.filter((g) => g.nome);
+  if (!subs.length) return <Grade produtos={secao.produtos} onAbrir={onAbrir} carregarJa={carregarJa} />;
+  const irParaSub = (id: string) =>
+    document.getElementById(`sub-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  return (
+    <>
+      <nav aria-label={`Tipos de ${secao.nome}`} className="sem-barra -mx-4 mt-1 flex gap-2 overflow-x-auto px-4 pb-1">
+        {subs.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => irParaSub(g.id)}
+            className="rotulo h-7 [@media(pointer:coarse)]:min-h-10 shrink-0 cursor-pointer rounded-full border border-borda bg-superficie-2 px-3 text-[0.7rem] font-bold text-texto transition-colors hover:border-rosa/70"
+          >
+            {g.nome} <span className="font-normal text-suave">{g.produtos.length}</span>
+          </button>
+        ))}
+      </nav>
+      {secao.grupos.map((g, i) =>
+        g.nome ? (
+          <div key={g.id} id={`sub-${g.id}`} className="scroll-mt-36 pt-5">
+            {/* Âncora sem prefixo, para links do banner como "#vodka" */}
+            <span id={g.id} className="relative -top-36 block" aria-hidden />
+            <h3 className="rotulo flex items-baseline gap-2 text-sm text-rosa-texto">
+              {g.nome}
+              <span className="text-[0.68rem] font-normal text-suave">
+                {g.produtos.length} {g.produtos.length === 1 ? "item" : "itens"}
+              </span>
+            </h3>
+            <Grade produtos={g.produtos} onAbrir={onAbrir} carregarJa={carregarJa && i === 0} />
+          </div>
+        ) : (
+          <Grade key={g.id} produtos={g.produtos} onAbrir={onAbrir} carregarJa={carregarJa && i === 0} />
+        ),
+      )}
+    </>
   );
 }
 

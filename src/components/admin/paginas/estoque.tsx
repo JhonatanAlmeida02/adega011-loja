@@ -8,6 +8,7 @@ import { normalizar } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { revalidarLoja } from "@/app/admin/acoes";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
+import { idsDaCategoria, ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { saldoVendavel, type Categoria, type Produto } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,8 @@ export function PaginaEstoque() {
     return totais;
   }, [indice]);
 
+  // Filtrar uma categoria principal mostra também as suas subcategorias
+  const doFiltro = useMemo(() => idsDaCategoria(categoria, categorias.dados), [categoria, categorias.dados]);
   const lista = useMemo(() => {
     const palavras = normalizar(buscaAplicada).split(/\s+/).filter(Boolean);
     return indice.filter(({ produto: p, texto, tipo: tipoItem }) => {
@@ -102,10 +105,10 @@ export function PaginaEstoque() {
       if (filtro === "baixo" && (p.eh_kit || !p.controla_estoque || p.estoque > (p.volume_unidade ?? 1) * 5)) return false;
       if (tipo !== "todos" && tipoItem !== tipo) return false;
       if (situacao !== "todos" && (situacao === "ativos" ? !p.ativo : p.ativo)) return false;
-      if (categoria !== "todas" && p.categoria_id !== categoria) return false;
+      if (categoria !== "todas" && !doFiltro.has(p.categoria_id ?? "")) return false;
       return palavras.every((palavra) => texto.includes(palavra));
     }).map((item) => item.produto);
-  }, [indice, filtro, buscaAplicada, tipo, situacao, categoria]);
+  }, [indice, filtro, buscaAplicada, tipo, situacao, categoria, doFiltro]);
   const totalPaginas = Math.max(1, Math.ceil(lista.length / ITENS_POR_PAGINA));
   const paginaAtual = Math.min(pagina, totalPaginas);
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
@@ -149,7 +152,7 @@ export function PaginaEstoque() {
           </div>
           <Select className="h-9" aria-label="Filtrar por categoria" value={categoria} onChange={(e) => { setCategoria(e.target.value); setPagina(1); }}>
             <option value="todas">Todas as categorias</option>
-            {categorias.dados.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {ordenarArvore(categorias.dados).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, categorias.dados)}</option>)}
           </Select>
           <Select className="h-9" aria-label="Filtrar por situação" value={situacao} onChange={(e) => { setSituacao(e.target.value); setPagina(1); }}>
             <option value="todos">Ativos e inativos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option>
