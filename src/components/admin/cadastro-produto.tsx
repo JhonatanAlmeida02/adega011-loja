@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, ImagePlus, Package, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
@@ -16,11 +16,13 @@ import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { EditorKit, type ComponenteKit } from "./editor-kit";
 import { EditorAdicionais } from "./editor-adicionais";
 import { Carregando, UploadImagem } from "./ui";
+import { MiniaturaProduto } from "./miniatura-produto";
+import { VincularProdutoVariacao } from "./vincular-produto-variacao";
 
 type Rascunho = Omit<Produto, "preco"> & { preco: string };
 interface DadosCadastro { produto: Produto; categorias: Categoria[]; bases: Produto[]; componentes: ComponenteKit[]; variacoes: Produto[]; custos: Record<string, number>; codigos: Record<string, string>; codigoPai: string }
 
-/** Custo (da planilha importada) e margem sobre o preço digitado. */
+/** Custo cadastrado e margem sobre o preço digitado. */
 function resumoCusto(preco: string, custo: number | undefined): { valor: string; detalhe: string; curto: string; prejuizo: boolean } {
   if (custo == null) return { valor: "—", detalhe: "Sem custo cadastrado", curto: "sem custo", prejuizo: false };
   const venda = paraCentavos(preco);
@@ -35,7 +37,12 @@ function resumoCusto(preco: string, custo: number | undefined): { valor: string;
     prejuizo: lucro < 0,
   };
 }
-interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; codigo: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean }
+interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; codigo: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean; vinculadoAgora?: boolean }
+
+function custoInvalido(valor: string): boolean {
+  const centavos = paraCentavos(valor);
+  return !!valor.trim() && (centavos === null || centavos > 2147483647);
+}
 
 export function CadastroProduto({ produtoId }: { produtoId?: string }) {
   const params = useSearchParams();
@@ -79,6 +86,7 @@ export function CadastroProduto({ produtoId }: { produtoId?: string }) {
       if (ids.length) {
         const c = await sb.from("produto_importacao").select("produto_id,custo,codigo,codigo_pai").in("produto_id", ids);
         if (!ativo) return;
+        if (c.error) return setErro(`Não foi possível carregar os custos: ${c.error.message}`);
         for (const linha of (c.data ?? []) as { produto_id: string; custo: number | null; codigo: string | null; codigo_pai: string | null }[]) {
           if (linha.custo != null) custos[linha.produto_id] = linha.custo;
           if (linha.codigo) codigos[linha.produto_id] = linha.codigo;
@@ -109,6 +117,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   })));
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
   const [fotoVariacaoId, setFotoVariacaoId] = useState(dados.variacoes[0]?.id ?? "");
+  const [custosVinculados, setCustosVinculados] = useState<Record<string, number>>({});
+  const [custosEditados, setCustosEditados] = useState<Record<string, string>>({});
+  const valorCusto = (id: string) => {
+    const custo = dados.custos[id] ?? custosVinculados[id];
+    return custosEditados[id] ?? (custo == null ? "" : centavosParaCampo(custo));
+  };
+  const alterarCusto = (id: string, valor: string) => setCustosEditados((c) => ({ ...c, [id]: valor.replace(/[^\d,.-]/g, "") }));
   const fotoVariacao = variacoes.find((v) => v.id === fotoVariacaoId) ?? variacoes[0];
   const [componentes, setComponentes] = useState(dados.componentes);
   const [aba, setAba] = useState("gerais");
@@ -121,6 +136,26 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const montado = useRef(true);
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setF((x) => ({ ...x, [k]: v }));
 
+  const vincularProduto = (p: Produto) => {
+    if (variacoes.length >= 50 || variacoes.some((v) => v.id === p.id)) return;
+    const prefixo = f.nome.trim().toLocaleUpperCase();
+    const nome = prefixo && p.nome.toLocaleUpperCase().startsWith(`${prefixo} `)
+      ? p.nome.slice(prefixo.length).replace(/^[\s·–-]+/, "") : p.nome;
+    setVariacoes((vs) => vs.some((v) => v.id === p.id) ? vs : [...vs.filter((v) => v.id !== f.id || v.existente || v.nome.trim() || v.preco || v.foto_url), {
+      id: p.id, nome: nome.slice(0, 35), codigo: "", foto_url: p.foto_url,
+      preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1,
+      unidades_pacote: p.unidades_pacote ?? 1, ativo: p.ativo, disponivel: p.disponivel,
+      estoque: p.estoque, existente: true, vinculadoAgora: true,
+    }]);
+    void supabaseNavegador().from("produto_importacao").select("custo,codigo").eq("produto_id", p.id).maybeSingle().then(({ data }) => {
+      if (!montado.current || !data) return;
+      if (data.custo != null) setCustosVinculados((c) => ({ ...c, [p.id]: data.custo }));
+      // O SKU do produto vinculado vira o SKU da variação (se ainda não digitaram outro)
+      if (data.codigo) setVariacoes((vs) => vs.map((v) => v.id === p.id && !v.codigo ? { ...v, codigo: data.codigo } : v));
+    });
+    toast.success("Produto vinculado à grade. Defina o nome da variação e salve o cadastro.");
+  };
+
   useEffect(() => {
     montado.current = true;
     return () => { montado.current = false; if (!emSalvar.current) uploads.concluir(null); };
@@ -131,6 +166,9 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     if (emSalvar.current) return;
     const preco = paraCentavos(f.preco);
     const novos: Record<string, string> = {};
+    const idsCadastro = new Set(comVariacoes ? variacoes.map((v) => v.id) : [f.id]);
+    const custosParaSalvar = Object.entries(custosEditados).filter(([id]) => idsCadastro.has(id));
+    if (custosParaSalvar.some(([, valor]) => custoInvalido(valor))) novos.custo = "Informe um custo válido, positivo ou zero.";
     if (!f.nome.trim()) novos.nome = "Informe o nome.";
     if (!comVariacoes && preco === null) novos.preco = "Informe um preço válido (ex.: 49,90).";
     if (!comVariacoes && !f.eh_kit && f.unidade_estoque === "ml" && (!Number.isInteger(f.volume_unidade) || (f.volume_unidade ?? 0) < 1 || (f.volume_unidade ?? 0) > 1000000)) novos.volume = "Informe o volume inteiro consumido por venda em ml.";
@@ -149,7 +187,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     }
     setErros(novos);
     if (Object.keys(novos).length) {
-      setAba(novos.nome || novos.sku || novos.preco || novos.volume || novos.pacote ? "gerais" : novos.variacoes ? "variacoes" : novos.kit ? "composicao" : "gerais");
+      setAba(novos.nome || novos.sku || novos.preco || novos.volume || novos.pacote ? "gerais" : novos.variacoes || novos.custo && comVariacoes ? "variacoes" : novos.kit ? "composicao" : "gerais");
       requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]:not([type="hidden"])')?.focus());
       toast.error("Confira os campos destacados."); return;
     }
@@ -161,10 +199,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         controla_estoque: f.controla_estoque, eh_kit: !!f.eh_kit,
         unidade_estoque: f.unidade_estoque ?? "un", volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, vende_pacote: !!f.vende_pacote, codigo: sku.trim() };
       const sb = supabaseNavegador();
-      const { data, error } = comVariacoes
-        ? await sb.rpc("salvar_produto_variacoes", { p_familia: f.familia_id ?? f.id, p_dados, p_atributo: atributo.trim(),
-          p_variacoes: variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), codigo: v.codigo.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) })
-        : await sb.rpc("salvar_produto_com_kit", { p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [] });
+      const { data, error } = await sb.rpc("salvar_cadastro_produto", {
+        p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [],
+        p_familia: comVariacoes ? f.familia_id ?? f.id : null,
+        p_atributo: atributo.trim(),
+        p_variacoes: comVariacoes ? variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), codigo: v.codigo.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) : [],
+        p_custos: custosParaSalvar.map(([produto_id, valor]) => ({ produto_id, custo: valor.trim() ? paraCentavos(valor) : null })),
+      });
       if (error || !data) { setErros({ geral: error?.message ?? "Não foi possível salvar." }); return; }
       salvo = true;
       uploads.concluir(comVariacoes ? variacoes.map((v) => v.foto_url) : f.foto_url);
@@ -190,6 +231,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     ...(existente ? [{ id: "adicionais", nome: "Adicionais" }] : []),
   ];
   const painel = "cadastro-painel space-y-5 data-[state=inactive]:hidden";
+  const fotoCabecalho = comVariacoes ? variacoes.find((v) => v.foto_url)?.foto_url ?? null : f.foto_url;
 
   return <form ref={formRef} onSubmit={enviar} noValidate data-testid="cadastro-produto" className="cadastro-erp mx-auto min-w-0 max-w-[1120px] text-sm">
     <div className="mb-5 flex items-center gap-2 text-xs text-suave">
@@ -199,7 +241,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button type="button" variant="suave" size="icone-sm" disabled={salvando} aria-label="Voltar para produtos" onClick={() => router.push("/admin/produtos")}><ArrowLeft /></Button>
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-rosa/20 bg-rosa/10 text-rosa-texto"><Package className="size-5" aria-hidden /></div>
+        <MiniaturaProduto foto={fotoCabecalho} tamanho={40} />
         <div className="min-w-0"><h1 className="truncate text-lg font-semibold" title={f.nome}>{f.nome.trim() || (existente ? "Editar produto" : "Novo produto")}</h1><p className="mt-0.5 text-xs text-suave">{tipoAtual} · {existente ? "Editar produto" : "Novo produto"}</p></div>
       </div>
       <Button type="submit" size="sm" className="rounded-lg shadow-none" disabled={salvando}><Check />{salvando ? "Salvando…" : "Salvar produto"}</Button>
@@ -230,9 +272,9 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
             <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Campo>
             <Campo label={comVariacoes ? "SKU do produto" : "SKU (código)"} htmlFor="p-sku" erro={erros.sku} ajuda={comVariacoes ? "Código geral. Cada variação tem o seu SKU na aba Variações." : "Opcional. Código interno para achar o produto na busca."}><Input id="p-sku" value={sku} onChange={(e) => setSku(e.target.value)} maxLength={100} autoComplete="off" spellCheck={false} className="font-mono" aria-invalid={!!erros.sku} /></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
-            {!comVariacoes && !f.eh_kit && (() => {
-              const c = resumoCusto(f.preco, dados.custos[f.id]);
-              return <Campo label="Custo (R$)" htmlFor="p-custo" ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" readOnly tabIndex={-1} value={c.valor} title="Custo da planilha importada" className="cursor-default font-mono text-suave" /></Campo>;
+            {!comVariacoes && (() => {
+              const c = resumoCusto(f.preco, paraCentavos(valorCusto(f.id)) ?? undefined);
+              return <Campo label="Custo (R$)" htmlFor="p-custo" erro={erros.custo} ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" inputMode="decimal" placeholder="0,00" maxLength={16} value={valorCusto(f.id)} onChange={(e) => alterarCusto(f.id, e.target.value)} aria-invalid={!!erros.custo} className="font-mono" /></Campo>;
             })()}
           </div>
           <Campo label="Descrição" htmlFor="p-desc" ajuda={`${f.descricao.length}/500 caracteres`}><Textarea id="p-desc" value={f.descricao} onChange={(e) => set("descricao", e.target.value)} maxLength={500} rows={3} /></Campo>
@@ -261,7 +303,9 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         {comVariacoes && <Tabs.Content value="variacoes" forceMount className={painel}>
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-semibold">Variações do produto</h2><p className="mt-1 text-xs text-suave">Defina as opções e os preços de cada variação.</p></div><Button type="button" variant="suave" size="sm" disabled={variacoes.length >= 50} onClick={() => setVariacoes((vs) => [...vs, { foto_url: null, id: crypto.randomUUID(), nome: "", codigo: "", preco: f.preco, volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, ativo: true, disponivel: true, estoque: 0, existente: false }])}><Plus /> Adicionar variação</Button></div>
           <div className="max-w-xs"><Campo label="Tipo da variação" htmlFor="v-atributo" ajuda="Ex.: Sabor, Tamanho ou Sabor / tamanho."><Input id="v-atributo" maxLength={30} value={atributo} onChange={(e) => setAtributo(e.target.value)} /></Campo></div>
+          {variacoes.length < 50 && <VincularProdutoVariacao excluidos={[f.id, ...variacoes.map((v) => v.id)].join(",")} unidade={f.unidade_estoque ?? "un"} vendePacote={!!f.vende_pacote} onVincular={vincularProduto} />}
           {erros.variacoes && <p role="alert" className="text-sm text-perigo">{erros.variacoes}</p>}
+          {erros.custo && <p role="alert" className="text-sm text-perigo">{erros.custo}</p>}
           <div className="border-t border-borda pt-5"><h3 className="mb-3 font-medium">Grade de variações <span className="ml-1 text-xs font-normal text-suave">({variacoes.length})</span></h3>
             <div className="relative overflow-x-auto rounded-lg border border-borda">
               <table className="w-full min-w-[960px] border-collapse text-left text-[13px]">
@@ -272,15 +316,15 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
                   <td className="px-3 py-2"><Input id={`v-sku-${i}`} aria-label={`SKU da variação ${i + 1}`} maxLength={100} autoComplete="off" spellCheck={false} className="font-mono" value={v.codigo} onChange={(e) => alterarVariacao(v.id, { codigo: e.target.value })} /></td>
                   <td className="px-3 py-2"><Input id={`v-preco-${i}`} aria-label={`Preço da variação ${i + 1} (R$)`} className="font-mono" inputMode="decimal" placeholder="0,00" value={v.preco} onChange={(e) => alterarVariacao(v.id, { preco: e.target.value.replace(/[^\d,.]/g, "") })} aria-invalid={!!erros.variacoes && paraCentavos(v.preco) === null} /></td>
                   <td className="px-3 py-2">{(() => {
-                    const c = resumoCusto(v.preco, dados.custos[v.id]);
-                    return <span title={c.detalhe}><span className="block font-mono">{c.valor}</span><span className={cn("block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></span>;
+                    const c = resumoCusto(v.preco, paraCentavos(valorCusto(v.id)) ?? undefined);
+                    return <div title={c.detalhe}><Input aria-label={`Custo da variação ${i + 1} (R$)`} inputMode="decimal" placeholder="0,00" maxLength={16} value={valorCusto(v.id)} onChange={(e) => alterarCusto(v.id, e.target.value)} aria-invalid={!!erros.custo && custoInvalido(valorCusto(v.id))} className="font-mono" /><span className={cn("mt-1 block whitespace-nowrap text-[11px] leading-tight", c.prejuizo ? "text-perigo" : "text-suave")}>{c.curto}<span className="sr-only"> ({c.detalhe})</span></span></div>;
                   })()}</td>
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
                   {f.unidade_estoque !== "ml" && <td className="px-3 py-2"><Input aria-label={`Unidades por pacote da variação ${i + 1}`} type="number" min={1} max={1000000} step={1} value={v.unidades_pacote} onChange={(e) => alterarVariacao(v.id, { unidades_pacote: Number(e.target.value) })} /></td>}
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-suave">{v.estoque} <span className="text-[11px]">{f.unidade_estoque ?? "un"}</span></td>
                   <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Visível: ${v.nome || `variação ${i + 1}`}`} checked={v.ativo} onChange={(ativo) => alterarVariacao(v.id, { ativo })} /></td>
                   <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Disponível: ${v.nome || `variação ${i + 1}`}`} checked={v.disponivel} onChange={(disponivel) => alterarVariacao(v.id, { disponivel })} /></td>
-                  <td className="px-2 py-2"><Button type="button" size="icone-sm" variant="fantasma" disabled={v.existente} title={v.existente ? "Desative a visibilidade para retirar esta opção da loja" : "Remover variação"} aria-label={`Remover variação ${i + 1}`} onClick={() => setVariacoes((vs) => vs.filter((x) => x.id !== v.id))}><Trash2 /></Button></td>
+                  <td className="px-2 py-2"><Button type="button" size="icone-sm" variant="fantasma" disabled={v.existente && !v.vinculadoAgora} title={v.vinculadoAgora ? "Retirar da grade sem excluir o produto" : v.existente ? "Desative a visibilidade para retirar esta opção da loja" : "Remover variação"} aria-label={`Remover variação ${i + 1}`} onClick={() => setVariacoes((vs) => vs.filter((x) => x.id !== v.id))}><Trash2 /></Button></td>
                 </tr>)}</tbody>
               </table>
             </div>

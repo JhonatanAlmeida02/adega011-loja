@@ -7,12 +7,23 @@ import { DadosEstruturados } from "@/components/loja/dados-estruturados";
 import { IniciarCarrinho } from "@/components/loja/iniciar-carrinho";
 import { Rodape } from "@/components/loja/rodape";
 import { VerificacaoIdade } from "@/components/loja/verificacao-idade";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import type { FotosPreparadas } from "@/lib/fotos-preparadas";
+import { FotosPreparadasProvider } from "@/components/ui/fotos-preparadas";
+import { cacheLife } from "next/cache";
+
+async function carregarFotosPreparadas(): Promise<FotosPreparadas> {
+  "use cache";
+  cacheLife("max");
+  return readFile(path.join(process.cwd(), "public", "_fotos-manifest.json"), "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
+}
 
 export default async function Home() {
-  const loja = await carregarLoja();
+  const [loja, fotos] = await Promise.all([carregarLoja(), carregarFotosPreparadas()]);
 
   return (
-    <>
+    <FotosPreparadasProvider fotos={fotos}>
       <a
         href="#cardapio"
         className="sr-only z-[70] rounded-full bg-amarelo px-5 py-3 font-bold text-preto focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
@@ -34,6 +45,6 @@ export default async function Home() {
       </main>
       <Rodape config={loja.config} />
       <Carrinho loja={loja} />
-    </>
+    </FotosPreparadasProvider>
   );
 }

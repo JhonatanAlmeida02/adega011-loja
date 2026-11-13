@@ -19,6 +19,9 @@
 
 # production
 /build
+/public/_fotos/
+/public/_fotos-manifest.json
+/public/_fotos-manifest.json.tmp
 
 # misc
 .DS_Store

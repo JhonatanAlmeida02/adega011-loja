@@ -1,4 +1,7 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { ImagemProduto } from "@/components/ui/imagem-produto";
 import { LogoTema, SELO_SIMPLES } from "@/components/tema/logo-tema";
 import { cn } from "@/lib/utils";
 
@@ -18,15 +21,18 @@ export function FotoProduto({
   esgotado?: boolean;
   carregarJa?: boolean;
 }) {
+  const [fotoComErro, setFotoComErro] = useState<string | null>(null);
   return (
     <div className={cn("relative overflow-hidden bg-superficie-2", className)}>
-      {src ? (
-        <Image
+      {src && src !== fotoComErro ? (
+        <ImagemProduto
           src={src}
           alt={alt}
           fill
           sizes={sizes}
           loading={carregarJa ? "eager" : "lazy"}
+          fetchPriority={carregarJa ? "high" : "auto"}
+          onError={() => setFotoComErro(src)}
           className={cn(
             "object-cover transition-transform duration-500 group-hover:scale-[1.04]",
             esgotado && "grayscale opacity-60",
@@ -46,6 +52,7 @@ export function FotoProduto({
  * cortar) sobre fundo branco; sem foto, o selo da marca bem clarinho.
  */
 export function MiniaturaFoto({ src, alt = "", sizes = "56px", className }: { src: string | null; alt?: string; sizes?: string; className?: string }) {
+  const [fotoComErro, setFotoComErro] = useState<string | null>(null);
   return (
     <span
       className={cn(
@@ -54,8 +61,8 @@ export function MiniaturaFoto({ src, alt = "", sizes = "56px", className }: { sr
         className,
       )}
     >
-      {src ? (
-        <Image src={src} alt={alt} fill sizes={sizes} className="object-contain p-1.5" />
+      {src && src !== fotoComErro ? (
+        <ImagemProduto src={src} alt={alt} fill sizes={sizes} className="object-contain p-1.5" onError={() => setFotoComErro(src)} />
       ) : (
         <LogoTema {...SELO_SIMPLES} alt="" width={40} height={40} className="w-[55%] opacity-25" />
       )}

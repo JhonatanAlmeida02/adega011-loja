@@ -165,6 +165,9 @@ function Conteudo({ produto, categoria, onFechar }: { produto: Produto; categori
             <Plus /> Adicionar · {formatarPreco(produto.preco)}
           </Button>
         )}
+        <Button type="button" variant="suave" className="mt-2 h-11 w-full rounded-lg border border-borda text-sm font-semibold" onClick={onFechar}>
+          OK, voltar à loja
+        </Button>
       </div>
     </>
   );

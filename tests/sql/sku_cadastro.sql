@@ -64,8 +64,18 @@ begin
     if msg <> 'Há variações com o mesmo SKU.' then raise exception 'FAIL mensagem: %',msg;end if;
   end;
 
+  -- Custo digitado sem SKU não inventa código "MANUAL-..."
+  perform public.salvar_cadastro_produto(outro,'{"nome":"QA Custo","preco":900}','[]',null,'',
+    '[]',jsonb_build_array(jsonb_build_object('produto_id',outro,'custo',450)));
+  if (select custo from public.produto_importacao where produto_id=outro) is distinct from 450
+    or (select codigo from public.produto_importacao where produto_id=outro) is not null then raise exception 'FAIL custo sem sku';end if;
+  -- SKU e custo juntos na mesma gravação
+  perform public.salvar_cadastro_produto(outro,'{"nome":"QA Custo","preco":900,"codigo":"QA-C"}','[]',null,'',
+    '[]',jsonb_build_array(jsonb_build_object('produto_id',outro,'custo',500)));
+  if (select codigo||'/'||custo from public.produto_importacao where produto_id=outro) is distinct from 'QA-C/500' then raise exception 'FAIL sku e custo juntos';end if;
+
   -- O SKU do produto não vira SKU de variação
   if exists(select 1 from public.produto_importacao where codigo='QA-PAI') then raise exception 'FAIL sku do pai gravado na variação';end if;
 end;$test$;
 rollback;
-select 'PASS: SKU no cadastro (simples, variações, troca, duplicado, apagar, custo preservado). Dados de teste desfeitos.' as resultado;
+select 'PASS: SKU no cadastro (simples, variações, troca, duplicado, apagar, custo preservado, custo sem código inventado). Dados de teste desfeitos.' as resultado;

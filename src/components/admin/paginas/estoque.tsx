@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { History, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { normalizar } from "@/lib/busca";
@@ -137,7 +138,7 @@ export function PaginaEstoque() {
     <>
       <CabecalhoPagina
         titulo="Estoque"
-        descricao="Vendas do site e do balcão baixam sozinhas; cancelamentos devolvem."
+        acoes={<Button asChild variant="suave"><Link href="/admin/ordens-entrada"><PackagePlus />Ordens de entrada / XML</Link></Button>}
       />
 
       <section aria-label="Controle de estoque" className="produtos-erp">

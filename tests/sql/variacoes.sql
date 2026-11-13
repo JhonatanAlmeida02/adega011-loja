@@ -1,7 +1,7 @@
 begin;
 do $$
 declare admin_id uuid; familia uuid:=gen_random_uuid(); a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid();
-  kit uuid:=gen_random_uuid(); outra uuid:=gen_random_uuid(); lista jsonb; dados jsonb:='{"nome":"QA Skol","preco":0,"unidade_estoque":"un"}'; consumo jsonb;
+  kit uuid:=gen_random_uuid(); outra uuid:=gen_random_uuid(); sem_controle uuid:=gen_random_uuid(); lista jsonb; dados jsonb:='{"nome":"QA Skol","preco":0,"unidade_estoque":"un"}'; consumo jsonb; historico jsonb;
 begin
   select user_id into admin_id from public.admins limit 1;
   perform set_config('request.jwt.claim.sub',admin_id::text,true);
@@ -9,12 +9,20 @@ begin
   -- Adopt an existing simple SKU: its ID, stock, kit links and history survive.
   perform public.salvar_produto_com_kit(a,'{"nome":"QA Skol 269","preco":400,"controla_estoque":true}','[]');
   perform public.ajustar_estoque(a,'entrada',31);
+  update public.produtos set foto_url='https://example.com/skol-original.jpg' where id=a;
+  insert into public.produto_importacao(produto_id,codigo,custo,origem) values(a,'QA-VINCULO-'||a::text,250,'{}');
+  select jsonb_agg(to_jsonb(m) order by m.id) into historico from public.estoque_movimentos m where produto_id=a;
   perform public.salvar_produto_com_kit(kit,'{"nome":"QA Fardo","preco":4400,"eh_kit":true}',jsonb_build_array(jsonb_build_object('componente_id',a,'quantidade',15)));
   lista:=jsonb_build_array(jsonb_build_object('id',a,'nome','269 ml','preco',400),jsonb_build_object('id',b,'nome','350 ml','preco',500));
   perform public.salvar_produto_variacoes(familia,dados,'Tamanho',lista);
   perform public.salvar_produto_variacoes(familia,dados,'Tamanho',lista);
   if (select count(*) from public.produtos where familia_id=familia)<>2 then raise exception 'FAIL duplicate retry';end if;
   if (select estoque from public.produtos where id=a)<>31 or (select estoque from public.produtos where id=b)<>0 then raise exception 'FAIL stock was replaced or invented';end if;
+  if (select foto_url from public.produtos where id=a) is distinct from 'https://example.com/skol-original.jpg'
+    or (select custo from public.produto_importacao where produto_id=a) is distinct from 250
+    or (select codigo from public.produto_importacao where produto_id=a) is distinct from 'QA-VINCULO-'||a::text
+    or (select jsonb_agg(to_jsonb(m) order by m.id) from public.estoque_movimentos m where produto_id=a) is distinct from historico then
+    raise exception 'FAIL linking lost original photo, cost, SKU or stock history';end if;
   if (select saldo from public.saldos_venda() where produto_id=kit)<>2 then raise exception 'FAIL kit link broken';end if;
   perform public.ajustar_estoque(b,'entrada',5);
   consumo:=privado.consumo_itens(jsonb_build_array(jsonb_build_object('produto_id',b,'quantidade',2),jsonb_build_object('produto_id',kit,'quantidade',1)));
@@ -57,6 +65,9 @@ begin
     raise exception using errcode='XX000',message='FAIL invalid photo transaction accepted';
   exception when check_violation then null;end;
   if (select foto_url from public.produtos where id=a) is not null then raise exception 'FAIL photos not atomic';end if;
+  perform public.salvar_produto_com_kit(sem_controle,'{"nome":"QA SEM CONTROLE","preco":300,"controla_estoque":false}','[]');
+  perform public.salvar_produto_variacoes(familia,dados,'Tamanho',lista || jsonb_build_array(jsonb_build_object('id',sem_controle,'nome','SEM CONTROLE','preco',300)));
+  if (select controla_estoque from public.produtos where id=sem_controle) then raise exception 'FAIL linking enabled stock tracking on existing product';end if;
   perform set_config('request.jwt.claim.sub','',true);
   perform set_config('request.jwt.claims','{"role":"anon"}',true);
   begin

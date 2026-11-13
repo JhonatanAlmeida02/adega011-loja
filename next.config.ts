@@ -15,7 +15,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   images: {
-    formats: ["image/avif", "image/webp"],
+    // WebP keeps the size reduction without the slower first AVIF encoding.
+    formats: ["image/webp"],
     remotePatterns: [
       supabase
         ? {
@@ -31,6 +32,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
+      {
+        source: "/_fotos/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       {
         source: "/(.*)",
         headers: [
