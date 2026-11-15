@@ -19,6 +19,7 @@ import {
   Settings,
   ShoppingCart,
   Truck,
+  Wallet,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useSessaoAdmin } from "@/lib/admin/sessao";
@@ -36,6 +37,7 @@ const LINKS = [
   { href: "/admin/estoque", rotulo: "Estoque", icone: Boxes, principal: true },
   { href: "/admin/ordens-entrada", rotulo: "Ordens de entrada", icone: ClipboardCheck, principal: false },
   { href: "/admin/relatorios", rotulo: "Relatórios", icone: BarChart3, principal: false },
+  { href: "/admin/financeiro", rotulo: "Financeiro", icone: Wallet, principal: false },
   { href: "/admin/categorias", rotulo: "Categorias", icone: LayoutGrid, principal: false },
   { href: "/admin/banner", rotulo: "Banner", icone: IconeImagem, principal: false },
   { href: "/admin/entrega", rotulo: "Entrega", icone: Truck, principal: false },
@@ -160,7 +162,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
-        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
+        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>{children}</main>
 
       {/* Navegação inferior (celular) */}
