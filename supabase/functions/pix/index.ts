@@ -6,6 +6,7 @@
 //   POST /pix/webhook       aviso do Mercado Pago, tópico "order" (assinatura x-signature conferida)
 //   POST /pix/verificar     { pedido_id } → a tela do cliente pede para conferir agora
 //   POST /pix/reconciliar   agendado: confere Pix vencidos que ficaram sem aviso
+//   POST /pix/estornar      { pedido_id } → SÓ admin logado: devolve o Pix pago (valor total)
 //   POST /pix/simular       { pedido_id, status } → SÓ com MP_FAKE=1 (testes)
 //
 // Regra de ouro: nada vira "pago" por causa do que chega no aviso. O aviso só diz
@@ -211,6 +212,48 @@ async function criarPix(pedidoId: string) {
   return resposta(200, { ok: true });
 }
 
+/**
+ * Estorno pelo painel. A permissão é conferida no banco COM O LOGIN de quem
+ * clicou (pix_para_estorno exige admin); só depois a função usa o token da loja.
+ */
+async function estornar(req: Request, pedidoId: string) {
+  const auth = req.headers.get("Authorization") ?? "";
+  const apikey = req.headers.get("apikey") ?? "";
+  if (!auth.startsWith("Bearer ") || !apikey) return resposta(401, { erro: "Entre no painel para estornar." });
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/pix_para_estorno`, {
+    method: "POST",
+    headers: { apikey, Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_pedido: pedidoId }),
+  });
+  const dados = await r.json().catch(() => null);
+  if (!r.ok) {
+    const negado = r.status === 401 || r.status === 403 || dados?.code === "42501";
+    return resposta(negado ? 403 : 422, { erro: negado ? "Só o admin pode estornar." : (dados?.message ?? "Não foi possível estornar.") });
+  }
+  const idExterno = String(dados?.id_externo ?? "");
+
+  if (FAKE) {
+    const ap = await rpc<string>("pix_aplicar", { p_id_externo: idExterno, p_referencia: pedidoId, p_status_mp: "refunded", p_valor: dados.valor, p_moeda: "BRL" });
+    return resposta(200, { ok: true, status: ap.ok ? ap.dados : "erro" });
+  }
+  if (!/^ORD[0-9A-Z]{1,40}$/i.test(idExterno)) return resposta(422, { erro: "Pix inválido para estorno." });
+  const token = Deno.env.get("MP_ACCESS_TOKEN");
+  if (!token) return resposta(503, { erro: "Pix automático não configurado." });
+  // Sem corpo = devolução do valor total da order
+  const mp = await fetch(`${MP}/v1/orders/${idExterno}/refund`, {
+    method: "POST",
+    signal: AbortSignal.timeout(15000),
+    headers: { Authorization: `Bearer ${token}`, "X-Idempotency-Key": `estorno-${idExterno}` },
+  });
+  if (!mp.ok) {
+    console.error("[pix] MP estorno", idExterno, mp.status, (await mp.text()).slice(0, 300));
+    return resposta(502, { erro: "O Mercado Pago não aceitou o estorno agora. Confira o saldo da conta e tente de novo." });
+  }
+  // Atualiza pelo que o Mercado Pago informa (pode levar alguns instantes)
+  const status = await conferir(idExterno);
+  return resposta(200, { ok: true, status });
+}
+
 /** id_externo do Pix em aberto de um pedido (leitura com a chave de serviço). */
 async function pendenteDoPedido(pedidoId: string): Promise<string | null> {
   const chave = chaveDeServico();
@@ -259,6 +302,8 @@ Deno.serve(async (req) => {
   if (!UUID.test(pedidoId)) return resposta(400, { erro: "Pedido inválido." });
 
   if (rota === "") return criarPix(pedidoId);
+
+  if (rota === "/estornar") return estornar(req, pedidoId);
 
   if (rota === "/verificar") {
     if (FAKE) return resposta(200, { ok: true });
