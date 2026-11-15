@@ -186,12 +186,15 @@ export function montarMensagem({
   dados,
   totais,
   numero,
+  pixPago,
 }: {
   config: Configuracoes;
   linhas: LinhaCarrinho[];
   dados: DadosCheckout;
   totais: Totais;
   numero?: number | null;
+  /** Pix automático já confirmado pelo Mercado Pago */
+  pixPago?: boolean;
 }): string {
   const l: string[] = [];
   l.push(`*Novo pedido · ${config.nome}*${numero ? ` — #${numero}` : ""}`);
@@ -233,6 +236,8 @@ export function montarMensagem({
         ? `Dinheiro — troco para ${formatarPreco(troco)} (levar ${formatarPreco(troco - totais.total)})`
         : "Dinheiro — sem troco",
     );
+  } else if (dados.pagamento === "pix" && pixPago) {
+    l.push("Pix pelo site — PAGO ✅");
   } else if (dados.pagamento) {
     l.push(NOMES_PAGAMENTO[dados.pagamento]);
   }

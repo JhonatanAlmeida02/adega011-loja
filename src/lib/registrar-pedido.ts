@@ -7,7 +7,7 @@ import type { Configuracoes } from "./tipos";
 import { paraCentavos } from "./utils";
 
 export type ResultadoRegistro =
-  | { ok: true; numero: number | null; subtotal?: number; taxa?: number; total?: number }
+  | { ok: true; numero: number | null; id?: string; subtotal?: number; taxa?: number; total?: number }
   | { ok: false; mensagem: string };
 
 /**
@@ -49,8 +49,8 @@ export async function registrarPedido(
       return { ok: true, numero: null };
     }
 
-    const r = data as { numero: number; subtotal: number; taxa: number; total: number };
-    return { ok: true, numero: r.numero, subtotal: r.subtotal, taxa: r.taxa, total: r.total };
+    const r = data as { id: string; numero: number; subtotal: number; taxa: number; total: number };
+    return { ok: true, numero: r.numero, id: r.id, subtotal: r.subtotal, taxa: r.taxa, total: r.total };
   } catch (e) {
     console.warn("[pedido] falha de rede, seguindo pelo WhatsApp:", e);
     return { ok: true, numero: null };

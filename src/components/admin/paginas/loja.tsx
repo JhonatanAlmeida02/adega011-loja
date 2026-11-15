@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useConfiguracoes } from "@/lib/admin/config";
+import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { NOMES_DIAS, statusDaLoja } from "@/lib/horario";
 import { NOMES_PAGAMENTO, type Configuracoes, type FaixaHorario, type FormaPagamento, type Horarios, type StatusManual } from "@/lib/tipos";
 import { apenasDigitos, cn, mascararTelefone } from "@/lib/utils";
@@ -164,7 +165,42 @@ function Pagamentos({ config, gravar }: Props) {
           </div>
         ))}
       </div>
+      {config.pagamentos.includes("pix") && <PixAutomatico config={config} gravar={gravar} />}
     </Cartao>
+  );
+}
+
+/** Liga o Pix automático (Mercado Pago). Só liga com as credenciais salvas no Supabase. */
+function PixAutomatico({ config, gravar }: Props) {
+  const [configurado, setConfigurado] = useState<boolean | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    supabaseNavegador().functions.invoke("pix", { method: "GET" })
+      .then(({ data }) => ativo && setConfigurado(!!(data as { configurado?: boolean } | null)?.configurado))
+      .catch(() => ativo && setConfigurado(false));
+    return () => { ativo = false; };
+  }, []);
+  const ligado = !!config.pix_online;
+  return (
+    <div className="mt-3 rounded-2xl border border-borda bg-superficie-2 p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="font-bold">Pix automático (Mercado Pago)</p>
+          <p className="text-sm text-suave">O cliente paga pelo QR Code no site e o pedido chega aqui como pago, sem conferir comprovante.</p>
+        </div>
+        <Interruptor
+          checked={ligado}
+          onCheckedChange={(v) => void gravar({ pix_online: v }, v ? "Pix automático ligado" : "Pix automático desligado")}
+          label="Pix automático"
+          disabled={!ligado && configurado !== true}
+        />
+      </div>
+      {configurado === false && (
+        <p role="status" className="mt-2 text-sm text-amarelo-texto">
+          Falta salvar as credenciais do Mercado Pago no Supabase (MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET). Veja o README.
+        </p>
+      )}
+    </div>
   );
 }
 

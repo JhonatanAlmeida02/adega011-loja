@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, Bike, CheckCircle2, Copy, MapPin, ShoppingBag, Store, Trash2 } from "lucide-react";
+import { ArrowLeft, Bike, CheckCircle2, Copy, MapPin, QrCode, ShoppingBag, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCarrinho } from "@/lib/carrinho";
 import {
@@ -28,12 +28,15 @@ import { Campo, Input, Select, Textarea } from "@/components/ui/campos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { IconeWhatsApp } from "@/components/marca/icones";
 import { cidadeComUf, type EnderecoCep } from "@/lib/cep";
-import { SUPABASE_URL } from "@/lib/supabase/config";
+import { SUPABASE_URL, supabaseConfigurado } from "@/lib/supabase/config";
 import { CampoCep } from "./campo-cep";
+import { PagamentoPix } from "./pagamento-pix";
 import { SeletorQuantidade } from "./seletor-quantidade";
 import { useStatusLoja } from "./use-status-loja";
 
 type Etapa = "itens" | "checkout" | "enviado";
+/** Pedido registrado; com Pix automático, pedidoId/urlPago levam para a tela do QR Code. */
+type Enviado = { numero: number | null; url: string; pix: boolean; pedidoId?: string; urlPago?: string };
 
 const CHAVE_CLIENTE = "adega011:cliente";
 
@@ -100,7 +103,7 @@ export function Carrinho({ loja }: { loja: DadosLoja }) {
   const aberto = useCarrinho((s) => s.aberto);
   const setAberto = useCarrinho((s) => s.setAberto);
   const [etapa, setEtapa] = useState<Etapa>("itens");
-  const [enviado, setEnviado] = useState<{ numero: number | null; url: string; pix: boolean } | null>(null);
+  const [enviado, setEnviado] = useState<Enviado | null>(null);
 
   const linhas = useMemo(() => montarLinhas(itens, loja.produtos), [itens, loja.produtos]);
   const subtotal = calcularSubtotal(linhas);
@@ -160,9 +163,18 @@ export function Carrinho({ loja }: { loja: DadosLoja }) {
               }}
             />
           )}
-          {etapa === "enviado" && enviado && (
-            <EtapaEnviado loja={loja} {...enviado} onNovo={() => mudarAberto(false)} />
-          )}
+          {etapa === "enviado" && enviado && (enviado.pedidoId && enviado.urlPago ? (
+            <PagamentoPix
+              pedidoId={enviado.pedidoId}
+              numero={enviado.numero}
+              urlPago={enviado.urlPago}
+              urlSemPix={enviado.url}
+              chavePix={loja.config.chave_pix}
+              onNovo={() => mudarAberto(false)}
+            />
+          ) : (
+            <EtapaEnviado loja={loja} numero={enviado.numero} url={enviado.url} pix={enviado.pix} onNovo={() => mudarAberto(false)} />
+          ))}
         </SheetContent>
       </Sheet>
     </>
@@ -349,9 +361,11 @@ function EtapaCheckout({
   linhas: LinhaCarrinho[];
   subtotal: number;
   onVoltar: () => void;
-  onEnviado: (r: { numero: number | null; url: string; pix: boolean }) => void;
+  onEnviado: (r: Enviado) => void;
 }) {
   const { config, regioes } = loja;
+  // Pix automático só com o banco configurado (no modo demonstração não existe cobrança)
+  const pixAutomatico = supabaseConfigurado && !!config.pix_online && config.pagamentos.includes("pix");
   const status = useStatusLoja(config);
   const limpar = useCarrinho((s) => s.limpar);
   const [dados, setDados] = useState<DadosCheckout>(() => dadosIniciais(loja));
@@ -432,9 +446,11 @@ function EtapaCheckout({
       return;
     }
 
+    // Pix automático: primeiro o QR Code; o WhatsApp fica para depois de pagar
+    const pixOnline = pixAutomatico && dados.pagamento === "pix";
     // No computador, abre a aba já no clique (evita bloqueio de pop-up após o await).
     const celular = window.matchMedia("(pointer: coarse)").matches;
-    const janela = celular ? null : window.open("", "_blank");
+    const janela = celular || pixOnline ? null : window.open("", "_blank");
 
     setEnviando(true);
     const r = await registrarPedido(dados, linhas, config, cotacao);
@@ -468,6 +484,11 @@ function EtapaCheckout({
       await Promise.race([atualizarVitrineAposPedido().catch(() => null), new Promise((ok) => setTimeout(ok, 1500))]);
     }
     limpar();
+    if (pixOnline && r.id) {
+      const pago = montarMensagem({ config, linhas, dados, totais: totaisFinais, numero: r.numero, pixPago: true });
+      onEnviado({ numero: r.numero, url, pix: true, pedidoId: r.id, urlPago: linkWhatsApp(config.whatsapp, pago) });
+      return;
+    }
     onEnviado({ numero: r.numero, url, pix: dados.pagamento === "pix" });
     abrirWhatsApp(url, janela);
   };
@@ -704,6 +725,7 @@ function EtapaCheckout({
                 onSelecionar={() => set("pagamento", p)}
               >
                 {NOMES_PAGAMENTO[p]}
+                {p === "pix" && pixAutomatico && <span className="ml-1 text-xs font-normal text-suave">· QR Code na hora</span>}
               </OpcaoRadio>
             ))}
           </div>
@@ -779,8 +801,14 @@ function EtapaCheckout({
           </p>
         )}
         <Button type="submit" variant="whatsapp" size="lg" className="w-full" disabled={enviando || fechada}>
-          <IconeWhatsApp />
-          {enviando ? "Enviando…" : fechada ? "Loja fechada" : "Enviar pedido pelo WhatsApp"}
+          {pixAutomatico && dados.pagamento === "pix" ? <QrCode /> : <IconeWhatsApp />}
+          {enviando
+            ? "Enviando…"
+            : fechada
+              ? "Loja fechada"
+              : pixAutomatico && dados.pagamento === "pix"
+                ? "Pagar com Pix"
+                : "Enviar pedido pelo WhatsApp"}
         </Button>
       </div>
     </form>

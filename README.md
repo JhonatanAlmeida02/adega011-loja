@@ -146,6 +146,32 @@ No checkout, depois do cálculo, o cliente vê a distância, o tempo estimado de
 
 > O endereço da loja (em **Painel → Loja**) é o ponto de partida. Ele é localizado uma vez e guardado; se mudar, é localizado de novo automaticamente.
 
+## 5.1 Pix automático (Mercado Pago, API de Orders)
+
+O cliente escolhe Pix, vê o QR Code no próprio site e o pedido chega no painel como **Pix pago ✓** sem conferir comprovante. Vem desligado; só liga com as credenciais salvas.
+
+**Como é seguro:**
+- o valor da cobrança sai do banco (`pix_preparar`), nunca do navegador;
+- a chave do Mercado Pago fica nos segredos do Supabase, só a Edge Function `pix` usa;
+- nada vira "pago" pelo que chega no aviso: a função consulta o pagamento no Mercado Pago e o banco (`pix_aplicar`) confere referência, valor e moeda; aviso repetido não muda nada;
+- o aviso (Webhook) tem a assinatura `x-signature` conferida (HMAC-SHA256);
+- uma cobrança por pedido (`X-Idempotency-Key`); Pix vence em 30 min e o pedido é cancelado, devolvendo o estoque.
+
+**Passo a passo (conta do dono no Mercado Pago):**
+1. Em [Suas integrações](https://www.mercadopago.com.br/developers/panel/app), crie uma aplicação: **Checkout Transparente**, tipo de API **API de Orders** (a API de Payments será descontinuada).
+2. Em **Credenciais**, copie o **Access Token** (comece pelas de **Teste**).
+3. Em **Configuração de webhooks**, use a URL `https://SEU-PROJETO.supabase.co/functions/v1/pix/webhook`, marque o evento **Order**, salve e copie a **assinatura secreta**.
+4. No Supabase, **Edge Functions › Secrets**: `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`. Com credenciais de **teste**, adicione também `MP_TESTE_APROVAR=1`: o pagador vai como "APRO" e o Mercado Pago aprova o Pix sozinho, testando o fluxo inteiro sem dinheiro. **Tire esse segredo** ao trocar para as credenciais de produção.
+5. Publique a função: `npx supabase functions deploy pix --no-verify-jwt` (o Mercado Pago não manda login; a função confere tudo sozinha).
+6. Agende a conciliação (confere Pix vencidos que ficaram sem aviso), uma vez no SQL Editor:
+   ```sql
+   select cron.schedule('pix-conciliar', '*/10 * * * *',
+     $$select net.http_post(url := 'https://SEU-PROJETO.supabase.co/functions/v1/pix/reconciliar', body := '{}'::jsonb)$$);
+   ```
+7. No painel, **Loja › Formas de pagamento › Pix automático**: ligue. Com as credenciais de teste o pedido vira "Pix pago ✓" sozinho; depois troque para as de produção e faça um pedido de R$ 1 pagando você mesmo (e estorne pelo Mercado Pago).
+
+Testes: `tests/sql/pix_mercadopago.sql` e o e2e "Pix automático" (com `MP_FAKE=1` no `supabase/functions/.env`, a função não chama o Mercado Pago e aceita `POST /pix/simular`).
+
 ## 6. Deploy
 
 ### Vercel (recomendado)
