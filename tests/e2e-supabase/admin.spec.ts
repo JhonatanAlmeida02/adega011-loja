@@ -188,7 +188,7 @@ test("taxa de entrega, banner e loja fechada", async ({ page, browser }) => {
   await loja.getByLabel("Região / bairro").selectOption({ label: "Região A · até 3 km — R$ 6,50" });
   await expect(loja.getByTestId("total")).toHaveText("R$ 126,40");
 
-  await irPara(page, "Loja");
+  await irPara(page, "Configurações");
   await page.getByRole("radio", { name: /Forçar fechada/ }).click();
   await expect(page.getByText("Modo: Forçar fechada")).toBeVisible();
   await loja.reload();
@@ -653,7 +653,7 @@ test("subcategorias: criar dentro de outra, usar no produto, filtrar e ver na lo
 
 test("Pix automático: QR Code no checkout, confirmação sozinha e pedido pago no painel", async ({ page, browser, request }) => {
   await entrar(page);
-  await irPara(page, "Loja");
+  await irPara(page, "Configurações");
   // Com MP_FAKE=1 a função "pix" responde como configurada (sem chamar o Mercado Pago)
   const chave = page.getByRole("switch", { name: "Pix automático" });
   await expect(chave).toBeEnabled();
@@ -711,9 +711,63 @@ test("Pix automático: QR Code no checkout, confirmação sozinha e pedido pago 
   await expect(cartao.getByRole("button", { name: "Estornar Pix" })).toHaveCount(0);
 
   // Desliga de novo para não afetar os outros testes
-  await irPara(page, "Loja");
+  await irPara(page, "Configurações");
   await page.getByRole("switch", { name: "Pix automático" }).click();
   await expect(page.getByRole("switch", { name: "Pix automático" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("contas a pagar e a receber: cadastrar, pagar pela conta escolhida, desfazer e receber", async ({ page }) => {
+  const sufixo = Date.now().toString(36).slice(-5).toUpperCase();
+  await entrar(page);
+
+  // Menu por seções: Finanças › Contas a pagar
+  await irPara(page, "Contas a pagar");
+  await expect(page.getByRole("heading", { name: "Contas a pagar" })).toBeVisible();
+  await page.getByRole("button", { name: "Nova conta a pagar" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("Descrição").fill(`NF ${sufixo} Ambev`);
+  await form.getByLabel("Fornecedor / para quem").fill("Ambev");
+  await form.getByLabel("Valor (R$)").fill("45,00");
+  await form.getByLabel("Categoria").fill("Fornecedores");
+  await form.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Conta criada")).toBeVisible();
+  const linha = page.getByRole("list", { name: "Contas a pagar" }).getByRole("listitem").filter({ hasText: `NF ${sufixo} Ambev` });
+  await expect(linha).toContainText("Vence hoje");
+  await expect(linha).toContainText("R$ 45,00");
+
+  // Pagar: escolhe a conta de saída
+  await linha.getByRole("button", { name: "Pagar" }).click();
+  const pagar = page.getByRole("dialog");
+  await expect(pagar.getByLabel("Pagar com a conta")).toBeVisible();
+  await pagar.getByRole("button", { name: "Pagar R$ 45,00" }).click();
+  await expect(page.getByText("Paga e lançada no extrato")).toBeVisible();
+  await expect(linha).toHaveCount(0); // saiu de "Em aberto"
+  await page.getByRole("button", { name: "Pagas", exact: true }).click();
+  await expect(linha).toContainText("Paga em");
+
+  // Desfazer: volta para em aberto (com estorno no extrato)
+  await linha.getByRole("button", { name: "Desfazer" }).click();
+  await page.getByRole("dialog").getByLabel("Motivo").fill("Teste");
+  await page.getByRole("dialog").getByRole("button", { name: "Desfazer" }).click();
+  await expect(page.getByText("Pagamento desfeito")).toBeVisible();
+  await page.getByRole("button", { name: "Em aberto", exact: true }).click();
+  await expect(linha).toContainText("Vence hoje");
+  // Cancela para não somar nos próximos testes
+  await linha.getByRole("button", { name: `Cancelar NF ${sufixo} Ambev` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancelar conta" }).click();
+  await expect(page.getByText("Conta cancelada")).toBeVisible();
+
+  // Contas a receber: entrada na conta escolhida
+  await irPara(page, "Contas a receber");
+  await page.getByRole("button", { name: "Nova conta a receber" }).click();
+  await page.getByRole("dialog").getByLabel("Descrição").fill(`Fiado ${sufixo}`);
+  await page.getByRole("dialog").getByLabel("Valor (R$)").fill("30,00");
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  const receber = page.getByRole("list", { name: "Contas a receber" }).getByRole("listitem").filter({ hasText: `Fiado ${sufixo}` });
+  await receber.getByRole("button", { name: "Receber" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Receber na conta")).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Receber R$ 30,00" }).click();
+  await expect(page.getByText("Recebida e lançada no extrato")).toBeVisible();
 });
 
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {

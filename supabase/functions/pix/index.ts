@@ -21,6 +21,8 @@
 //                       aprova o Pix sozinho, para testar o fluxo inteiro sem dinheiro
 //   MP_FAKE=1           (só testes automáticos) não chama o Mercado Pago
 
+import { itensDaCobranca, type ItemPedido } from "./itens.ts";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -139,7 +141,7 @@ function vencimento(minutos: number): { iso: string } {
 }
 
 async function criarPix(pedidoId: string) {
-  const prep = await rpc<{ existente?: { id_externo: string; status: string }; pedido?: { numero: number; total: number; cliente_nome: string } }>(
+  const prep = await rpc<{ existente?: { id_externo: string; status: string }; pedido?: { numero: number; total: number; cliente_nome: string; taxa?: number; desconto?: number; itens?: ItemPedido[] } }>(
     "pix_preparar", { p_pedido: pedidoId },
   );
   if (!prep.ok) {
@@ -163,31 +165,40 @@ async function criarPix(pedidoId: string) {
     const dominio = Deno.env.get("MP_EMAIL_DOMINIO") || "adega011.com.br";
     const nome = pedido.cliente_nome.trim().split(/\s+/);
     const valor = (pedido.total / 100).toFixed(2);
-    const r = await fetch(`${MP}/v1/orders`, {
+    const itens = itensDaCobranca(pedido);
+    const cobranca = (comItens: boolean) => ({
+      type: "online",
+      processing_mode: "automatic",
+      external_reference: pedidoId,
+      total_amount: valor,
+      description: `Pedido #${pedido.numero}`,
+      ...(comItens && itens ? { items: itens } : {}),
+      payer: {
+        email: `pedido${pedido.numero}@${dominio}`,
+        // Credenciais de teste: "APRO" faz o Mercado Pago aprovar o Pix sozinho
+        first_name: Deno.env.get("MP_TESTE_APROVAR") === "1" ? "APRO" : (nome[0] ?? "Cliente"),
+      },
+      transactions: {
+        payments: [{ amount: valor, payment_method: { id: "pix", type: "bank_transfer" }, expiration_time: "PT30M" }],
+      },
+    });
+    const criar = (comItens: boolean) => fetch(`${MP}/v1/orders`, {
       method: "POST",
       signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         // Mesmo pedido = mesma cobrança, mesmo se a tela chamar duas vezes
-        "X-Idempotency-Key": `pix-${pedidoId}`,
+        "X-Idempotency-Key": comItens ? `pix-${pedidoId}` : `pix-${pedidoId}-simples`,
       },
-      body: JSON.stringify({
-        type: "online",
-        processing_mode: "automatic",
-        external_reference: pedidoId,
-        total_amount: valor,
-        description: `Pedido #${pedido.numero}`,
-        payer: {
-          email: `pedido${pedido.numero}@${dominio}`,
-          // Credenciais de teste: "APRO" faz o Mercado Pago aprovar o Pix sozinho
-          first_name: Deno.env.get("MP_TESTE_APROVAR") === "1" ? "APRO" : (nome[0] ?? "Cliente"),
-        },
-        transactions: {
-          payments: [{ amount: valor, payment_method: { id: "pix", type: "bank_transfer" }, expiration_time: "PT30M" }],
-        },
-      }),
+      body: JSON.stringify(cobranca(comItens)),
     });
+    let r = await criar(!!itens);
+    // Se o Mercado Pago recusar a lista de itens, cria sem ela (o Pix não pode falhar por isso)
+    if (itens && (r.status === 400 || r.status === 422)) {
+      console.error("[pix] MP recusou os itens, criando sem eles", (await r.text()).slice(0, 300));
+      r = await criar(false);
+    }
     const corpo = await r.json().catch(() => null);
     if (!r.ok || !corpo) {
       console.error("[pix] MP criação", r.status, JSON.stringify(corpo).slice(0, 400));
