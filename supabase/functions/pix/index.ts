@@ -1,22 +1,24 @@
-// Edge Function "pix" (Supabase / Deno): Pix automático pelo Mercado Pago.
+// Edge Function "pix" (Supabase / Deno): Pix automático pelo Mercado Pago (API de Orders).
 //
 // Rotas (verify_jwt = false; quem decide o que vale é o banco e o Mercado Pago):
 //   GET  /pix               → { configurado } (o painel mostra se as credenciais estão salvas)
 //   POST /pix               { pedido_id } → cria a cobrança Pix do pedido (valor do BANCO)
-//   POST /pix/webhook       aviso do Mercado Pago (assinatura x-signature conferida)
+//   POST /pix/webhook       aviso do Mercado Pago, tópico "order" (assinatura x-signature conferida)
 //   POST /pix/verificar     { pedido_id } → a tela do cliente pede para conferir agora
 //   POST /pix/reconciliar   agendado: confere Pix vencidos que ficaram sem aviso
 //   POST /pix/simular       { pedido_id, status } → SÓ com MP_FAKE=1 (testes)
 //
 // Regra de ouro: nada vira "pago" por causa do que chega no aviso. O aviso só diz
-// "olhe o pagamento X"; a função consulta o pagamento no Mercado Pago com o token
-// da loja e o banco (public.pix_aplicar) confere referência, valor e moeda.
+// "olhe a order X"; a função consulta a order no Mercado Pago com o token da loja
+// e o banco (public.pix_aplicar) confere referência, valor e moeda.
 //
 // Segredos (Supabase > Edge Functions > Secrets):
 //   MP_ACCESS_TOKEN     token de produção (ou de teste) da aplicação no Mercado Pago
 //   MP_WEBHOOK_SECRET   "assinatura secreta" dos Webhooks da aplicação
 //   MP_EMAIL_DOMINIO    (opcional) domínio do e-mail do pagador; padrão adega011.com.br
-//   MP_FAKE=1           (só testes) não chama o Mercado Pago
+//   MP_TESTE_APROVAR=1  (só com credenciais de TESTE) pagador "APRO": o Mercado Pago
+//                       aprova o Pix sozinho, para testar o fluxo inteiro sem dinheiro
+//   MP_FAKE=1           (só testes automáticos) não chama o Mercado Pago
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,22 +66,34 @@ async function rpc<T>(nome: string, args: Record<string, unknown>): Promise<{ ok
   return { ok: true, dados: dados as T };
 }
 
-/** Lê um pagamento no Mercado Pago (fonte da verdade). */
+/** Status da order do Mercado Pago no vocabulário de public.pix_aplicar. */
+export function statusDaOrder(status: string, detalhe: string): string {
+  if (status === "processed") return "approved"; // accredited ou partially_refunded: foi pago
+  if (status === "refunded") return "refunded";
+  if (status === "charged_back") return "charged_back";
+  if (status === "canceled" || status === "failed" || status === "expired") return "cancelled";
+  return detalhe === "expired" ? "cancelled" : "pending"; // created, processing, action_required
+}
+
+/** Lê uma order no Mercado Pago (fonte da verdade). */
 async function lerPagamento(id: string): Promise<{ status: string; referencia: string | null; valor: number; moeda: string } | null> {
-  if (!/^[0-9]{1,20}$/.test(id)) return null;
+  if (!/^ORD[0-9A-Z]{1,40}$/i.test(id)) return null;
   const token = Deno.env.get("MP_ACCESS_TOKEN");
   if (!token) return null;
-  const r = await fetch(`${MP}/v1/payments/${id}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) });
+  const r = await fetch(`${MP}/v1/orders/${id}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) });
   if (!r.ok) {
     console.error("[pix] MP leitura", id, r.status, (await r.text()).slice(0, 200));
     return null;
   }
-  const p = await r.json();
+  const o = await r.json();
+  const pagamentos = o.transactions?.payments ?? [];
+  // Pix só existe em real; só aceita order cujo(s) pagamento(s) sejam Pix
+  const soPix = pagamentos.length > 0 && pagamentos.every((p: { payment_method?: { id?: string } }) => p.payment_method?.id === "pix");
   return {
-    status: String(p.status ?? ""),
-    referencia: typeof p.external_reference === "string" ? p.external_reference : null,
-    valor: Math.round(Number(p.transaction_amount) * 100),
-    moeda: String(p.currency_id ?? ""),
+    status: statusDaOrder(String(o.status ?? ""), String(o.status_detail ?? "")),
+    referencia: typeof o.external_reference === "string" ? o.external_reference : null,
+    valor: Math.round(Number(o.total_amount) * 100),
+    moeda: String(o.currency ?? (soPix ? "BRL" : "")),
   };
 }
 
@@ -118,11 +132,9 @@ async function assinaturaValida(req: Request, dataId: string): Promise<boolean |
   return dif === 0;
 }
 
-/** Data de vencimento no formato do Mercado Pago, no horário de São Paulo. */
-function vencimento(minutos: number): { mp: string; iso: string } {
-  const quando = new Date(Date.now() + minutos * 60_000);
-  const sp = new Date(quando.getTime() - 3 * 3600_000).toISOString().replace("Z", "-03:00");
-  return { mp: sp, iso: quando.toISOString() };
+/** Vencimento guardado no banco (o Mercado Pago recebe a mesma duração: PT30M). */
+function vencimento(minutos: number): { iso: string } {
+  return { iso: new Date(Date.now() + minutos * 60_000).toISOString() };
 }
 
 async function criarPix(pedidoId: string) {
@@ -149,7 +161,8 @@ async function criarPix(pedidoId: string) {
     if (!token) return resposta(503, { erro: "Pix automático ainda não configurado." });
     const dominio = Deno.env.get("MP_EMAIL_DOMINIO") || "adega011.com.br";
     const nome = pedido.cliente_nome.trim().split(/\s+/);
-    const r = await fetch(`${MP}/v1/payments`, {
+    const valor = (pedido.total / 100).toFixed(2);
+    const r = await fetch(`${MP}/v1/orders`, {
       method: "POST",
       signal: AbortSignal.timeout(15000),
       headers: {
@@ -159,28 +172,35 @@ async function criarPix(pedidoId: string) {
         "X-Idempotency-Key": `pix-${pedidoId}`,
       },
       body: JSON.stringify({
-        transaction_amount: pedido.total / 100,
-        description: `Pedido #${pedido.numero}`,
-        payment_method_id: "pix",
-        date_of_expiration: venc.mp,
+        type: "online",
+        processing_mode: "automatic",
         external_reference: pedidoId,
-        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/pix/webhook`,
-        payer: { email: `pedido${pedido.numero}@${dominio}`, first_name: nome[0] ?? "Cliente", last_name: nome.slice(1).join(" ") || "Adega" },
+        total_amount: valor,
+        description: `Pedido #${pedido.numero}`,
+        payer: {
+          email: `pedido${pedido.numero}@${dominio}`,
+          // Credenciais de teste: "APRO" faz o Mercado Pago aprovar o Pix sozinho
+          first_name: Deno.env.get("MP_TESTE_APROVAR") === "1" ? "APRO" : (nome[0] ?? "Cliente"),
+        },
+        transactions: {
+          payments: [{ amount: valor, payment_method: { id: "pix", type: "bank_transfer" }, expiration_time: "PT30M" }],
+        },
       }),
     });
     const corpo = await r.json().catch(() => null);
     if (!r.ok || !corpo) {
-      console.error("[pix] MP criação", r.status, JSON.stringify(corpo).slice(0, 300));
+      console.error("[pix] MP criação", r.status, JSON.stringify(corpo).slice(0, 400));
       return resposta(502, { erro: "Não foi possível gerar o Pix agora. Escolha outra forma de pagamento ou chame no WhatsApp." });
     }
     // Confere o que o MP devolveu antes de mostrar ao cliente
-    if (corpo.external_reference !== pedidoId || Math.round(Number(corpo.transaction_amount) * 100) !== pedido.total) {
+    if (corpo.external_reference !== pedidoId || Math.round(Number(corpo.total_amount) * 100) !== pedido.total) {
       console.error("[pix] MP devolveu cobrança diferente", corpo.id);
       return resposta(502, { erro: "Não foi possível gerar o Pix agora." });
     }
+    const metodo = corpo.transactions?.payments?.[0]?.payment_method ?? {};
     idExterno = String(corpo.id);
-    qr = corpo.point_of_interaction?.transaction_data?.qr_code ?? "";
-    qr64 = corpo.point_of_interaction?.transaction_data?.qr_code_base64 ?? "";
+    qr = metodo.qr_code ?? "";
+    qr64 = metodo.qr_code_base64 ?? "";
     if (!qr) return resposta(502, { erro: "Não foi possível gerar o Pix agora." });
   }
 
@@ -219,7 +239,8 @@ Deno.serve(async (req) => {
     const tipo = String(url.searchParams.get("type") ?? url.searchParams.get("topic") ?? corpo?.type ?? corpo?.topic ?? "");
     const valida = await assinaturaValida(req, dataId);
     if (valida === false) return resposta(401, { erro: "Assinatura inválida." });
-    if (!dataId || (tipo && tipo !== "payment")) return resposta(200, { ok: true, ignorado: true });
+    // API de Orders: o aviso vem com o tópico "order" e o id da order (ORD...)
+    if (!dataId || (tipo && tipo !== "order")) return resposta(200, { ok: true, ignorado: true });
     const resultado = FAKE ? "fake" : await conferir(dataId);
     return resposta(200, { ok: true, resultado });
   }
