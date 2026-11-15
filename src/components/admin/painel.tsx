@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
   BarChart3,
   Boxes,
   ClipboardList,
@@ -20,6 +22,7 @@ import {
   ShoppingCart,
   Truck,
   Wallet,
+  type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useSessaoAdmin } from "@/lib/admin/sessao";
@@ -30,19 +33,50 @@ import { Carregando } from "./ui";
 import { AlternarTema } from "@/components/tema/alternar-tema";
 import { LogoTema, SELO } from "@/components/tema/logo-tema";
 
-const LINKS = [
-  { href: "/admin", rotulo: "Pedidos", icone: ClipboardList, principal: true },
-  { href: "/admin/pdv", rotulo: "PDV", icone: ShoppingCart, principal: true },
-  { href: "/admin/produtos", rotulo: "Produtos", icone: Package, principal: true },
-  { href: "/admin/estoque", rotulo: "Estoque", icone: Boxes, principal: true },
-  { href: "/admin/ordens-entrada", rotulo: "Ordens de entrada", icone: ClipboardCheck, principal: false },
-  { href: "/admin/relatorios", rotulo: "Relatórios", icone: BarChart3, principal: false },
-  { href: "/admin/financeiro", rotulo: "Financeiro", icone: Wallet, principal: false },
-  { href: "/admin/categorias", rotulo: "Categorias", icone: LayoutGrid, principal: false },
-  { href: "/admin/banner", rotulo: "Banner", icone: IconeImagem, principal: false },
-  { href: "/admin/entrega", rotulo: "Entrega", icone: Truck, principal: false },
-  { href: "/admin/loja", rotulo: "Loja", icone: Settings, principal: false },
-] as const;
+type LinkPainel = { href: string; rotulo: string; icone: LucideIcon; principal: boolean };
+
+/** Menu do painel por seções (barra lateral e "Mais" no celular). */
+const SECOES: { titulo: string; links: LinkPainel[] }[] = [
+  {
+    titulo: "Vendas",
+    links: [
+      { href: "/admin", rotulo: "Pedidos", icone: ClipboardList, principal: true },
+      { href: "/admin/pdv", rotulo: "PDV", icone: ShoppingCart, principal: true },
+      { href: "/admin/relatorios", rotulo: "Relatórios", icone: BarChart3, principal: false },
+    ],
+  },
+  {
+    titulo: "Catálogo",
+    links: [
+      { href: "/admin/produtos", rotulo: "Produtos", icone: Package, principal: true },
+      { href: "/admin/categorias", rotulo: "Categorias", icone: LayoutGrid, principal: false },
+    ],
+  },
+  {
+    titulo: "Suprimentos",
+    links: [
+      { href: "/admin/estoque", rotulo: "Estoque", icone: Boxes, principal: true },
+      { href: "/admin/ordens-entrada", rotulo: "Ordens de entrada", icone: ClipboardCheck, principal: false },
+    ],
+  },
+  {
+    titulo: "Finanças",
+    links: [
+      { href: "/admin/financeiro", rotulo: "Contas e extrato", icone: Wallet, principal: false },
+      { href: "/admin/contas-a-pagar", rotulo: "Contas a pagar", icone: ArrowUpFromLine, principal: false },
+      { href: "/admin/contas-a-receber", rotulo: "Contas a receber", icone: ArrowDownToLine, principal: false },
+    ],
+  },
+  {
+    titulo: "Loja",
+    links: [
+      { href: "/admin/loja", rotulo: "Configurações", icone: Settings, principal: false },
+      { href: "/admin/entrega", rotulo: "Entrega", icone: Truck, principal: false },
+      { href: "/admin/banner", rotulo: "Banner", icone: IconeImagem, principal: false },
+    ],
+  },
+];
+const LINKS = SECOES.flatMap((s) => s.links);
 
 export function Painel({ children }: { children: React.ReactNode }) {
   const sessao = useSessaoAdmin();
@@ -115,33 +149,40 @@ export function Painel({ children }: { children: React.ReactNode }) {
             {recolhida ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
           </button>
         </div>
-        <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
-          {LINKS.map(({ href, rotulo, icone: Icone }) => (
-            <Link key={href} href={href} aria-label={rotulo} title={recolhida ? rotulo : undefined}
-              aria-current={ativo(href) ? "page" : undefined}
-              className={cn(
-                "flex h-10 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
-                recolhida ? "justify-center" : "px-3",
-                ativo(href) ? "bg-rosa/10 text-rosa-texto" : "text-suave hover:bg-superficie-3 hover:text-texto",
-              )}
-            >
-              <Icone className="size-5 shrink-0" aria-hidden />
-              {!recolhida && <span>{rotulo}</span>}
-            </Link>
+        <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
+          {SECOES.map((secao, i) => (
+            <div key={secao.titulo} role="group" aria-label={secao.titulo} className={cn("flex flex-col gap-0.5", i > 0 && (recolhida ? "mt-2 border-t border-borda pt-2" : "mt-3"))}>
+              {!recolhida && <p className="px-3 pb-1 text-[0.68rem] font-bold tracking-wider text-suave uppercase">{secao.titulo}</p>}
+              {secao.links.map(({ href, rotulo, icone: Icone }) => (
+                <Link key={href} href={href} aria-label={rotulo} title={recolhida ? rotulo : undefined}
+                  aria-current={ativo(href) ? "page" : undefined}
+                  className={cn(
+                    "flex h-9 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
+                    recolhida ? "justify-center" : "px-3",
+                    ativo(href) ? "bg-rosa/10 text-rosa-texto" : "text-suave hover:bg-superficie-3 hover:text-texto",
+                  )}
+                >
+                  <Icone className="size-5 shrink-0" aria-hidden />
+                  {!recolhida && <span>{rotulo}</span>}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
-        <div className="shrink-0 space-y-1 border-t border-borda p-3">
-          {!recolhida && <p className="mb-3 truncate px-2 text-xs text-suave" title={sessao.email}>{sessao.email}</p>}
-          <AlternarTema comTexto={!recolhida}
-            className={cn("h-10 w-full rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "justify-start px-3")} />
-          <a href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver loja (abre em nova aba)" title="Ver loja"
-            className={cn("flex h-10 items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "px-3")}>
-            <ExternalLink className="size-5 shrink-0" />{!recolhida && "Ver loja"}
-          </a>
-          <button type="button" onClick={sair} aria-label="Sair" title="Sair"
-            className={cn("flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm text-suave hover:bg-superficie-3 hover:text-texto", recolhida ? "justify-center" : "px-3")}>
-            <LogOut className="size-5 shrink-0" />{!recolhida && "Sair"}
-          </button>
+        {/* Rodapé compacto: e-mail e, numa linha só, tema, ver loja e sair */}
+        <div className="shrink-0 border-t border-borda p-2">
+          {!recolhida && <p className="truncate px-2 pt-1 pb-1.5 text-xs text-suave" title={sessao.email}>{sessao.email}</p>}
+          <div className={cn("flex gap-1", recolhida ? "flex-col items-center" : "items-center justify-between")}>
+            <AlternarTema className="size-10 rounded-lg text-suave hover:bg-superficie-3 hover:text-texto" />
+            <a href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver loja (abre em nova aba)" title="Ver loja"
+              className="grid size-10 place-items-center rounded-lg text-suave hover:bg-superficie-3 hover:text-texto">
+              <ExternalLink className="size-5" />
+            </a>
+            <button type="button" onClick={sair} aria-label="Sair" title="Sair"
+              className="grid size-10 cursor-pointer place-items-center rounded-lg text-suave hover:bg-superficie-3 hover:text-texto">
+              <LogOut className="size-5" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -162,7 +203,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
-        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
+        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") || pathname.startsWith("/admin/contas-a-") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>{children}</main>
 
       {/* Navegação inferior (celular) */}
@@ -202,21 +243,32 @@ export function Painel({ children }: { children: React.ReactNode }) {
           <div className="px-5 pt-4 pb-8 pr-16">
             <SheetTitle className="titulo text-3xl">Menu</SheetTitle>
             <SheetDescription className="sr-only">Outras telas do painel</SheetDescription>
-            <nav aria-label="Mais opções do painel" className="mt-4 grid grid-cols-2 gap-2">
-              {LINKS.filter((l) => !l.principal).map(({ href, rotulo, icone: Icone }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMais(false)}
-                  aria-current={ativo(href) ? "page" : undefined}
-                  className={cn(
-                    "flex h-14 items-center gap-3 rounded-2xl border px-4 font-bold",
-                    ativo(href) ? "border-rosa bg-rosa/10 text-rosa-texto" : "border-borda bg-superficie-2",
-                  )}
-                >
-                  <Icone className="size-5" aria-hidden /> {rotulo}
-                </Link>
-              ))}
+            <nav aria-label="Mais opções do painel" className="mt-4 space-y-5">
+              {SECOES.map((secao) => {
+                const extras = secao.links.filter((l) => !l.principal);
+                if (!extras.length) return null;
+                return (
+                  <div key={secao.titulo} role="group" aria-label={secao.titulo}>
+                    <p className="mb-2 text-xs font-bold tracking-wider text-suave uppercase">{secao.titulo}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {extras.map(({ href, rotulo, icone: Icone }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setMais(false)}
+                          aria-current={ativo(href) ? "page" : undefined}
+                          className={cn(
+                            "flex h-14 items-center gap-3 rounded-2xl border px-4 text-sm font-bold",
+                            ativo(href) ? "border-rosa bg-rosa/10 text-rosa-texto" : "border-borda bg-superficie-2",
+                          )}
+                        >
+                          <Icone className="size-5 shrink-0" aria-hidden /> {rotulo}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </nav>
           </div>
         </SheetContent>
