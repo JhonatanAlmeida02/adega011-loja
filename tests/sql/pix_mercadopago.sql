@@ -5,7 +5,7 @@ begin;
 set local statement_timeout = '25s';
 do $test$
 declare
-  lata uuid := gen_random_uuid(); r jsonb; pedido uuid; pedido2 uuid; n text; msg text; total integer;
+  lata uuid := gen_random_uuid(); admin_id uuid := (select user_id from public.admins limit 1); r jsonb; pedido uuid; pedido2 uuid; n text; msg text; total integer;
 begin
   update public.configuracoes set status_manual = 'aberta', pedido_minimo = 0, aceita_retirada = true,
     pagamentos = array['pix', 'dinheiro', 'cartao'], pix_online = true where id = 1;
@@ -63,8 +63,29 @@ begin
   if (select pagamento_status from public.pedidos where id = pedido) <> 'pago' or (select pago_em from public.pagamentos where id_externo = 'mp-1') is null
     then raise exception 'FAIL pedido não ficou pago'; end if;
   if (select status from public.pedidos where id = pedido) <> 'novo' then raise exception 'FAIL pago mudou o status do pedido'; end if;
-  -- Estorno
+  -- Estorno pelo painel: visitante não; admin recebe o id e o valor total
+  perform set_config('role', 'anon', true);
+  begin
+    perform public.pix_para_estorno(pedido);
+    raise exception using errcode = 'XX000', message = 'FAIL visitante pediu estorno';
+  exception when insufficient_privilege then null; end;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', gen_random_uuid(), 'role', 'authenticated')::text, true);
+  begin
+    perform public.pix_para_estorno(pedido);
+    raise exception using errcode = 'XX000', message = 'FAIL logado sem ser admin pediu estorno';
+  exception when sqlstate 'P0001' or insufficient_privilege then null; end;
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  r := public.pix_para_estorno(pedido);
+  if r ->> 'id_externo' <> 'mp-1' or (r ->> 'valor')::integer <> 1000 then raise exception 'FAIL dados do estorno: %', r; end if;
+  perform set_config('role', 'postgres', true);
   if public.pix_aplicar('mp-1', pedido, 'refunded', 1000, 'BRL') <> 'estornado' then raise exception 'FAIL estorno'; end if;
+  -- Já estornado: não estorna de novo
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  begin
+    perform public.pix_para_estorno(pedido);
+    raise exception using errcode = 'XX000', message = 'FAIL estorno duplicado';
+  exception when sqlstate 'P0001' then null; end;
 
   -- Pix vencido: cancela o pedido novo e devolve o estoque
   r := public.criar_pedido('QA Pix 2', '11999990002', 'retirada', null, null, 'pix', null, null,
@@ -99,4 +120,4 @@ begin
 end;
 $test$;
 rollback;
-select 'PASS: Pix com total do banco, uma cobrança por pedido, confirmação só quando referência/valor/moeda batem, aviso repetido sem efeito, estorno, vencido cancela e devolve estoque, visitante sem acesso às funções internas. Dados desfeitos.' as resultado;
+select 'PASS: Pix com total do banco, uma cobrança por pedido, confirmação só quando referência/valor/moeda batem, aviso repetido sem efeito, estorno, vencido cancela e devolve estoque, visitante sem acesso às funções internas, estorno só por admin e só uma vez. Dados desfeitos.' as resultado;

@@ -701,6 +701,15 @@ test("Pix automático: QR Code no checkout, confirmação sozinha e pedido pago 
   const cartao = page.getByRole("main").getByRole("listitem").filter({ hasText: `#${numero}` });
   await expect(cartao).toContainText("Pix pago ✓", { timeout: 40_000 });
 
+  // Estorno: sem login é recusado; o admin estorna pelo botão
+  const semLogin = await request.post(`${url}/functions/v1/pix/estornar`, { headers: { apikey: anon, Authorization: `Bearer ${anon}` }, data: { pedido_id: pedidoId } });
+  expect(semLogin.status()).toBe(403);
+  await cartao.getByRole("button", { name: "Estornar Pix" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Estornar" }).click();
+  await expect(page.getByText(`Pix do pedido #${numero} estornado`)).toBeVisible();
+  await expect(cartao).toContainText("Pix estornado", { timeout: 40_000 });
+  await expect(cartao.getByRole("button", { name: "Estornar Pix" })).toHaveCount(0);
+
   // Desliga de novo para não afetar os outros testes
   await irPara(page, "Loja");
   await page.getByRole("switch", { name: "Pix automático" }).click();

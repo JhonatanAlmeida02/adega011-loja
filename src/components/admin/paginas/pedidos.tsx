@@ -9,7 +9,7 @@ import { NOMES_ORIGEM, NOMES_PAGAMENTO, NOMES_STATUS, type Pedido, type StatusPe
 import { apenasDigitos, cn, formatarPreco, mascararTelefone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/marca/icones";
-import { CabecalhoPagina, Carregando, Vazio } from "../ui";
+import { CabecalhoPagina, Carregando, Confirmar, Vazio } from "../ui";
 
 const POR_PAGINA = 30;
 
@@ -183,7 +183,7 @@ export function PaginaPedidos() {
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
           {pedidos.map((p) => (
-            <CartaoPedido key={p.id} pedido={p} onStatus={mudarStatus} />
+            <CartaoPedido key={p.id} pedido={p} onStatus={mudarStatus} onAtualizar={recarregar} />
           ))}
         </ul>
       )}
@@ -199,7 +199,7 @@ export function PaginaPedidos() {
   );
 }
 
-function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: Pedido, s: StatusPedido) => void }) {
+function CartaoPedido({ pedido: p, onStatus, onAtualizar }: { pedido: Pedido; onStatus: (p: Pedido, s: StatusPedido) => void; onAtualizar: () => void }) {
   const tel = apenasDigitos(p.cliente_telefone);
   const telWa = tel.length <= 11 ? `55${tel}` : tel;
   const proximo = PROXIMO[p.status];
@@ -298,6 +298,7 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
           </a>
         </Button>
         )}
+        {p.pagamento_status === "pago" && <EstornarPix pedido={p} onFeito={onAtualizar} />}
         <label className="sr-only" htmlFor={`status-${p.id}`}>
           Alterar status do pedido {p.numero}
         </label>
@@ -328,4 +329,40 @@ function SeloPix({ status }: { status: NonNullable<Pedido["pagamento_status"]> }
   } as const;
   const [classe, texto] = estilos[status];
   return <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[0.7rem] font-bold ${classe}`}>{texto}</span>;
+}
+
+/**
+ * Devolve o Pix pago pelo Mercado Pago (valor total do pedido). Quem confere se
+ * é admin é o servidor; o botão só aparece para facilitar.
+ */
+function EstornarPix({ pedido: p, onFeito }: { pedido: Pedido; onFeito: () => void }) {
+  const [enviando, setEnviando] = useState(false);
+  const estornar = async () => {
+    setEnviando(true);
+    try {
+      const { data, error } = await supabaseNavegador().functions.invoke("pix/estornar", { body: { pedido_id: p.id } });
+      if (error) {
+        const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+        toast.error(corpo?.erro ?? "Não foi possível estornar agora.");
+        return;
+      }
+      const status = (data as { status?: string } | null)?.status;
+      toast.success(status === "estornado" ? `Pix do pedido #${p.numero} estornado` : "Estorno pedido ao Mercado Pago. O selo muda quando ele confirmar.");
+      onFeito();
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <Confirmar
+      titulo={`Estornar o Pix do pedido #${p.numero}?`}
+      descricao={`${formatarPreco(p.total)} voltam para a conta de quem pagou, pelo Mercado Pago. O valor sai do saldo da loja no Mercado Pago. Depois, cancele o pedido se for o caso.`}
+      rotuloConfirmar="Estornar"
+      onConfirmar={estornar}
+    >
+      <Button size="sm" variant="suave" disabled={enviando}>
+        {enviando ? "Estornando…" : "Estornar Pix"}
+      </Button>
+    </Confirmar>
+  );
 }
