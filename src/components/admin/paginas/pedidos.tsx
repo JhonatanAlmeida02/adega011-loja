@@ -274,6 +274,7 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
           <dd>
             {NOMES_PAGAMENTO[p.pagamento]}
             {p.pagamento === "dinheiro" && (p.troco_para ? ` · troco p/ ${formatarPreco(p.troco_para)}` : " · sem troco")}
+            {p.pagamento_status && <SeloPix status={p.pagamento_status} />}
           </dd>
         </div>
       </dl>
@@ -315,4 +316,16 @@ function CartaoPedido({ pedido: p, onStatus }: { pedido: Pedido; onStatus: (p: P
       </div>
     </li>
   );
+}
+
+/** Situação do Pix automático (quem marca é o Mercado Pago, conferido no servidor). */
+function SeloPix({ status }: { status: NonNullable<Pedido["pagamento_status"]> }) {
+  const estilos = {
+    pago: ["border-sucesso/50 bg-sucesso/10 text-sucesso", "Pix pago ✓"],
+    pendente: ["border-amarelo/50 bg-amarelo/10 text-amarelo-texto", "Aguardando Pix"],
+    expirado: ["border-borda bg-superficie-2 text-suave", "Pix vencido"],
+    estornado: ["border-perigo/50 bg-perigo/10 text-perigo", "Pix estornado"],
+  } as const;
+  const [classe, texto] = estilos[status];
+  return <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[0.7rem] font-bold ${classe}`}>{texto}</span>;
 }

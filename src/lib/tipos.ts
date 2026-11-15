@@ -32,6 +32,8 @@ export interface Configuracoes {
   aceita_retirada: boolean;
   pagamentos: FormaPagamento[];
   chave_pix: string;
+  /** Pix automático (Mercado Pago): QR Code no checkout e confirmação sozinha */
+  pix_online?: boolean;
   tempo_entrega: string;
   banner_titulo: string;
   banner_texto: string;
@@ -217,6 +219,8 @@ export interface Pedido {
   regiao_nome: string | null;
   endereco: string | null;
   pagamento: FormaPagamento;
+  /** Pix automático: null quando o pedido não usa */
+  pagamento_status?: "pendente" | "pago" | "expirado" | "estornado" | null;
   troco_para: number | null;
   observacoes: string | null;
   itens: ItemPedido[];

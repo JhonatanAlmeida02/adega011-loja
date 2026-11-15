@@ -651,6 +651,62 @@ test("subcategorias: criar dentro de outra, usar no produto, filtrar e ver na lo
   await expect(secao.getByRole("article", { name: `Rum Ouro ${sufixo}` })).toBeVisible();
 });
 
+test("Pix automático: QR Code no checkout, confirmação sozinha e pedido pago no painel", async ({ page, browser, request }) => {
+  await entrar(page);
+  await irPara(page, "Loja");
+  // Com MP_FAKE=1 a função "pix" responde como configurada (sem chamar o Mercado Pago)
+  const chave = page.getByRole("switch", { name: "Pix automático" });
+  await expect(chave).toBeEnabled();
+  if ((await chave.getAttribute("aria-checked")) !== "true") await chave.click();
+  await expect(chave).toHaveAttribute("aria-checked", "true");
+
+  const loja = await (await browser.newContext()).newPage();
+  let whatsapp = "";
+  await loja.context().route(/^https:\/\/(wa\.me|api\.whatsapp\.com)\//, (r) => {
+    whatsapp = r.request().url();
+    return r.fulfill({ status: 200, body: "ok" });
+  });
+  await abrirLoja(loja);
+  await loja.getByRole("button", { name: "Adicionar IPA 473 ml" }).click();
+  await loja.getByRole("button", { name: /Ver carrinho/ }).click();
+  await loja.getByRole("button", { name: "Finalizar pedido" }).click();
+  await loja.getByLabel("Nome").fill("Cliente Pix");
+  await loja.getByLabel("WhatsApp / telefone").fill(`119${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`);
+  await loja.getByRole("dialog").getByRole("radio", { name: "Retirada" }).check({ force: true });
+  await loja.getByRole("dialog").getByRole("radio", { name: /Pix/ }).check({ force: true });
+  await expect(loja.getByRole("dialog")).toContainText("QR Code na hora");
+
+  // O pedido é gravado e a tela pede o Pix (o valor vem do banco, não do navegador)
+  const chamada = loja.waitForRequest((r) => /\/functions\/v1\/pix$/.test(r.url()) && r.method() === "POST");
+  await loja.getByRole("button", { name: "Pagar com Pix" }).click();
+  const pedidoId = (await chamada).postDataJSON().pedido_id as string;
+  await expect(loja.getByRole("heading", { name: "Pague com Pix" })).toBeVisible();
+  await expect(loja.getByRole("img", { name: /QR Code Pix de R\$ 14,90/ })).toBeVisible();
+  await expect(loja.getByLabel("Código Pix copia e cola")).toContainText("PIXTESTE");
+  await expect(loja.getByRole("status").filter({ hasText: "Aguardando pagamento" })).toContainText(/vence em (29|30):\d\d/);
+  expect(whatsapp).toBe(""); // WhatsApp só depois de pagar
+
+  // Mercado Pago confirma (simulado): a tela muda sozinha
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const sim = await request.post(`${url}/functions/v1/pix/simular`, { headers: { apikey: anon }, data: { pedido_id: pedidoId, status: "approved" } });
+  expect(await sim.json()).toMatchObject({ resultado: "pago" });
+  await expect(loja.getByRole("heading", { name: "Pagamento confirmado!" })).toBeVisible({ timeout: 10_000 });
+  const aviso = loja.getByRole("link", { name: "Avisar no WhatsApp" });
+  expect(decodeURIComponent((await aviso.getAttribute("href")) ?? "")).toContain("Pix pelo site — PAGO ✅");
+
+  // No painel o pedido aparece como pago
+  await irPara(page, "Pedidos");
+  const numero = (await loja.getByText(/Pedido #\d+ está pago/).innerText()).match(/#(\d+)/)![1];
+  const cartao = page.getByRole("main").getByRole("listitem").filter({ hasText: `#${numero}` });
+  await expect(cartao).toContainText("Pix pago ✓", { timeout: 40_000 });
+
+  // Desliga de novo para não afetar os outros testes
+  await irPara(page, "Loja");
+  await page.getByRole("switch", { name: "Pix automático" }).click();
+  await expect(page.getByRole("switch", { name: "Pix automático" })).toHaveAttribute("aria-checked", "false");
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
