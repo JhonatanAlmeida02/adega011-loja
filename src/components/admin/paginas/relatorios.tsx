@@ -20,6 +20,12 @@ interface Relatorio {
   descontos: number;
   taxas_entrega: number;
   cancelados: number;
+  custo_produtos: number;
+  vendas_sem_custo: number;
+  despesas: number;
+  despesas_por_categoria: { categoria: string; total: number }[];
+  lucro_bruto: number;
+  lucro_liquido: number;
   por_origem: Linha[];
   por_pagamento: Linha[];
   por_dia: { dia: string; pedidos: number; total: number }[];
@@ -46,10 +52,64 @@ function intervalo(p: Periodo, de: string, ate: string): [string, string] {
   return [de || hoje, ate || hoje];
 }
 
+/** Mesma data N meses antes/depois (dia 31 vira o último dia do mês). */
+function somarMeses(iso: string, meses: number): string {
+  const [a, m, d] = iso.split("-").map(Number);
+  const alvo = new Date(Date.UTC(a, m - 1 + meses, 1));
+  const ultimo = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
+  alvo.setUTCDate(Math.min(d, ultimo));
+  return alvo.toISOString().slice(0, 10);
+}
+function diasEntre(de: string, ate: string): number {
+  return Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86400000);
+}
+
+type Comparacao = "anterior" | "mes" | "ano" | "custom";
+function intervaloComparacao(c: Comparacao, inicio: string, fim: string, de: string, ate: string): [string, string] {
+  if (c === "anterior") {
+    const n = diasEntre(inicio, fim) + 1;
+    return [somarDias(inicio, -n), somarDias(inicio, -1)];
+  }
+  if (c === "mes") return [somarMeses(inicio, -1), somarMeses(fim, -1)];
+  if (c === "ano") return [somarMeses(inicio, -12), somarMeses(fim, -12)];
+  return [de, ate];
+}
+
 const diaCurto = (iso: string) => {
   const [, m, d] = iso.split("-");
   return `${d}/${m}`;
 };
+
+const dataCurta = (iso: string) => {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a.slice(2)}`;
+};
+const faixa = (de: string, ate: string) => (de === ate ? dataCurta(de) : `${dataCurta(de)} a ${dataCurta(ate)}`);
+
+/** Margem (%) sobre o faturamento, com 1 casa. */
+const margem = (lucro: number, faturamento: number) =>
+  faturamento ? `${((lucro / faturamento) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "—";
+
+/** Busca o relatório de um período (null enquanto carrega). */
+function useRelatorio(inicio: string, fim: string, ativo = true) {
+  const [estado, setEstado] = useState<{ chave: string; dados: Relatorio | null } | null>(null);
+  const chave = `${inicio}|${fim}`;
+  useEffect(() => {
+    if (!ativo || !inicio || !fim || fim < inicio) return;
+    let vivo = true;
+    supabaseNavegador()
+      .rpc("relatorio_vendas", { p_inicio: inicio, p_fim: fim })
+      .then(({ data, error }) => {
+        if (!vivo) return;
+        if (error) toast.error(error.message);
+        setEstado({ chave, dados: (data as Relatorio) ?? null });
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [chave, inicio, fim, ativo]);
+  return estado?.chave === chave ? { dados: estado.dados, carregando: false } : { dados: null, carregando: true };
+}
 
 const NOME_CHAVE: Record<string, string> = {
   ...NOMES_ORIGEM,
@@ -60,24 +120,8 @@ export function PaginaRelatorios() {
   const [periodo, setPeriodo] = useState<Periodo>("7");
   const [de, setDe] = useState(() => somarDias(hojeSP(), -6));
   const [ate, setAte] = useState(() => hojeSP());
-  const [dados, setDados] = useState<Relatorio | null>(null);
-  const [carregando, setCarregando] = useState(true);
   const [inicio, fim] = intervalo(periodo, de, ate);
-
-  useEffect(() => {
-    let ativo = true;
-    supabaseNavegador()
-      .rpc("relatorio_vendas", { p_inicio: inicio, p_fim: fim })
-      .then(({ data, error }) => {
-        if (!ativo) return;
-        if (error) toast.error(error.message);
-        setDados((data as Relatorio) ?? null);
-        setCarregando(false);
-      });
-    return () => {
-      ativo = false;
-    };
-  }, [inicio, fim]);
+  const { dados, carregando } = useRelatorio(inicio, fim);
 
   // Dias sem venda também aparecem (zerados) no gráfico
   const dias = useMemo(() => {
@@ -109,10 +153,7 @@ export function PaginaRelatorios() {
             key={id}
             type="button"
             aria-pressed={periodo === id}
-            onClick={() => {
-              setPeriodo(id);
-              setCarregando(true);
-            }}
+            onClick={() => setPeriodo(id)}
             className={cn(
               "rotulo h-10 cursor-pointer rounded-full border px-4 font-bold",
               periodo === id ? "border-rosa bg-rosa text-preto" : "border-borda hover:border-rosa/60",
@@ -139,9 +180,14 @@ export function PaginaRelatorios() {
       {carregando || !dados ? (
         <Carregando />
       ) : dados.pedidos === 0 ? (
-        <Vazio titulo="Sem vendas no período" texto={`Nenhuma venda entre ${diaCurto(inicio)} e ${diaCurto(fim)}.`} />
+        <div className="space-y-6">
+          <Vazio titulo="Sem vendas no período" texto={`Nenhuma venda entre ${diaCurto(inicio)} e ${diaCurto(fim)}.`} />
+          <Comparativo atual={dados} inicio={inicio} fim={fim} />
+        </div>
       ) : (
         <div className="space-y-6">
+          <LucroLiquido dados={dados} />
+
           {/* Números principais */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Numero rotulo="Faturamento" valor={formatarPreco(dados.faturamento)} destaque />
@@ -151,6 +197,8 @@ export function PaginaRelatorios() {
             <Numero rotulo="Descontos" valor={formatarPreco(dados.descontos)} />
             <Numero rotulo="Cancelados" valor={String(dados.cancelados)} />
           </div>
+
+          <Comparativo atual={dados} inicio={inicio} fim={fim} />
 
           {dias.length > 1 && <GraficoDias dias={dias} />}
 
@@ -299,6 +347,178 @@ function Barras({ titulo, linhas }: { titulo: string; linhas: Linha[] }) {
           </li>
         ))}
       </ul>
+    </Cartao>
+  );
+}
+
+/** Lucro líquido do período, com a conta que leva até ele. */
+function LucroLiquido({ dados }: { dados: Relatorio }) {
+  const positivo = dados.lucro_liquido >= 0;
+  return (
+    <Cartao className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] md:items-center">
+      <div>
+        <p className="rotulo text-suave">Lucro líquido</p>
+        <p className={cn("mt-1 font-mono text-3xl font-bold tabular-nums sm:text-4xl", positivo ? "text-sucesso" : "text-perigo")}>
+          {formatarPreco(dados.lucro_liquido)}
+        </p>
+        <p className="mt-1 text-sm text-suave">
+          Margem líquida <span className="font-mono font-bold text-texto">{margem(dados.lucro_liquido, dados.faturamento)}</span>
+          {" · "}bruta <span className="font-mono">{margem(dados.lucro_bruto, dados.faturamento)}</span>
+        </p>
+      </div>
+      <dl className="space-y-1.5 text-sm">
+        <LinhaConta rotulo="Faturamento" valor={dados.faturamento} />
+        <LinhaConta rotulo="Custo dos produtos vendidos" valor={-dados.custo_produtos} />
+        <LinhaConta rotulo="Lucro bruto" valor={dados.lucro_bruto} forte />
+        <LinhaConta rotulo="Despesas pagas" valor={-dados.despesas} />
+        {dados.despesas_por_categoria.map((d) => (
+          <LinhaConta key={d.categoria} rotulo={d.categoria} valor={-d.total} recuo />
+        ))}
+        <LinhaConta rotulo="Lucro líquido" valor={dados.lucro_liquido} forte />
+      </dl>
+      <p className="text-xs text-suave md:col-span-2">
+        Custo pelo cadastro atual de cada produto. Despesas são as saídas do Financeiro no período (inclui contas pagas), sem
+        a categoria Fornecedores — a compra de mercadoria já está no custo dos produtos.
+        {dados.vendas_sem_custo > 0 && (
+          <span className="mt-1 block font-bold text-amarelo-texto">
+            {formatarPreco(dados.vendas_sem_custo)} em vendas de produtos sem custo cadastrado: o lucro real é menor.
+          </span>
+        )}
+      </p>
+    </Cartao>
+  );
+}
+
+function LinhaConta({ rotulo, valor, forte, recuo }: { rotulo: string; valor: number; forte?: boolean; recuo?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3",
+        forte && "border-t border-borda pt-1.5 font-bold",
+        recuo && "pl-4 text-xs text-suave",
+      )}
+    >
+      <dt>{rotulo}</dt>
+      <dd className="font-mono tabular-nums">{valor < 0 ? `− ${formatarPreco(-valor)}` : formatarPreco(valor)}</dd>
+    </div>
+  );
+}
+
+type TipoValor = "dinheiro" | "numero" | "pct";
+const formatarValor = (v: number, tipo: TipoValor) =>
+  tipo === "dinheiro"
+    ? formatarPreco(v)
+    : tipo === "pct"
+      ? `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+      : String(v);
+
+/** Mini relatório: o período escolhido lado a lado com outro, e a variação. */
+function Comparativo({ atual, inicio, fim }: { atual: Relatorio; inicio: string; fim: string }) {
+  const [modo, setModo] = useState<Comparacao>("anterior");
+  const [de, setDe] = useState(() => intervaloComparacao("anterior", inicio, fim, "", "")[0]);
+  const [ate, setAte] = useState(() => intervaloComparacao("anterior", inicio, fim, "", "")[1]);
+  const [cInicio, cFim] = intervaloComparacao(modo, inicio, fim, de, ate);
+  const valido = !!cInicio && !!cFim && cInicio <= cFim && diasEntre(cInicio, cFim) <= 366;
+  const { dados: outro, carregando } = useRelatorio(cInicio, cFim, valido);
+
+  const pctLiquida = (r: Relatorio) => (r.faturamento ? (r.lucro_liquido / r.faturamento) * 100 : 0);
+  const linhas: { rotulo: string; a: number; b: number; tipo: TipoValor; menorMelhor?: boolean; forte?: boolean }[] = outro
+    ? [
+        { rotulo: "Faturamento", a: atual.faturamento, b: outro.faturamento, tipo: "dinheiro", forte: true },
+        { rotulo: "Pedidos", a: atual.pedidos, b: outro.pedidos, tipo: "numero" },
+        { rotulo: "Ticket médio", a: atual.ticket_medio, b: outro.ticket_medio, tipo: "dinheiro" },
+        { rotulo: "Custo dos produtos", a: atual.custo_produtos, b: outro.custo_produtos, tipo: "dinheiro", menorMelhor: true },
+        { rotulo: "Despesas", a: atual.despesas, b: outro.despesas, tipo: "dinheiro", menorMelhor: true },
+        { rotulo: "Lucro líquido", a: atual.lucro_liquido, b: outro.lucro_liquido, tipo: "dinheiro", forte: true },
+        { rotulo: "Margem líquida", a: pctLiquida(atual), b: pctLiquida(outro), tipo: "pct" },
+        { rotulo: "Descontos", a: atual.descontos, b: outro.descontos, tipo: "dinheiro", menorMelhor: true },
+        { rotulo: "Cancelados", a: atual.cancelados, b: outro.cancelados, tipo: "numero", menorMelhor: true },
+      ]
+    : [];
+
+  return (
+    <Cartao>
+      <h2 className="titulo mb-1 text-2xl">Comparar períodos</h2>
+      <p className="mb-4 text-sm text-suave">
+        {faixa(inicio, fim)} comparado com {valido ? faixa(cInicio, cFim) : "…"}
+      </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(
+          [
+            ["anterior", "Período anterior"],
+            ["mes", "Mês passado"],
+            ["ano", "Ano passado"],
+            ["custom", "Escolher datas"],
+          ] as [Comparacao, string][]
+        ).map(([id, rotulo]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={modo === id}
+            onClick={() => setModo(id)}
+            className={cn(
+              "rotulo h-9 cursor-pointer rounded-full border px-3.5 font-bold",
+              modo === id ? "border-rosa bg-rosa text-preto" : "border-borda hover:border-rosa/60",
+            )}
+          >
+            {rotulo}
+          </button>
+        ))}
+        {modo === "custom" && (
+          <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="cmp-de">
+              Comparar de
+            </label>
+            <Input id="cmp-de" type="date" value={de} max={ate} onChange={(e) => setDe(e.target.value)} className="h-9 w-40 font-mono" />
+            <span className="text-suave">até</span>
+            <label className="sr-only" htmlFor="cmp-ate">
+              Comparar até
+            </label>
+            <Input id="cmp-ate" type="date" value={ate} min={de} onChange={(e) => setAte(e.target.value)} className="h-9 w-40 font-mono" />
+          </div>
+        )}
+      </div>
+
+      {!valido ? (
+        <p className="text-sm text-suave">Escolha um período de até 1 ano.</p>
+      ) : carregando || !outro ? (
+        <Carregando />
+      ) : (
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[30rem] text-sm">
+            <thead>
+              <tr className="rotulo text-left text-suave">
+                <th className="pb-2 font-normal">Indicador</th>
+                <th className="pb-2 text-right font-normal">Este período</th>
+                <th className="pb-2 text-right font-normal">Comparado</th>
+                <th className="pb-2 text-right font-normal">Variação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-borda">
+              {linhas.map((l) => {
+                const dif = l.a - l.b;
+                const igual = Math.abs(dif) < 0.05;
+                const num = (v: number) => `${v > 0 ? "+" : ""}${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}`;
+                // Margem varia em pontos percentuais; o resto em % sobre o valor comparado.
+                const texto =
+                  l.tipo === "pct" ? `${num(dif)} p.p.` : l.b === 0 ? (l.a === 0 ? "0%" : "novo") : `${num((dif / Math.abs(l.b)) * 100)}%`;
+                const bom = l.menorMelhor ? dif < 0 : dif > 0;
+                return (
+                  <tr key={l.rotulo} className={cn(l.forte && "font-bold")}>
+                    <td className="py-2">{l.rotulo}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">{formatarValor(l.a, l.tipo)}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-suave">{formatarValor(l.b, l.tipo)}</td>
+                    <td className={cn("py-2 text-right font-mono tabular-nums", igual ? "text-suave" : bom ? "text-sucesso" : "text-perigo")}>
+                      {!igual && (dif > 0 ? "▲ " : "▼ ")}
+                      {texto}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Cartao>
   );
 }
