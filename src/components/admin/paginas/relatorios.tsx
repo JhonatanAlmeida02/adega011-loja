@@ -1,36 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { NOMES_ORIGEM, NOMES_PAGAMENTO, type FormaPagamento } from "@/lib/tipos";
 import { cn, formatarPreco } from "@/lib/utils";
 import { Input } from "@/components/ui/campos";
+import { Button } from "@/components/ui/button";
+import { validarRelatorio, type RelatorioVendas as Relatorio, type LinhaRelatorio as Linha } from "@/lib/relatorios";
 import { CabecalhoPagina, Carregando, Cartao, Vazio } from "../ui";
-
-interface Linha {
-  chave: string;
-  pedidos: number;
-  total: number;
-}
-interface Relatorio {
-  faturamento: number;
-  pedidos: number;
-  ticket_medio: number;
-  descontos: number;
-  taxas_entrega: number;
-  cancelados: number;
-  custo_produtos: number;
-  vendas_sem_custo: number;
-  despesas: number;
-  despesas_por_categoria: { categoria: string; total: number }[];
-  lucro_bruto: number;
-  lucro_liquido: number;
-  por_origem: Linha[];
-  por_pagamento: Linha[];
-  por_dia: { dia: string; pedidos: number; total: number }[];
-  top_produtos: { nome: string; quantidade: number; total: number }[];
-}
 
 type Periodo = "hoje" | "7" | "30" | "mes" | "custom";
 
@@ -92,23 +69,39 @@ const margem = (lucro: number, faturamento: number) =>
 
 /** Busca o relatório de um período (null enquanto carrega). */
 function useRelatorio(inicio: string, fim: string, ativo = true) {
-  const [estado, setEstado] = useState<{ chave: string; dados: Relatorio | null } | null>(null);
-  const chave = `${inicio}|${fim}`;
+  const [estado, setEstado] = useState<{ chave: string; dados: Relatorio | null; erro: string } | null>(null);
+  const [tentativa, setTentativa] = useState(0);
+  const chave = `${inicio}|${fim}|${tentativa}`;
+  const valido = !!inicio && !!fim && fim >= inicio && diasEntre(inicio, fim) <= 366;
+  const tentarNovamente = () => setTentativa((n) => n + 1);
   useEffect(() => {
-    if (!ativo || !inicio || !fim || fim < inicio) return;
+    if (!ativo || !valido) return;
     let vivo = true;
-    supabaseNavegador()
-      .rpc("relatorio_vendas", { p_inicio: inicio, p_fim: fim })
-      .then(({ data, error }) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const carregar = async () => {
+      try {
+        const { data, error } = await supabaseNavegador().rpc("relatorio_vendas", { p_inicio: inicio, p_fim: fim }).abortSignal(controller.signal);
+        if (error) throw error;
+        const dados = validarRelatorio(data);
+        if (vivo) setEstado({ chave, dados, erro: "" });
+      } catch (erro) {
         if (!vivo) return;
-        if (error) toast.error(error.message);
-        setEstado({ chave, dados: (data as Relatorio) ?? null });
-      });
-    return () => {
-      vivo = false;
+        console.error("[relatorios] Falha ao carregar:", erro);
+        setEstado({ chave, dados: null, erro: controller.signal.aborted ? "O relatório demorou para responder. Tente novamente." : "Não foi possível carregar o relatório. Tente novamente." });
+      } finally { clearTimeout(timer); }
     };
-  }, [chave, inicio, fim, ativo]);
-  return estado?.chave === chave ? { dados: estado.dados, carregando: false } : { dados: null, carregando: true };
+    void carregar();
+    return () => {
+      vivo = false; clearTimeout(timer); controller.abort();
+    };
+  }, [chave, inicio, fim, ativo, valido]);
+  if (!valido) return { dados: null, carregando: false, erro: "Escolha um período válido de até 1 ano.", tentarNovamente };
+  return estado?.chave === chave ? { dados: estado.dados, carregando: false, erro: estado.erro, tentarNovamente } : { dados: null, carregando: ativo, erro: "", tentarNovamente };
+}
+
+function FalhaRelatorio({ mensagem, onTentar }: { mensagem: string; onTentar: () => void }) {
+  return <div role="alert" className="space-y-3 rounded-lg border border-borda bg-superficie p-4"><p className="text-sm text-suave">{mensagem}</p><Button type="button" size="sm" variant="suave" onClick={onTentar}>Tentar novamente</Button></div>;
 }
 
 const NOME_CHAVE: Record<string, string> = {
@@ -121,7 +114,7 @@ export function PaginaRelatorios() {
   const [de, setDe] = useState(() => somarDias(hojeSP(), -6));
   const [ate, setAte] = useState(() => hojeSP());
   const [inicio, fim] = intervalo(periodo, de, ate);
-  const { dados, carregando } = useRelatorio(inicio, fim);
+  const { dados, carregando, erro, tentarNovamente } = useRelatorio(inicio, fim);
 
   // Dias sem venda também aparecem (zerados) no gráfico
   const dias = useMemo(() => {
@@ -177,7 +170,7 @@ export function PaginaRelatorios() {
         )}
       </div>
 
-      {carregando || !dados ? (
+      {erro ? <FalhaRelatorio mensagem={erro} onTentar={tentarNovamente} /> : carregando || !dados ? (
         <Carregando />
       ) : dados.pedidos === 0 ? (
         <div className="space-y-6">
@@ -419,7 +412,7 @@ function Comparativo({ atual, inicio, fim }: { atual: Relatorio; inicio: string;
   const [ate, setAte] = useState(() => intervaloComparacao("anterior", inicio, fim, "", "")[1]);
   const [cInicio, cFim] = intervaloComparacao(modo, inicio, fim, de, ate);
   const valido = !!cInicio && !!cFim && cInicio <= cFim && diasEntre(cInicio, cFim) <= 366;
-  const { dados: outro, carregando } = useRelatorio(cInicio, cFim, valido);
+  const { dados: outro, carregando, erro, tentarNovamente } = useRelatorio(cInicio, cFim, valido);
 
   const pctLiquida = (r: Relatorio) => (r.faturamento ? (r.lucro_liquido / r.faturamento) * 100 : 0);
   const linhas: { rotulo: string; a: number; b: number; tipo: TipoValor; menorMelhor?: boolean; forte?: boolean }[] = outro
@@ -481,7 +474,7 @@ function Comparativo({ atual, inicio, fim }: { atual: Relatorio; inicio: string;
 
       {!valido ? (
         <p className="text-sm text-suave">Escolha um período de até 1 ano.</p>
-      ) : carregando || !outro ? (
+      ) : erro ? <FalhaRelatorio mensagem={erro} onTentar={tentarNovamente} /> : carregando || !outro ? (
         <Carregando />
       ) : (
         <div className="-mx-1 overflow-x-auto px-1">
