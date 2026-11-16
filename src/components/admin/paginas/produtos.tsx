@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { toast } from "sonner";
 import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
 import { combina } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { removerImagem } from "@/lib/admin/imagens";
+import { clonarProduto, type PedidoClonagem } from "@/lib/admin/clonar-produto";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { idsDaCategoria, ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { saldoVendavel, type Categoria, type Produto } from "@/lib/tipos";
@@ -42,6 +43,27 @@ export function PaginaProdutos() {
   }, []);
   const metadata = useMemo(() => new Map(metadados.dados.map((m) => [m.produto_id, m])), [metadados.dados]);
   const router = useRouter();
+  const [clonando, setClonando] = useState(false);
+  const travaClonagem = useRef(false);
+  const pedidosClonagem = useRef(new Map<string, PedidoClonagem>());
+  const clonar = async (id: string, familia = true) => {
+    if (travaClonagem.current) return;
+    travaClonagem.current = true;
+    setClonando(true);
+    const chave = `${id}:${familia}`;
+    const pedido = pedidosClonagem.current.get(chave) ?? { id: crypto.randomUUID(), fotos: {} };
+    pedidosClonagem.current.set(chave, pedido);
+    try {
+      const novoId = await clonarProduto(id, familia, pedido);
+      toast.success("Cópia criada oculta. Revise o nome e o SKU antes de ativar.");
+      router.push(`/admin/produtos/${novoId}`);
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível clonar o produto.");
+    } finally {
+      travaClonagem.current = false;
+      setClonando(false);
+    }
+  };
 
   const agrupados = useMemo(() => agruparVariacoes([...produtos.dados].sort((a, b) => a.ordem - b.ordem)), [produtos.dados]);
   const valores = useMemo(() => {
@@ -205,6 +227,13 @@ export function PaginaProdutos() {
                         <DropdownMenu.Trigger asChild><Button variant="fantasma" size="icone-sm" aria-label={`Ações de ${p.nome}`}><MoreHorizontal /></Button></DropdownMenu.Trigger>
                         <DropdownMenu.Portal><DropdownMenu.Content sideOffset={4} align="end" className="z-50 min-w-48 rounded-lg border border-borda bg-superficie p-1 text-sm shadow-xl">
                           <DropdownMenu.Item onSelect={() => router.push(`/admin/produtos/${membros[0].id}`)} className="menu-produto-item"><Pencil className="size-4" />Editar produto</DropdownMenu.Item>
+                          <DropdownMenu.Item disabled={clonando} onSelect={() => void clonar(membros[0].id)} className="menu-produto-item data-[disabled]:opacity-50"><Copy className="size-4" />{clonando ? "Clonando…" : "Clonar produto"}</DropdownMenu.Item>
+                          {p.variacoes && <DropdownMenu.Sub>
+                            <DropdownMenu.SubTrigger disabled={clonando} className="menu-produto-item data-[disabled]:opacity-50">Clonar uma variação<ChevronRight className="ml-auto size-4" /></DropdownMenu.SubTrigger>
+                            <DropdownMenu.Portal><DropdownMenu.SubContent sideOffset={4} className="z-50 max-h-72 min-w-48 overflow-y-auto rounded-lg border border-borda bg-superficie p-1 text-sm shadow-xl">
+                              {membros.map((v) => <DropdownMenu.Item key={v.id} disabled={clonando} onSelect={() => void clonar(v.id, false)} className="menu-produto-item">{v.variacao_nome || v.nome}</DropdownMenu.Item>)}
+                            </DropdownMenu.SubContent></DropdownMenu.Portal>
+                          </DropdownMenu.Sub>}
                           {!p.variacoes && <>
                             <DropdownMenu.Separator className="my-1 h-px bg-borda" />
                             {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja'], ['ativo', 'Visível na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa-texto" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
