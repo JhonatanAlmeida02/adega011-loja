@@ -202,12 +202,14 @@ export function PaginaRelatorios() {
 
           <Cartao>
             <h2 className="titulo mb-3 text-2xl">Mais vendidos</h2>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="rotulo text-left text-suave">
                   <th className="pb-2 font-normal">Produto</th>
                   <th className="pb-2 text-right font-normal">Qtd.</th>
                   <th className="pb-2 text-right font-normal">Total</th>
+                  <th className="pb-2 pl-4 text-right font-normal" title="Custo total da quantidade vendida, pelo cadastro atual">Custo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-borda">
@@ -219,10 +221,13 @@ export function PaginaRelatorios() {
                     </td>
                     <td className="py-2 text-right font-mono">{p.quantidade}</td>
                     <td className="py-2 text-right font-mono">{formatarPreco(p.total)}</td>
+                    <td className="whitespace-nowrap py-2 pl-4 text-right font-mono text-suave">{p.custo == null ? <span className="font-sans text-xs">Não cadastrado</span> : formatarPreco(p.custo)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
+            <p className="mt-2 text-xs text-suave">Custo da quantidade vendida no período, calculado pelo cadastro atual.</p>
           </Cartao>
         </div>
       )}

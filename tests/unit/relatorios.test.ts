@@ -24,3 +24,11 @@ test("respostas nulas, listas inválidas e números ausentes não chegam à tela
     assert.throws(() => validarRelatorio(invalido), /incompleto/);
   }
 });
+
+test("custo por produto distingue zero de custo ausente e aceita a resposta anterior", () => {
+  for (const custo of [0, 1250, null, undefined]) {
+    const r = validarRelatorio({ ...dados, top_produtos: [{ nome: "Produto", quantidade: 5, total: 2500, custo }] });
+    assert.equal(r.top_produtos[0].custo, custo);
+  }
+  assert.throws(() => validarRelatorio({ ...dados, top_produtos: [{ nome: "Produto", quantidade: 5, total: 2500, custo: "invalido" }] }), /incompleto/);
+});

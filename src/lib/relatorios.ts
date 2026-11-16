@@ -6,7 +6,7 @@ export interface RelatorioVendas {
   despesas_por_categoria: { categoria: string; total: number }[];
   por_origem: LinhaRelatorio[]; por_pagamento: LinhaRelatorio[];
   por_dia: { dia: string; pedidos: number; total: number }[];
-  top_produtos: { nome: string; quantidade: number; total: number }[];
+  top_produtos: { nome: string; quantidade: number; total: number; custo?: number | null }[];
 }
 
 const objeto = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -20,7 +20,7 @@ export function validarRelatorio(dados: unknown): RelatorioVendas {
   if (!objeto(dados) || !campos.every((c) => numero(dados[c]))
     || !lista(dados.por_origem, grupo) || !lista(dados.por_pagamento, grupo)
     || !lista(dados.por_dia, (l) => typeof l.dia === "string" && numero(l.pedidos) && numero(l.total))
-    || !lista(dados.top_produtos, (l) => typeof l.nome === "string" && numero(l.quantidade) && numero(l.total))
+    || !lista(dados.top_produtos, (l) => typeof l.nome === "string" && numero(l.quantidade) && numero(l.total) && (l.custo == null || numero(l.custo)))
     || !lista(dados.despesas_por_categoria, (l) => typeof l.categoria === "string" && numero(l.total))) {
     throw new Error("O banco retornou um relatório incompleto ou incompatível.");
   }
