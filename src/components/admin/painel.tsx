@@ -7,6 +7,13 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   BarChart3,
+  CalendarDays,
+  ChevronDown,
+  Landmark,
+  ShoppingBag,
+  Store,
+  Tags,
+  Warehouse,
   Boxes,
   ClipboardList,
   ClipboardCheck,
@@ -36,9 +43,10 @@ import { LogoTema, SELO } from "@/components/tema/logo-tema";
 type LinkPainel = { href: string; rotulo: string; icone: LucideIcon; principal: boolean };
 
 /** Menu do painel por seções (barra lateral e "Mais" no celular). */
-const SECOES: { titulo: string; links: LinkPainel[] }[] = [
+const SECOES: { titulo: string; icone: LucideIcon; links: LinkPainel[] }[] = [
   {
     titulo: "Vendas",
+    icone: ShoppingBag,
     links: [
       { href: "/admin", rotulo: "Pedidos", icone: ClipboardList, principal: true },
       { href: "/admin/pdv", rotulo: "PDV", icone: ShoppingCart, principal: true },
@@ -47,6 +55,7 @@ const SECOES: { titulo: string; links: LinkPainel[] }[] = [
   },
   {
     titulo: "Catálogo",
+    icone: Tags,
     links: [
       { href: "/admin/produtos", rotulo: "Produtos", icone: Package, principal: true },
       { href: "/admin/categorias", rotulo: "Categorias", icone: LayoutGrid, principal: false },
@@ -54,6 +63,7 @@ const SECOES: { titulo: string; links: LinkPainel[] }[] = [
   },
   {
     titulo: "Suprimentos",
+    icone: Warehouse,
     links: [
       { href: "/admin/estoque", rotulo: "Estoque", icone: Boxes, principal: true },
       { href: "/admin/ordens-entrada", rotulo: "Ordens de entrada", icone: ClipboardCheck, principal: false },
@@ -61,14 +71,17 @@ const SECOES: { titulo: string; links: LinkPainel[] }[] = [
   },
   {
     titulo: "Finanças",
+    icone: Wallet,
     links: [
-      { href: "/admin/financeiro", rotulo: "Contas e extrato", icone: Wallet, principal: false },
+      { href: "/admin/financeiro", rotulo: "Contas e extrato", icone: Landmark, principal: false },
       { href: "/admin/contas-a-pagar", rotulo: "Contas a pagar", icone: ArrowUpFromLine, principal: false },
       { href: "/admin/contas-a-receber", rotulo: "Contas a receber", icone: ArrowDownToLine, principal: false },
+      { href: "/admin/calendario-contas", rotulo: "Calendário", icone: CalendarDays, principal: false },
     ],
   },
   {
     titulo: "Loja",
+    icone: Store,
     links: [
       { href: "/admin/loja", rotulo: "Configurações", icone: Settings, principal: false },
       { href: "/admin/entrega", rotulo: "Entrega", icone: Truck, principal: false },
@@ -82,6 +95,8 @@ export function Painel({ children }: { children: React.ReactNode }) {
   const sessao = useSessaoAdmin();
   const [mais, setMais] = useState(false);
   const [recolhida, setRecolhida] = useState(false);
+  // Sanfona: abre a seção da tela atual; a pessoa pode abrir outra (vale até mudar de tela)
+  const [escolha, setEscolha] = useState<{ pagina: string; secao: string | null } | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -127,6 +142,17 @@ export function Painel({ children }: { children: React.ReactNode }) {
   }
 
   const ativo = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
+  const secaoDaPagina = SECOES.find((secao) => secao.links.some((l) => ativo(l.href)))?.titulo ?? null;
+  const secaoAberta = escolha && escolha.pagina === pathname ? escolha.secao : secaoDaPagina;
+  const alternarSecao = (titulo: string) => {
+    if (recolhida) {
+      // Menu fechado: o ícone da seção abre o menu já com ela aberta
+      setRecolhida(false);
+      setEscolha({ pagina: pathname, secao: titulo });
+      return;
+    }
+    setEscolha({ pagina: pathname, secao: secaoAberta === titulo ? null : titulo });
+  };
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row" style={{ "--sidebar-width": recolhida ? "72px" : "14rem" } as React.CSSProperties}>
@@ -149,25 +175,49 @@ export function Painel({ children }: { children: React.ReactNode }) {
             {recolhida ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
           </button>
         </div>
-        <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
-          {SECOES.map((secao, i) => (
-            <div key={secao.titulo} role="group" aria-label={secao.titulo} className={cn("flex flex-col gap-0.5", i > 0 && (recolhida ? "mt-2 border-t border-borda pt-2" : "mt-3"))}>
-              {!recolhida && <p className="px-3 pb-1 text-[0.68rem] font-bold tracking-wider text-suave uppercase">{secao.titulo}</p>}
-              {secao.links.map(({ href, rotulo, icone: Icone }) => (
-                <Link key={href} href={href} aria-label={rotulo} title={recolhida ? rotulo : undefined}
-                  aria-current={ativo(href) ? "page" : undefined}
+        <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+          {SECOES.map((secao) => {
+            const aberta = !recolhida && secaoAberta === secao.titulo;
+            const temAtiva = secao.titulo === secaoDaPagina;
+            const IconeSecao = secao.icone;
+            const id = `secao-${secao.titulo.normalize("NFD").replace(/[^a-z]/gi, "").toLowerCase()}`;
+            return (
+              <div key={secao.titulo}>
+                <button type="button" onClick={() => alternarSecao(secao.titulo)}
+                  aria-expanded={recolhida ? undefined : aberta} aria-controls={recolhida ? undefined : id}
+                  aria-label={recolhida ? `${secao.titulo} (abrir menu)` : undefined} title={recolhida ? secao.titulo : undefined}
                   className={cn(
-                    "flex h-9 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition-colors",
+                    "flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm font-semibold transition-colors",
                     recolhida ? "justify-center" : "px-3",
-                    ativo(href) ? "bg-rosa/10 text-rosa-texto" : "text-suave hover:bg-superficie-3 hover:text-texto",
-                  )}
-                >
-                  <Icone className="size-5 shrink-0" aria-hidden />
-                  {!recolhida && <span>{rotulo}</span>}
-                </Link>
-              ))}
-            </div>
-          ))}
+                    temAtiva && (recolhida || !aberta) ? "bg-rosa/10 text-rosa-texto" : "text-texto hover:bg-superficie-3",
+                  )}>
+                  <IconeSecao className={cn("size-5 shrink-0", !temAtiva && "text-suave")} aria-hidden />
+                  {!recolhida && <span className="flex-1 text-left">{secao.titulo}</span>}
+                  {!recolhida && <ChevronDown className={cn("size-4 shrink-0 text-suave transition-transform duration-200 motion-reduce:transition-none", aberta && "rotate-180")} aria-hidden />}
+                </button>
+                {!recolhida && (
+                  // Abre e fecha com animação de altura (grid 0fr → 1fr)
+                  <div id={id} role="group" aria-label={secao.titulo} inert={!aberta}
+                    className={cn("grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none", aberta ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+                    <div className="overflow-hidden">
+                      <div className="ml-5 flex flex-col gap-0.5 border-l border-borda py-1 pl-2">
+                        {secao.links.map(({ href, rotulo, icone: Icone }) => (
+                          <Link key={href} href={href} aria-current={ativo(href) ? "page" : undefined}
+                            className={cn(
+                              "flex h-9 shrink-0 items-center gap-3 rounded-lg px-2 text-sm font-medium transition-colors",
+                              ativo(href) ? "bg-rosa/10 text-rosa-texto" : "text-suave hover:bg-superficie-3 hover:text-texto",
+                            )}>
+                            <Icone className="size-4 shrink-0" aria-hidden />
+                            <span>{rotulo}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
         {/* Rodapé compacto: e-mail e, numa linha só, tema, ver loja e sair */}
         <div className="shrink-0 border-t border-borda p-2">
@@ -203,7 +253,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
-        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") || pathname.startsWith("/admin/contas-a-") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
+        pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") || pathname.startsWith("/admin/contas-a-") || pathname.startsWith("/admin/calendario") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>{children}</main>
 
       {/* Navegação inferior (celular) */}

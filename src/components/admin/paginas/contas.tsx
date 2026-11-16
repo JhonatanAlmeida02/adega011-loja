@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { hojeFinanceiro, type ContaFinanceira } from "@/lib/financeiro";
 import {
-  CATEGORIAS_TITULO, TEXTOS_TITULO, dataBr, resumoTitulos, situacaoTitulo,
-  type Situacao, type TipoTitulo, type Titulo,
+  CATEGORIAS_TITULO, TEXTOS_TITULO, dataBr, intervaloPeriodo, noPeriodo, resumoTitulos, situacaoTitulo,
+  type Periodo, type Situacao, type TipoTitulo, type Titulo,
 } from "@/lib/titulos";
 import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,13 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { CabecalhoPagina, Carregando, Confirmar, Vazio } from "../ui";
 
 type Filtro = "abertas" | "pagas" | "canceladas" | "todas";
-type Acao = { tipo: "editar"; titulo?: Titulo } | { tipo: "baixar"; titulo: Titulo } | { tipo: "desfazer"; titulo: Titulo };
+export type AcaoTitulo =
+  | { tipo: "editar"; titulo?: Titulo; tipoTitulo?: TipoTitulo; vencimento?: string }
+  | { tipo: "baixar"; titulo: Titulo }
+  | { tipo: "desfazer"; titulo: Titulo };
+type Acao = AcaoTitulo;
 
-const CORES: Record<Situacao["tipo"], string> = {
+export const CORES_SITUACAO: Record<Situacao["tipo"], string> = {
   vencida: "border-perigo/50 bg-perigo/10 text-perigo",
   hoje: "border-amarelo/60 bg-amarelo/10 text-amarelo-texto",
   proxima: "border-amarelo/40 bg-amarelo/5 text-amarelo-texto",
@@ -27,25 +31,19 @@ const CORES: Record<Situacao["tipo"], string> = {
   cancelada: "border-borda bg-superficie-2 text-suave line-through",
 };
 
-/** Contas a pagar ou a receber, ligadas às contas do Financeiro. */
-export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
-  const textos = TEXTOS_TITULO[tipo];
+/** Contas a pagar/receber (de um tipo ou dos dois) e as contas do Financeiro. */
+export function useContasFinanceiras(tipo?: TipoTitulo) {
   const [titulos, setTitulos] = useState<Titulo[] | null>(null);
   const [contas, setContas] = useState<ContaFinanceira[]>([]);
   const [erro, setErro] = useState("");
-  const [filtro, setFiltro] = useState<Filtro>("abertas");
-  const [busca, setBusca] = useState("");
-  const [acao, setAcao] = useState<Acao | null>(null);
-  const [operando, setOperando] = useState(false);
   const [versao, setVersao] = useState(0);
-  const hoje = hojeFinanceiro();
-  const atualizar = () => setVersao((v) => v + 1);
-
   useEffect(() => {
     let ativo = true;
     const sb = supabaseNavegador();
+    let consulta = sb.from("financeiro_titulos").select("*");
+    if (tipo) consulta = consulta.eq("tipo", tipo);
     Promise.all([
-      sb.from("financeiro_titulos").select("*").eq("tipo", tipo).order("vencimento").order("criado_em").limit(2000),
+      consulta.order("vencimento").order("criado_em").limit(5000),
       sb.from("financeiro_saldos").select("*").order("padrao", { ascending: false }).order("nome"),
     ]).then(([t, c]) => {
       if (!ativo) return;
@@ -56,21 +54,46 @@ export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
     });
     return () => { ativo = false; };
   }, [tipo, versao]);
+  return { titulos, contas, erro, atualizar: () => setVersao((v) => v + 1) };
+}
+
+/** Sugestões de fornecedor/cliente e categoria a partir do que já foi cadastrado. */
+export function sugestoesTitulos(titulos: Titulo[] | null, tipo: TipoTitulo) {
+  const doTipo = (titulos ?? []).filter((t) => t.tipo === tipo);
+  return {
+    pessoas: [...new Set(doTipo.map((t) => t.pessoa).filter(Boolean))].sort(),
+    categorias: [...new Set([...CATEGORIAS_TITULO[tipo], ...doTipo.map((t) => t.categoria).filter(Boolean)])],
+  };
+}
+
+/** Contas a pagar ou a receber, ligadas às contas do Financeiro. */
+export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
+  const textos = TEXTOS_TITULO[tipo];
+  const { titulos, contas, erro, atualizar } = useContasFinanceiras(tipo);
+  const [filtro, setFiltro] = useState<Filtro>("abertas");
+  const [periodo, setPeriodo] = useState<Periodo>("tudo");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+  const [busca, setBusca] = useState("");
+  const [acao, setAcao] = useState<Acao | null>(null);
+  const [operando, setOperando] = useState(false);
+  const hoje = hojeFinanceiro();
 
   const resumo = useMemo(() => resumoTitulos(titulos ?? [], hoje), [titulos, hoje]);
   const pagasNoMes = useMemo(() => (titulos ?? []).filter((t) => t.status === "pago" && (t.pago_em ?? "").slice(0, 7) === hoje.slice(0, 7)), [titulos, hoje]);
   const nomeConta = useMemo(() => new Map(contas.map((c) => [c.id, c.nome])), [contas]);
-  const pessoas = useMemo(() => [...new Set((titulos ?? []).map((t) => t.pessoa).filter(Boolean))].sort(), [titulos]);
-  const categorias = useMemo(() => [...new Set([...CATEGORIAS_TITULO[tipo], ...(titulos ?? []).map((t) => t.categoria).filter(Boolean)])], [titulos, tipo]);
+  const { pessoas, categorias } = useMemo(() => sugestoesTitulos(titulos, tipo), [titulos, tipo]);
+  const intervalo = useMemo(() => intervaloPeriodo(periodo, hoje, de, ate), [periodo, hoje, de, ate]);
 
   const lista = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
     return (titulos ?? [])
       .filter((t) => filtro === "todas" || (filtro === "abertas" ? t.status === "aberto" : filtro === "pagas" ? t.status === "pago" : t.status === "cancelado"))
+      .filter((t) => noPeriodo(t, intervalo, hoje))
       .filter((t) => !termo || `${t.descricao} ${t.pessoa} ${t.categoria} ${t.documento}`.toLocaleLowerCase("pt-BR").includes(termo))
       // Pagas: mais recentes primeiro; o resto por vencimento
       .sort((a, b) => (filtro === "pagas" ? (b.pago_em ?? "").localeCompare(a.pago_em ?? "") : a.vencimento.localeCompare(b.vencimento)));
-  }, [titulos, filtro, busca]);
+  }, [titulos, filtro, busca, intervalo, hoje]);
 
   const cancelar = async (t: Titulo) => {
     const { error } = await supabaseNavegador().rpc("financeiro_cancelar_titulo", { p_id: t.id });
@@ -113,6 +136,31 @@ export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
         </div>
         <Button variant="suave" size="icone" onClick={atualizar} aria-label="Atualizar lista"><RefreshCw /></Button>
       </div>
+      <div className="mb-3 flex flex-wrap items-end gap-2">
+        <div className="w-48">
+          <Campo label={filtro === "pagas" ? "Período (data do pagamento)" : "Período (vencimento)"} htmlFor="periodo">
+            <Select id="periodo" value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+              <option value="tudo">Todas as datas</option>
+              <option value="mes">Este mês</option>
+              <option value="proximo">Próximo mês</option>
+              <option value="ano">Este ano</option>
+              <option value="personalizado">Escolher período…</option>
+            </Select>
+          </Campo>
+        </div>
+        {periodo === "personalizado" && (
+          <>
+            <div className="w-40"><Campo label="De" htmlFor="periodo-de"><Input id="periodo-de" type="date" value={de} onChange={(e) => setDe(e.target.value)} /></Campo></div>
+            <div className="w-40"><Campo label="Até" htmlFor="periodo-ate"><Input id="periodo-ate" type="date" value={ate} min={de || undefined} onChange={(e) => setAte(e.target.value)} /></Campo></div>
+          </>
+        )}
+        {periodo !== "tudo" && filtro === "abertas" && (
+          <p className="pb-2 text-xs text-suave">Contas vencidas de antes do período continuam aparecendo.</p>
+        )}
+        {periodo !== "tudo" && lista.length > 0 && (
+          <p className="ml-auto pb-2 text-sm">Total no filtro: <strong className="font-mono">{formatarPreco(lista.reduce((s, t) => s + t.valor, 0))}</strong></p>
+        )}
+      </div>
 
       {lista.length === 0 ? (
         <Vazio titulo={filtro === "abertas" ? "Nada em aberto" : "Nenhuma conta aqui"} texto={filtro === "abertas" ? `Use "${textos.novo}" para cadastrar.` : "Ajuste a busca ou a situação."} />
@@ -132,7 +180,7 @@ export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={cn("rounded-full border px-2 py-0.5 text-[0.7rem] font-bold whitespace-nowrap", CORES[sit.tipo])}>{sit.texto}</span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[0.7rem] font-bold whitespace-nowrap", CORES_SITUACAO[sit.tipo])}>{sit.texto}</span>
                   <span className="text-xs text-suave tabular-nums" title="Vencimento">{dataBr(t.vencimento)}</span>
                 </div>
                 <strong className="ml-auto font-mono tabular-nums">{formatarPreco(t.valor)}</strong>
@@ -161,7 +209,7 @@ export function PaginaContas({ tipo }: { tipo: TipoTitulo }) {
           <SheetTitle className="sr-only">{acao?.tipo === "baixar" ? textos.acao : acao?.tipo === "desfazer" ? "Desfazer" : textos.novo}</SheetTitle>
           <SheetDescription className="sr-only">Confira os dados antes de salvar.</SheetDescription>
           {acao && (
-            <Formulario
+            <FormularioTitulo
               key={acao.tipo + (acao.titulo?.id ?? "nova")}
               tipo={tipo} acao={acao} contas={contas} pessoas={pessoas} categorias={categorias}
               onOperando={setOperando} onCancelar={() => setAcao(null)} onSalvo={() => { setAcao(null); atualizar(); }}
@@ -185,7 +233,7 @@ function Resumo({ titulo, valor, quantidade, destaque, onClick }: { titulo: stri
   );
 }
 
-function Formulario({ tipo, acao, contas, pessoas, categorias, onCancelar, onSalvo, onOperando }: {
+export function FormularioTitulo({ tipo, acao, contas, pessoas, categorias, onCancelar, onSalvo, onOperando }: {
   tipo: TipoTitulo; acao: Acao; contas: ContaFinanceira[]; pessoas: string[]; categorias: string[];
   onCancelar: () => void; onSalvo: () => void; onOperando: (v: boolean) => void;
 }) {
@@ -198,7 +246,7 @@ function Formulario({ tipo, acao, contas, pessoas, categorias, onCancelar, onSal
   const [documento, setDocumento] = useState(t?.documento ?? "");
   const [observacoes, setObservacoes] = useState(t?.observacoes ?? "");
   const [valor, setValor] = useState(t ? centavosParaCampo(t.valor) : "");
-  const [vencimento, setVencimento] = useState(t?.vencimento ?? hojeFinanceiro());
+  const [vencimento, setVencimento] = useState(t?.vencimento ?? (acao.tipo === "editar" ? acao.vencimento : undefined) ?? hojeFinanceiro());
   const [repetir, setRepetir] = useState(1);
   const ativas = contas.filter((c) => c.ativa);
   const [conta, setConta] = useState(() => ativas.find((c) => c.padrao)?.id ?? ativas[0]?.id ?? "");

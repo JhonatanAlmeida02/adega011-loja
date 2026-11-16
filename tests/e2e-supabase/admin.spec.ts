@@ -770,6 +770,52 @@ test("contas a pagar e a receber: cadastrar, pagar pela conta escolhida, desfaze
   await expect(page.getByText("Recebida e lançada no extrato")).toBeVisible();
 });
 
+test("calendário: clicar no dia cria conta com o vencimento, ano todo com repetição e filtro por período", async ({ page }) => {
+  const sufixo = Date.now().toString(36).slice(-5).toUpperCase();
+  await entrar(page);
+  await irPara(page, "Calendário");
+  await expect(page.getByRole("heading", { name: "Calendário de contas" })).toBeVisible();
+
+  // Vai dois meses à frente e clica no dia 15
+  await page.getByRole("button", { name: "Próximo mês" }).click();
+  await page.getByRole("button", { name: "Próximo mês" }).click();
+  const dia = page.getByRole("gridcell", { name: /^15\// });
+  const data = (await dia.getAttribute("aria-label"))!.slice(0, 10); // dd/mm/aaaa
+  const iso = data.split("/").reverse().join("-");
+  await dia.click();
+  // Dia com contas abre a lista; dia vazio abre direto a nova conta
+  const novaNoDia = page.getByRole("dialog").getByRole("button", { name: "Nova conta neste dia" });
+  if (await novaNoDia.isVisible()) await novaNoDia.click();
+  const form = page.getByRole("dialog");
+  await expect(form.getByLabel("Vencimento")).toHaveValue(iso);
+  await form.getByLabel("Descrição").fill(`Aluguel ${sufixo}`);
+  await form.getByLabel("Valor (R$)").fill("1500,00");
+  await form.getByLabel("Repetir").selectOption("12");
+  await form.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("12 contas criadas")).toBeVisible();
+  // Se veio da lista do dia, ela volta a aparecer com a conta nova; fecha para ver o calendário
+  if (await page.getByRole("dialog").isVisible()) {
+    await expect(page.getByRole("dialog")).toContainText(`Aluguel ${sufixo} (1/12)`);
+    await page.keyboard.press("Escape");
+  }
+
+  // O dia mostra a conta; clicando, aparece na lista do dia com Pagar
+  await page.getByRole("gridcell", { name: new RegExp(`^${data.replace(/\//g, "\\/")}: \\d+ conta`) }).click();
+  await expect(page.getByRole("dialog")).toContainText(`Aluguel ${sufixo} (1/12)`);
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Pagar" }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Contas a pagar com filtro de período só nesse dia: só a parcela 1/12
+  await irPara(page, "Contas a pagar");
+  await page.getByLabel("Período (vencimento)").selectOption("personalizado");
+  await page.getByLabel("De", { exact: true }).fill(iso);
+  await page.getByLabel("Até", { exact: true }).fill(iso);
+  const lista = page.getByRole("list", { name: "Contas a pagar" });
+  await expect(lista.getByRole("listitem").filter({ hasText: `Aluguel ${sufixo}` })).toHaveCount(1);
+  await expect(lista).toContainText("(1/12)");
+  await expect(page.getByText("Total no filtro:")).toBeVisible();
+});
+
 test("frete por km: painel ativa, loja calcula 2,00 + 1,50/km e o pedido grava a taxa", async ({ page, browser, request }) => {
   await entrar(page);
   await irPara(page, "Entrega");
