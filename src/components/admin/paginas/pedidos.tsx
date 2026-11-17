@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, BellOff, MapPin, Phone, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { revalidarLoja } from "@/app/admin/acoes";
+import { usePapel } from "@/lib/admin/sessao";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { NOMES_ORIGEM, NOMES_PAGAMENTO, NOMES_STATUS, type Pedido, type StatusPedido } from "@/lib/tipos";
 import { apenasDigitos, cn, formatarPreco, mascararTelefone } from "@/lib/utils";
@@ -202,6 +203,7 @@ export function PaginaPedidos() {
 function CartaoPedido({ pedido: p, onStatus, onAtualizar }: { pedido: Pedido; onStatus: (p: Pedido, s: StatusPedido) => void; onAtualizar: () => void }) {
   const tel = apenasDigitos(p.cliente_telefone);
   const telWa = tel.length <= 11 ? `55${tel}` : tel;
+  const papel = usePapel();
   const proximo = PROXIMO[p.status];
 
   return (
@@ -298,7 +300,7 @@ function CartaoPedido({ pedido: p, onStatus, onAtualizar }: { pedido: Pedido; on
           </a>
         </Button>
         )}
-        {p.pagamento_status === "pago" && <EstornarPix pedido={p} onFeito={onAtualizar} />}
+        {p.pagamento_status === "pago" && papel === "admin" && <EstornarPix pedido={p} onFeito={onAtualizar} />}
         <label className="sr-only" htmlFor={`status-${p.id}`}>
           Alterar status do pedido {p.numero}
         </label>
