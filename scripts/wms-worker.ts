@@ -5,7 +5,9 @@
  * Precisa de DATABASE_URL (papel com permissão de SET ROLE wms_worker) e, para a
  * Olist real, OLIST_CLIENT_ID/SECRET/REDIRECT_URI e INTEGRATION_ENCRYPTION_KEY.
  */
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
+config();
 import { hostname } from "node:os";
 import { encerrarPoolWms } from "../src/lib/wms/db";
 import { adapterPara } from "../src/lib/wms/integracoes/fabrica";

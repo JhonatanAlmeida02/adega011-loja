@@ -10,7 +10,7 @@ import { cifrar } from "../../src/lib/wms/integracoes/cripto";
 import { MockOlistAdapter } from "../../src/lib/wms/integracoes/mock-olist";
 import type { ErpAdapter } from "../../src/lib/wms/integracoes/tipos";
 import { obterToken, processarInbox, processarJob, processarOutbox, type Conexao, type DepsWorker } from "../../src/lib/wms/worker/processador";
-import { admin, chamar, chave, criarCenario, darEntrada, falha, saldo, statusPedido, temBanco, uuid, type Cenario } from "./helpers";
+import { admin, chamar, chave, criarCenario, falha, saldo, statusPedido, temBanco, uuid, type Cenario } from "./helpers";
 
 after(() => encerrarPoolWms());
 
