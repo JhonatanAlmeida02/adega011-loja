@@ -3,6 +3,7 @@
 #  1) 30 pedidos SIMULTÂNEOS do mesmo telefone: só 5 passam (limite de 5 a cada 10 min).
 #  2) 60 pedidos simultâneos de telefones diferentes para um produto com 10 em estoque:
 #     exatamente 10 passam e o estoque termina em 0 (nunca negativo).
+#  3) 60 pedidos simultâneos com telefones inventados da mesma conexão (IP): só 5 passam.
 #
 # Rode em um banco de TESTE com as migrations aplicadas (usa as variáveis PG* do psql):
 #   PGHOST=... PGUSER=postgres PGDATABASE=... bash tests/sql/limite_pedidos_concorrencia.sh
@@ -68,3 +69,16 @@ if [ "$vendidos" != "10" ] || [ "$saldo" != "0" ]; then
   echo "FAIL estoque com pedidos simultâneos: $vendidos vendidos, saldo $saldo (esperado 10 e 0)"; exit 1
 fi
 echo "ok  60 pedidos simultâneos para 10 unidades: 10 vendidos, saldo 0"
+
+# 3) O ataque: 60 pedidos simultâneos, telefones inventados, todos da mesma conexão (IP)
+sql "delete from public.pedidos where itens @> '[{\"produto_id\": \"$PRODUTO\"}]';
+     delete from privado.pedidos_por_ip where ip = '203.0.113.7';
+     update public.produtos set estoque = 1000 where id = '$PRODUTO';"
+{ echo '\set tel random(11900000000, 11999999999)'
+  echo "select set_config('request.headers', '{\"cf-connecting-ip\": \"203.0.113.7\"}', false);"
+  pedido ":tel::text"; } > "$TMP/ataque.sql"
+pgbench -n -c 30 -j 10 -t 2 -f "$TMP/ataque.sql" > /dev/null 2>&1 || true
+n=$(sql "select count(*) from public.pedidos where itens @> '[{\"produto_id\": \"$PRODUTO\"}]'")
+sql "delete from privado.pedidos_por_ip where ip = '203.0.113.7'"
+if [ "$n" != "5" ]; then echo "FAIL limite por conexão: $n pedidos aceitos da mesma conexão (esperado 5)"; exit 1; fi
+echo "ok  60 pedidos simultâneos com telefones inventados da mesma conexão: 5 aceitos"

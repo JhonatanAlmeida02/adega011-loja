@@ -11,6 +11,8 @@
 //   MAPS_FAKE=1          (só testes) inventa os km sem chamar o Google
 // Sem dependências externas: fala com o banco pela API REST (PostgREST).
 
+import { ipDoCliente } from "./ip.ts";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -149,7 +151,7 @@ Deno.serve(async (req) => {
   const endereco = `${rua}, ${bairro}, ${cidade}`;
 
   // Limite simples contra abuso (protege a cota do Google)
-  const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
+  const ip = ipDoCliente(req.headers);
   if (ip) {
     const desde = new Date(Date.now() - 10 * 60_000).toISOString();
     const r = await banco(
