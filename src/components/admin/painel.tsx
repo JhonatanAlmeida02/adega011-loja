@@ -28,11 +28,12 @@ import {
   Settings,
   ShoppingCart,
   Truck,
+  UserCog,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { useSessaoAdmin } from "@/lib/admin/sessao";
+import { PapelPainel, podeAbrir, useSessaoAdmin } from "@/lib/admin/sessao";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -86,10 +87,11 @@ const SECOES: { titulo: string; icone: LucideIcon; links: LinkPainel[] }[] = [
       { href: "/admin/loja", rotulo: "Configurações", icone: Settings, principal: false },
       { href: "/admin/entrega", rotulo: "Entrega", icone: Truck, principal: false },
       { href: "/admin/banner", rotulo: "Banner", icone: IconeImagem, principal: false },
+      { href: "/admin/usuarios", rotulo: "Usuários", icone: UserCog, principal: false },
     ],
   },
 ];
-const LINKS = SECOES.flatMap((s) => s.links);
+const COLUNAS_BARRA = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4", "grid-cols-5"];
 
 export function Painel({ children }: { children: React.ReactNode }) {
   const sessao = useSessaoAdmin();
@@ -141,8 +143,15 @@ export function Painel({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // O operador só vê as telas dele (o banco também bloqueia o resto)
+  const papel = sessao.papel;
+  const SECOES_PAPEL = SECOES.map((secao) => ({ ...secao, links: secao.links.filter((l) => podeAbrir(papel, l.href)) })).filter((secao) => secao.links.length);
+  const LINKS = SECOES_PAPEL.flatMap((secao) => secao.links);
+  const temMais = LINKS.some((l) => !l.principal);
+  const permitido = podeAbrir(papel, pathname);
+
   const ativo = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
-  const secaoDaPagina = SECOES.find((secao) => secao.links.some((l) => ativo(l.href)))?.titulo ?? null;
+  const secaoDaPagina = SECOES_PAPEL.find((secao) => secao.links.some((l) => ativo(l.href)))?.titulo ?? null;
   const secaoAberta = escolha && escolha.pagina === pathname ? escolha.secao : secaoDaPagina;
   const alternarSecao = (titulo: string) => {
     if (recolhida) {
@@ -176,7 +185,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav id="links-painel" aria-label="Painel" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {SECOES.map((secao) => {
+          {SECOES_PAPEL.map((secao) => {
             const aberta = !recolhida && secaoAberta === secao.titulo;
             const temAtiva = secao.titulo === secaoDaPagina;
             const IconeSecao = secao.icone;
@@ -221,7 +230,12 @@ export function Painel({ children }: { children: React.ReactNode }) {
         </nav>
         {/* Rodapé compacto: e-mail e, numa linha só, tema, ver loja e sair */}
         <div className="shrink-0 border-t border-borda p-2">
-          {!recolhida && <p className="truncate px-2 pt-1 pb-1.5 text-xs text-suave" title={sessao.email}>{sessao.email}</p>}
+          {!recolhida && (
+            <p className="truncate px-2 pt-1 pb-1.5 text-xs text-suave" title={sessao.email}>
+              {sessao.nome || sessao.email}
+              <span className="ml-1 rounded bg-superficie-3 px-1 py-px text-[0.65rem] font-bold uppercase">{papel === "admin" ? "Admin" : "Operador"}</span>
+            </p>
+          )}
           <div className={cn("flex gap-1", recolhida ? "flex-col items-center" : "items-center justify-between")}>
             <AlternarTema className="size-10 rounded-lg text-suave hover:bg-superficie-3 hover:text-texto" />
             <a href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver loja (abre em nova aba)" title="Ver loja"
@@ -254,12 +268,22 @@ export function Painel({ children }: { children: React.ReactNode }) {
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
         pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") || pathname.startsWith("/admin/contas-a-") || pathname.startsWith("/admin/calendario") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
-      )}>{children}</main>
+      )}>
+        <PapelPainel value={papel}>
+          {permitido ? children : (
+            <div className="mx-auto max-w-md py-16 text-center">
+              <h1 className="titulo text-3xl">Sem permissão</h1>
+              <p className="mt-3 text-suave">Esta tela é só do administrador. Como operador, você usa Pedidos e PDV.</p>
+              <Button asChild className="mt-6"><Link href="/admin">Ir para Pedidos</Link></Button>
+            </div>
+          )}
+        </PapelPainel>
+      </main>
 
       {/* Navegação inferior (celular) */}
       <nav
         aria-label="Painel"
-        className="pb-seguro fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-borda bg-superficie/95 px-1 pt-1 backdrop-blur md:hidden print:hidden"
+        className={cn("pb-seguro fixed inset-x-0 bottom-0 z-30 grid border-t border-borda bg-superficie/95 px-1 pt-1 backdrop-blur md:hidden print:hidden", COLUNAS_BARRA[LINKS.filter((l) => l.principal).length + (temMais ? 1 : 0)])}
       >
         {LINKS.filter((l) => l.principal).map(({ href, rotulo, icone: Icone }) => (
           <Link
@@ -275,7 +299,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
             {rotulo}
           </Link>
         ))}
-        <button
+        {temMais && <button
           type="button"
           onClick={() => setMais(true)}
           aria-expanded={mais}
@@ -286,7 +310,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
         >
           <Menu className="size-5" aria-hidden />
           Mais
-        </button>
+        </button>}
       </nav>
       <Sheet open={mais} onOpenChange={setMais}>
         <SheetContent rotuloFechar="Fechar menu">
@@ -294,7 +318,7 @@ export function Painel({ children }: { children: React.ReactNode }) {
             <SheetTitle className="titulo text-3xl">Menu</SheetTitle>
             <SheetDescription className="sr-only">Outras telas do painel</SheetDescription>
             <nav aria-label="Mais opções do painel" className="mt-4 space-y-5">
-              {SECOES.map((secao) => {
+              {SECOES_PAPEL.map((secao) => {
                 const extras = secao.links.filter((l) => !l.principal);
                 if (!extras.length) return null;
                 return (

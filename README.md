@@ -122,6 +122,17 @@ npm run criar-admin -- voce@adega011.com.br "UmaSenhaForte123"
 
 Depois é só entrar em `/admin/login`. Se esquecer a senha, use **“Esqueci minha senha”** na tela de login: o link chega por e-mail e deve ser aberto no mesmo navegador em que foi pedido.
 
+### Outros usuários: administrador e operador
+
+Com o primeiro admin criado, cadastre o resto da equipe pelo painel em **Loja → Usuários** (nome, e-mail, senha inicial e papel). Cada pessoa tem o próprio login:
+
+| Papel | Pode usar |
+|---|---|
+| **Administrador** | Tudo: produtos, estoque, financeiro, relatórios, configurações e usuários |
+| **Operador** | Só **Pedidos** (ver e mudar o status) e **PDV** (abrir/fechar caixa e vender). Não vê custos, relatórios nem financeiro e não apaga pedidos |
+
+A regra vale no banco (RLS e funções), não só no menu. O cadastro de logins usa a Edge Function `equipe` (publicada com `verify_jwt = false`: ela confere no banco se quem chamou é admin antes de usar a chave de serviço). A loja nunca fica sem administrador, e ninguém tira o próprio acesso.
+
 > O e-mail padrão do Supabase tem limite baixo de envios por hora. Para produção, configure um SMTP próprio em **Authentication → Emails → SMTP Settings** (ex.: Resend, Brevo, Amazon SES). Um usuário que faz login mas não está na tabela `admins` vê “Acesso negado” e não consegue ler nem alterar nada, porque o RLS bloqueia no banco.
 
 ## 5. Frete por km (Google Maps)

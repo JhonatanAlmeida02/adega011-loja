@@ -899,8 +899,81 @@ test("relatórios mostram as vendas do período", async ({ page }) => {
   await entrar(page);
   await page.goto("/admin/relatorios");
   await page.getByRole("button", { name: "Hoje" }).click();
-  await expect(page.getByText("Faturamento", { exact: true })).toBeVisible();
+  await expect(page.getByText("Faturamento", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mais vendidos" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Por origem" })).toBeVisible();
   await expect(page.locator("main")).toContainText("Balcão");
+});
+
+test("usuários: admin cadastra operador; operador só usa Pedidos e PDV", async ({ page, browser }) => {
+  const emailOperador = `operador.${Date.now()}@adega.local`;
+  await entrar(page);
+  await irPara(page, "Usuários");
+  await expect(page.getByRole("heading", { name: "Usuários" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Usuários do painel" })).toContainText("(você)");
+
+  await page.getByRole("button", { name: "Novo usuário" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("Nome").fill("Maria do Caixa");
+  await form.getByLabel("E-mail (é o login)").fill(emailOperador);
+  await expect(form.getByRole("radio", { name: /Operador/ })).toBeChecked();
+  await form.getByLabel("Senha inicial").fill("curta");
+  await form.getByRole("button", { name: "Cadastrar" }).click();
+  await expect(form.getByRole("alert")).toContainText("pelo menos 8");
+  await form.getByLabel("Senha inicial").fill("Operador123");
+  await form.getByRole("button", { name: "Cadastrar" }).click();
+  await expect(form).toBeHidden();
+  const linha = page.getByRole("listitem").filter({ hasText: emailOperador });
+  await expect(linha).toContainText("Maria do Caixa");
+  await expect(linha).toContainText("Operador");
+  await expect(linha).toContainText("Ainda não entrou");
+
+  // O operador entra e só vê Pedidos e PDV
+  const op = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await op.goto("/admin/login");
+  await op.getByLabel("E-mail").fill(emailOperador);
+  await op.getByLabel("Senha").fill("Operador123");
+  await op.getByRole("button", { name: "Entrar" }).click();
+  await expect(op.getByRole("heading", { name: "Pedidos" })).toBeVisible();
+  const menu = op.getByRole("navigation", { name: "Painel" }).first();
+  await expect(menu.getByRole("link", { name: "PDV", exact: true })).toBeVisible();
+  for (const tela of ["Produtos", "Relatórios", "Estoque", "Contas a pagar", "Configurações", "Usuários"]) {
+    await expect(menu.getByRole("link", { name: tela, exact: true })).toHaveCount(0);
+  }
+  await expect(op.getByText("Operador", { exact: true })).toBeVisible();
+  // Endereço digitado direto: tela bloqueada (e o banco não entrega os dados)
+  await op.goto("/admin/financeiro");
+  await expect(op.getByRole("heading", { name: "Sem permissão" })).toBeVisible();
+  await op.goto("/admin/usuarios");
+  await expect(op.getByRole("heading", { name: "Sem permissão" })).toBeVisible();
+
+  // PDV: abre o caixa, vende e fecha
+  await op.goto("/admin/pdv");
+  await op.getByLabel("Troco inicial (R$)").fill("20");
+  await op.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(op.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+  await op.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+  const venda = op.getByRole("complementary");
+  await venda.getByRole("button", { name: "Ir para pagamento", exact: true }).click();
+  await venda.getByRole("button", { name: /^Finalizar/ }).click();
+  const cupom = op.getByRole("dialog", { name: /Venda #/ });
+  await expect(cupom).toContainText("IPA 473 ml");
+  await cupom.getByRole("button", { name: "Nova venda" }).click();
+  await op.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = op.getByRole("dialog", { name: "Fechar caixa" });
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("20");
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+  await expect(op.getByText(/Caixa fechado/).first()).toBeVisible();
+  await op.context().close();
+
+  // Admin promove, troca a senha e tira o acesso
+  await page.reload();
+  await linha.getByRole("button", { name: /Trocar a senha/ }).click();
+  await page.getByRole("dialog").getByLabel("Nova senha").fill("NovaSenha456");
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText(/Senha de Maria do Caixa trocada/)).toBeVisible();
+  await expect(linha).not.toContainText("Ainda não entrou");
+  await linha.getByRole("button", { name: /Tirar o acesso/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Tirar acesso" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: emailOperador })).toHaveCount(0);
 });

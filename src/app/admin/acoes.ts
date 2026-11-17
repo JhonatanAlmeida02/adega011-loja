@@ -6,24 +6,31 @@ import { TAG_LOJA } from "@/lib/loja";
 import { BUCKET_FOTOS, supabaseConfigurado } from "@/lib/supabase/config";
 import { supabaseServidor } from "@/lib/supabase/servidor";
 
-/** Cliente com a sessão do usuário, se ele for admin. Senão, null. */
-async function clienteDoAdmin() {
+/**
+ * Cliente com a sessão do usuário, se ele for da equipe com o papel pedido
+ * ("admin" = administrador; "equipe" = administrador ou operador). Senão, null.
+ */
+async function clienteDaEquipe(nivel: "admin" | "equipe") {
   if (!supabaseConfigurado) return null;
   const sb = await supabaseServidor();
   const {
     data: { user },
   } = await sb.auth.getUser();
   if (!user) return null;
-  const { data } = await sb.from("admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  return data ? sb : null;
+  const { data } = await sb.from("admins").select("papel").eq("user_id", user.id).maybeSingle<{ papel: string }>();
+  if (!data) return null;
+  return nivel === "equipe" || data.papel === "admin" ? sb : null;
 }
 
+const clienteDoAdmin = () => clienteDaEquipe("admin");
+
 /**
- * Atualiza a vitrine na hora depois que o admin salva algo.
- * Confere a sessão e a permissão de admin aqui dentro (não confia no cliente).
+ * Atualiza a vitrine na hora depois que alguém da equipe salva algo (o operador
+ * também: venda no PDV e cancelar pedido mexem no estoque).
+ * Confere a sessão e a permissão aqui dentro (não confia no cliente).
  */
 export async function revalidarLoja(): Promise<{ ok: boolean }> {
-  if (!(await clienteDoAdmin())) return { ok: false };
+  if (!(await clienteDaEquipe("equipe"))) return { ok: false };
   updateTag(TAG_LOJA);
   return { ok: true };
 }
