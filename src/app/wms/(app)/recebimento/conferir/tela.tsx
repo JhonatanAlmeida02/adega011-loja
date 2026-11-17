@@ -61,7 +61,7 @@ export default function Recebimento({ id }: { id: string }) {
           <div className="mt-3"><CampoLeitura ref={leitor} id="leitura" rotulo="Código do produto (GTIN, caixa ou GS1)" onLeitura={ler} desabilitado={enviando} /></div>
           <Mensagem m={mensagem} />
           {pode("receipts.confirm") && (
-            <Button size="lg" className="mt-2 h-14 w-full sm:w-auto" disabled={enviando}
+            <Button size="lg" className="mt-2 h-14 w-full sm:w-auto" disabled={enviando || det.carregando}
               onClick={async () => { await executar(`receipts/${id}/confirm`, { expected_version: r.version }, { ok: (x: { status: string }) => `Confirmado: ${x.status}.` }); await det.recarregar(); }}>
               Confirmar recebimento conferido
             </Button>

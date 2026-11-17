@@ -108,7 +108,7 @@ export default function TarefaSeparacao({ id }: { id: string }) {
         <Painel>
           <p className="mb-3">Todos os itens desta tarefa foram tratados.</p>
           <Mensagem m={mensagem} />
-          <Button size="lg" className="h-14 w-full" disabled={enviando || t.status === "completed"} onClick={async () => {
+          <Button size="lg" className="h-14 w-full" disabled={enviando || det.carregando || t.status === "completed"} onClick={async () => {
             const r = await executar<{ order_status: string; pending_shortage: boolean }>(`picking-tasks/${id}/complete`, { expected_version: t.version },
               { ok: (x) => x.pending_shortage ? "Tarefa encerrada. Pedido aguarda realocação da falta." : `Tarefa encerrada. Pedido ${x.order_status}.` });
             if (r) router.push("/wms/separacao");

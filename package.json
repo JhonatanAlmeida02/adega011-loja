@@ -14,7 +14,12 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test --trace off",
     "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts --trace off",
-    "test:unit": "tsx --test tests/unit/*.test.ts"
+    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "wms:worker": "tsx scripts/wms-worker.ts",
+    "wms:bootstrap": "tsx scripts/wms-bootstrap.ts",
+    "wms:db:local": "bash scripts/wms-db-local.sh",
+    "test:wms": "tsx --test tests/wms/*.test.ts",
+    "test:e2e:wms": "playwright test -c playwright.wms.config.ts --trace off"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

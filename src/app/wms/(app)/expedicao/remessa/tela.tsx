@@ -49,7 +49,7 @@ export default function Remessa({ id }: { id: string }) {
         </Painel>
       )}
       {aberta && pode("shipments.dispatch") && (
-        <Button size="lg" variant="destaque" className="h-14 w-full sm:w-auto" disabled={enviando || pendentes > 0 || !det.dados!.packages.length}
+        <Button size="lg" variant="destaque" className="h-14 w-full sm:w-auto" disabled={enviando || det.carregando || pendentes > 0 || !det.dados!.packages.length}
           onClick={async () => { await executar(`shipments/${id}/dispatch`, { expected_version: s.version }, { ok: (r: { erp_posting: string }) => `Saída confirmada no WMS. ERP: ${r.erp_posting === "erp_side" ? "baixa feita pelo ERP (sem segunda baixa)" : r.erp_posting === "outbox" ? "pendente de envio ao ERP" : r.erp_posting === "blocked" ? "política de lançamento não definida" : "sem integração"}.` }); recarregar(); }}>
           Confirmar despacho (saída física)
         </Button>

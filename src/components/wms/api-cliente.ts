@@ -5,7 +5,7 @@
  * - Cada AÇÃO intencional gera uma Idempotency-Key; retentativas de rede reutilizam a mesma.
  * - Botão desabilitado durante o envio é só UX: a prevenção real de duplicidade é no servidor.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export class ErroApi extends Error {
   constructor(
@@ -59,16 +59,21 @@ export async function wmsPost<T = Record<string, unknown>>(caminho: string, corp
   }
 }
 
-/** Carrega dados e recarrega sob demanda (recarregar() dispara uma nova busca). */
+/**
+ * Carrega dados e recarrega sob demanda. `await recarregar()` só termina quando os
+ * dados novos chegam (evita usar versão antiga logo depois de uma leitura).
+ */
 export function useDados<T>(caminho: string | null, params: Record<string, string | number | boolean | null | undefined> = {}) {
   const [dados, setDados] = useState<T | null>(null);
   const [erro, setErro] = useState<ErroApi | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [rodada, setRodada] = useState(0);
+  const aguardando = useRef<(() => void)[]>([]);
   const chaveParams = JSON.stringify(params);
   useEffect(() => {
     if (!caminho) return;
     let vivo = true;
+    const esperando = aguardando.current.splice(0);
     wmsGet<T>(caminho, JSON.parse(chaveParams))
       .then((d) => {
         if (!vivo) return;
@@ -80,12 +85,21 @@ export function useDados<T>(caminho: string | null, params: Record<string, strin
       })
       .finally(() => {
         if (vivo) setCarregando(false);
+        esperando.forEach((f) => f());
       });
     return () => {
       vivo = false;
     };
   }, [caminho, chaveParams, rodada]);
-  const recarregar = useCallback(async () => setRodada((n) => n + 1), []);
+  const recarregar = useCallback(
+    () =>
+      new Promise<void>((resolver) => {
+        aguardando.current.push(resolver);
+        setCarregando(true);
+        setRodada((n) => n + 1);
+      }),
+    [],
+  );
   return { dados, erro, carregando, recarregar };
 }
 

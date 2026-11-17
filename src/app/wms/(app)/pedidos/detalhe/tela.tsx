@@ -39,7 +39,7 @@ export default function Pedido({ id }: { id: string }) {
       <Mensagem m={mensagem} />
       <div className="flex flex-wrap gap-2">
         {o.status === "awaiting_allocation" && pode("orders.allocate") && (
-          <Button disabled={enviando} onClick={async () => { await executar(`orders/${id}/allocate`, { expected_version: o.version }, { ok: (r: { allocated: boolean }) => r.allocated ? "Reservado e tarefas criadas." : "Estoque insuficiente: nada reservado (ocorrência registrada)." }); recarregar(); }}>Reservar e criar tarefas</Button>
+          <Button disabled={enviando || det.carregando} onClick={async () => { await executar(`orders/${id}/allocate`, { expected_version: o.version }, { ok: (r: { allocated: boolean }) => r.allocated ? "Reservado e tarefas criadas." : "Estoque insuficiente: nada reservado (ocorrência registrada)." }); recarregar(); }}>Reservar e criar tarefas</Button>
         )}
         {o.status === "on_hold" && o.hold_reason === "revision_changed" && pode("orders.reconcile") && (
           <Button disabled={enviando} onClick={async () => { await executar(`orders/${id}/reconcile`, {}, { ok: "Revisão aplicada; reservas liberadas e retorno físico criado quando necessário." }); recarregar(); }}>Reconciliar revisão</Button>
