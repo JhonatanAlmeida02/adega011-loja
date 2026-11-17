@@ -1,4 +1,4 @@
-import type { Configuracoes, FaixaHorario, Horarios } from "./tipos";
+import type { Configuracoes, FaixaHorario, Horarios, StatusManual } from "./tipos";
 
 export const FUSO = "America/Sao_Paulo";
 
@@ -65,30 +65,90 @@ export interface StatusLoja {
   detalhe: string;
 }
 
-export function statusDaLoja(
-  config: Pick<Configuracoes, "horarios" | "status_manual">,
-  agora: Date = new Date(),
-): StatusLoja {
-  if (config.status_manual === "aberta") {
-    return { aberta: true, titulo: "Aberto agora", detalhe: "Pode pedir!" };
+type ConfigStatus = Pick<Configuracoes, "horarios" | "status_manual"> & { status_ate?: string | null };
+
+/**
+ * Modo que vale agora. "Forçar aberta/fechada" pode ter prazo (status_ate):
+ * passou do prazo, volta sozinho ao automático (pelos horários padrão).
+ * Sem prazo, vale até alguém mudar no painel.
+ */
+export function modoEfetivo(config: Pick<ConfigStatus, "status_manual" | "status_ate">, agora: Date = new Date()): StatusManual {
+  if (config.status_manual !== "auto" && config.status_ate && new Date(config.status_ate).getTime() <= agora.getTime()) {
+    return "auto";
   }
+  return config.status_manual;
+}
+
+/** `agora` + n minutos, com segundos zerados (os horários são por minuto). */
+const daquiA = (agora: Date, minutos: number) => new Date(Math.floor(agora.getTime() / 60_000) * 60_000 + minutos * 60_000);
+
+/** Próxima abertura pelos horários padrão, depois de agora (null se não há horário). */
+export function proximaAberturaEm(horarios: Horarios, agora: Date = new Date()): Date | null {
   const { dia, minutos } = agoraEmSP(agora);
-  const faixa = config.status_manual === "fechada" ? null : dentroDoHorario(config.horarios, dia, minutos);
+  let melhor: number | null = null;
+  for (let i = 0; i <= 7; i++) {
+    for (const f of horarios[String((dia + i) % 7)] ?? []) {
+      const diferenca = i * 1440 + minutosDe(f.abre) - minutos;
+      if (diferenca > 0 && (melhor === null || diferenca < melhor)) melhor = diferenca;
+    }
+  }
+  return melhor === null ? null : daquiA(agora, melhor);
+}
 
-  if (faixa) {
-    return {
-      aberta: true,
-      titulo: "Aberto agora",
-      detalhe: faixa.fecha === "00:00" ? "Fecha à meia-noite" : `Fecha às ${formatarHora(faixa.fecha)}`,
-    };
+/** Próxima vez que o relógio de São Paulo marca "HH:MM" (hoje ou amanhã). */
+export function proximaHora(hhmm: string, agora: Date = new Date()): Date {
+  const { minutos } = agoraEmSP(agora);
+  return daquiA(agora, (minutosDe(hhmm) - minutos + 1440) % 1440 || 1440);
+}
+
+/** Hora de uma data no fuso de São Paulo: "2h", "16h30". */
+export function horaEmSP(data: Date): string {
+  const { minutos } = agoraEmSP(data);
+  return formatarHora(`${Math.floor(minutos / 60)}:${minutos % 60}`);
+}
+
+/** "hoje às 16h", "amanhã às 2h", "segunda às 16h" (fuso de São Paulo). */
+export function quandoEmSP(alvo: Date, agora: Date = new Date()): string {
+  const a = agoraEmSP(agora);
+  const b = agoraEmSP(alvo);
+  const dias = Math.floor((a.minutos + Math.round((alvo.getTime() - agora.getTime()) / 60_000)) / 1440);
+  const dia = dias <= 0 ? "hoje" : dias === 1 ? "amanhã" : dias < 7 ? NOMES_DIAS[b.dia].toLowerCase() : null;
+  const hora = horaEmSP(alvo);
+  if (dia) return `${dia} às ${hora}`;
+  const data = new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, day: "2-digit", month: "2-digit" }).format(alvo);
+  return `${data} às ${hora}`;
+}
+
+/** Até quando vale o modo forçado (null se não há prazo ou ele já passou). */
+export function prazoDoModo(config: Pick<ConfigStatus, "status_manual" | "status_ate">, agora: Date = new Date()): Date | null {
+  if (modoEfetivo(config, agora) === "auto" || !config.status_ate) return null;
+  return new Date(config.status_ate);
+}
+
+export function statusDaLoja(config: ConfigStatus, agora: Date = new Date()): StatusLoja {
+  const modo = modoEfetivo(config, agora);
+  const prazo = prazoDoModo(config, agora);
+
+  if (modo === "aberta") {
+    if (!prazo) return { aberta: true, titulo: "Aberto agora", detalhe: "Pode pedir!" };
+    // Se no fim do prazo o horário normal já está aberto, a loja segue aberta até ele fechar.
+    const p = agoraEmSP(prazo);
+    const seguida = dentroDoHorario(config.horarios, p.dia, p.minutos);
+    if (seguida) return { aberta: true, titulo: "Aberto agora", detalhe: textoFecha(seguida) };
+    return { aberta: true, titulo: "Aberto agora", detalhe: `Aberto até ${horaEmSP(prazo)}` };
   }
 
-  if (config.status_manual === "fechada") {
-    return { aberta: false, titulo: "Fechado agora", detalhe: "Voltamos em breve" };
+  const { dia, minutos } = agoraEmSP(agora);
+  if (modo === "fechada") {
+    return { aberta: false, titulo: "Fechado agora", detalhe: prazo ? `Abre ${quandoEmSP(prazo, agora)}` : "Voltamos em breve" };
   }
 
+  const faixa = dentroDoHorario(config.horarios, dia, minutos);
+  if (faixa) return { aberta: true, titulo: "Aberto agora", detalhe: textoFecha(faixa) };
   return { aberta: false, titulo: "Fechado agora", detalhe: proximaAbertura(config.horarios, dia, minutos) };
 }
+
+const textoFecha = (f: FaixaHorario) => (f.fecha === "00:00" ? "Fecha à meia-noite" : `Fecha às ${formatarHora(f.fecha)}`);
 
 function proximaAbertura(horarios: Horarios, dia: number, minutos: number): string {
   for (let i = 0; i < 7; i++) {

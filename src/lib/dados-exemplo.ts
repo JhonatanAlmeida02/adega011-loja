@@ -24,6 +24,7 @@ export const CONFIG_EXEMPLO: Configuracoes = {
     "6": [{ abre: "10:00", fecha: "00:00" }],
   },
   status_manual: "auto",
+  status_ate: null,
   pedido_minimo: 3000,
   aceita_entrega: true,
   aceita_retirada: true,

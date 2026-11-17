@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useConfiguracoes } from "@/lib/admin/config";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
-import { NOMES_DIAS, statusDaLoja } from "@/lib/horario";
+import { NOMES_DIAS, horaEmSP, modoEfetivo, prazoDoModo, proximaAberturaEm, proximaHora, quandoEmSP, statusDaLoja } from "@/lib/horario";
 import { NOMES_PAGAMENTO, type Configuracoes, type FaixaHorario, type FormaPagamento, type Horarios, type StatusManual } from "@/lib/tipos";
 import { apenasDigitos, cn, mascararTelefone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,50 @@ type Props = { config: Configuracoes; gravar: (c: Partial<Configuracoes>, msg?: 
 
 const OPCOES_STATUS: { valor: StatusManual; titulo: string; texto: string }[] = [
   { valor: "auto", titulo: "Automático", texto: "Abre e fecha pelo horário" },
-  { valor: "aberta", titulo: "Forçar aberta", texto: "Aceita pedidos agora" },
+  { valor: "aberta", titulo: "Forçar aberta", texto: "Aceita pedidos até a hora que você escolher" },
   { valor: "fechada", titulo: "Forçar fechada", texto: "Pausa os pedidos" },
 ];
 
+/** Relógio que anda a cada 30 s (o modo forçado vence sozinho). */
+function useAgora() {
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return agora;
+}
+
 function StatusManualCard({ config, gravar }: Props) {
-  const status = statusDaLoja(config);
+  const agora = useAgora();
+  const modo = modoEfetivo(config, agora);
+  const prazo = prazoDoModo(config, agora);
+  const status = statusDaLoja(config, agora);
+  // Modo forçado escolhido, esperando o prazo (ainda não gravado)
+  const [escolha, setEscolha] = useState<"aberta" | "fechada" | null>(null);
+  const [horaFim, setHoraFim] = useState("");
+  const selecionado = escolha ?? modo;
+
+  const abertura = proximaAberturaEm(config.horarios, agora);
+  // Pelos horários padrão, a loja estaria fechada agora?
+  const fechadaPeloHorario = !statusDaLoja({ ...config, status_manual: "auto", status_ate: null }, agora).aberta;
+
+  const aplicar = async (status_manual: StatusManual, status_ate: Date | null, rotulo: string) => {
+    const ok = await gravar({ status_manual, status_ate: status_ate?.toISOString() ?? null }, `Modo: ${rotulo}`);
+    if (ok) setEscolha(null);
+  };
+  // "+2h" a partir de agora, sem os segundos
+  const daquiHoras = (horas: number) => new Date(Math.ceil(agora.getTime() / 60_000) * 60_000 + horas * 3_600_000);
+  const abrirPor = (horas: number) => {
+    const fim = daquiHoras(horas);
+    return aplicar("aberta", fim, `Forçar aberta até ${horaEmSP(fim)}`);
+  };
+
+  let aviso: string;
+  if (modo === "aberta") aviso = prazo ? `Forçada aberta até ${horaEmSP(prazo)}, depois volta ao automático.` : "Forçada aberta sem prazo: só fecha quando você mudar.";
+  else if (modo === "fechada") aviso = prazo ? `Pausada até ${quandoEmSP(prazo, agora)}, depois volta ao automático.` : "Fechada até você reabrir.";
+  else aviso = "Seguindo os horários de funcionamento.";
+
   return (
     <Cartao>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -52,14 +90,19 @@ function StatusManualCard({ config, gravar }: Props) {
       </div>
       <div role="radiogroup" aria-label="Modo de funcionamento" className="grid gap-3 sm:grid-cols-3">
         {OPCOES_STATUS.map((o) => {
-          const sel = config.status_manual === o.valor;
+          const sel = selecionado === o.valor;
           return (
             <button
               key={o.valor}
               type="button"
               role="radio"
               aria-checked={sel}
-              onClick={() => gravar({ status_manual: o.valor }, `Modo: ${o.titulo}`)}
+              onClick={() => {
+                if (o.valor === "auto") {
+                  setEscolha(null);
+                  void aplicar("auto", null, "Automático");
+                } else setEscolha(o.valor);
+              }}
               className={cn(
                 "min-h-16 cursor-pointer rounded-2xl border-2 px-4 py-3 text-left transition-colors",
                 sel ? "border-rosa bg-rosa/10" : "border-borda bg-superficie-2 hover:border-rosa/50",
@@ -71,6 +114,69 @@ function StatusManualCard({ config, gravar }: Props) {
           );
         })}
       </div>
+
+      {escolha === "aberta" && (
+        <div role="group" aria-label="Até quando fica aberta" className="mt-4 space-y-3 rounded-2xl border border-borda bg-superficie-2 p-4">
+          <p className="font-bold">Aberta até quando?</p>
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3].map((h) => (
+              <Button key={h} variant="suave" onClick={() => void abrirPor(h)}>
+                +{h}h (até {horaEmSP(daquiHoras(h))})
+              </Button>
+            ))}
+            {fechadaPeloHorario && abertura && (
+              <Button variant="suave" onClick={() => void aplicar("aberta", abertura, `Forçar aberta até ${horaEmSP(abertura)}`)}>
+                Até o horário normal ({quandoEmSP(abertura, agora)})
+              </Button>
+            )}
+          </div>
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!horaFim) return;
+              const fim = proximaHora(horaFim, agora);
+              void aplicar("aberta", fim, `Forçar aberta até ${horaEmSP(fim)}`);
+            }}
+          >
+            <Campo label="Ou até às" htmlFor="aberta-ate">
+              <Input id="aberta-ate" type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} className="w-32" />
+            </Campo>
+            <Button type="submit" disabled={!horaFim}>
+              Abrir até essa hora
+            </Button>
+          </form>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-suave">Passou da hora, a loja volta sozinha para os horários de funcionamento.</p>
+            <Button variant="fantasma" onClick={() => setEscolha(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {escolha === "fechada" && (
+        <div role="group" aria-label="Até quando fica fechada" className="mt-4 space-y-3 rounded-2xl border border-borda bg-superficie-2 p-4">
+          <p className="font-bold">Fechada até quando?</p>
+          <div className="flex flex-wrap gap-2">
+            {abertura && (
+              <Button variant="suave" onClick={() => void aplicar("fechada", abertura, `Forçar fechada até ${quandoEmSP(abertura, agora)}`)}>
+                Até a próxima abertura ({quandoEmSP(abertura, agora)})
+              </Button>
+            )}
+            <Button variant="suave" onClick={() => void aplicar("fechada", null, "Forçar fechada até eu reabrir")}>
+              Até eu reabrir (férias, feriado)
+            </Button>
+            <Button variant="fantasma" onClick={() => setEscolha(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-4 text-sm text-suave" role="status">
+        {aviso}
+      </p>
     </Cartao>
   );
 }

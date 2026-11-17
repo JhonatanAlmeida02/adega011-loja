@@ -27,6 +27,8 @@ export interface Configuracoes {
   instagram: string;
   horarios: Horarios;
   status_manual: StatusManual;
+  /** Prazo do modo forçado: depois disso volta ao automático. null = até mudar no painel. */
+  status_ate: string | null;
   pedido_minimo: number; // centavos
   aceita_entrega: boolean;
   aceita_retirada: boolean;
