@@ -35,6 +35,30 @@ Loja virtual / cardápio digital da **Adega011**: o cliente monta o pedido pelo 
 - **Entrega**: frete por km (taxa inicial, valor por km, raio máximo) ou por região, pedido mínimo, tempo de entrega e liga/desliga de entrega e retirada.
 - **Loja**: nome, WhatsApp, endereço, Instagram, chave Pix, formas de pagamento, horários e abrir/fechar manual.
 
+## WMS (armazém) · em desenvolvimento
+
+Módulo interno em `/wms` para recebimento, conferência, armazenagem, estoque por endereço (lote, validade, série), reservas, separação, embalagem, expedição, inventário, devoluções e integração com o **ERP Olist** (API V3). Usa o mesmo Next.js e o mesmo Supabase, num schema próprio (`wms`), sem alterar a loja nem o estoque dela.
+
+> **Não está pronto para produção.** A integração com a Olist foi desenvolvida e testada só com um simulador; falta homologar com a conta real, validar a política de lançamento de estoque e fazer o piloto. Veja [`docs/implementation-status.md`](docs/implementation-status.md).
+
+- Instalação, Supabase, OAuth da Olist e política de estoque: [`docs/wms/configuracao.md`](docs/wms/configuracao.md)
+- Manual do operador e do supervisor: [`docs/wms/operacao.md`](docs/wms/operacao.md)
+- Erros, reprocessamento, conciliação, backup e restauração: [`docs/wms/procedimentos.md`](docs/wms/procedimentos.md)
+- Capacidades da API Olist conferidas na documentação oficial: [`docs/olist-capabilities.md`](docs/olist-capabilities.md)
+- Contrato da API interna: [`docs/wms/openapi.json`](docs/wms/openapi.json)
+
+```bash
+PGHOST=localhost PGUSER=postgres WMS_TEST_DB=wms_test npm run wms:db:local
+```
+
+```bash
+WMS_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/wms_test npm run test:wms
+```
+
+```bash
+npm run wms:worker
+```
+
 ## Stack
 
 | | |
