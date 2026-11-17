@@ -45,7 +45,7 @@ export function Rodape({ config }: { config: Configuracoes }) {
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.endereco)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex gap-2 hover:text-rosa-texto"
+                  className="inline-flex gap-2 py-1 hover:text-rosa-texto"
                 >
                   <MapPin aria-hidden className="mt-0.5 size-4 shrink-0" /> {config.endereco}
                 </a>
@@ -57,7 +57,7 @@ export function Rodape({ config }: { config: Configuracoes }) {
                   href={`https://wa.me/${config.whatsapp}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex gap-2 hover:text-rosa-texto"
+                  className="inline-flex gap-2 py-1 hover:text-rosa-texto"
                 >
                   <MessageCircle aria-hidden className="size-4 shrink-0" /> WhatsApp
                 </a>
@@ -69,7 +69,7 @@ export function Rodape({ config }: { config: Configuracoes }) {
                   href={`https://instagram.com/${insta}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex gap-2 hover:text-rosa-texto"
+                  className="inline-flex gap-2 py-1 hover:text-rosa-texto"
                 >
                   <Instagram aria-hidden className="size-4 shrink-0" /> @{insta}
                 </a>
