@@ -42,6 +42,24 @@ async function alternarDisponivel(page: Page, produto: string) {
   await page.keyboard.press("Escape");
 }
 
+/**
+ * O banco confere o horário com o relógio de verdade (o da página é simulado),
+ * então a loja fica "forçada aberta" por 3 h durante os testes.
+ */
+async function forcarAberta(page: Page) {
+  await irPara(page, "Configurações");
+  await page.getByRole("radio", { name: /Forçar aberta/ }).click();
+  await page.getByRole("button", { name: /^\+3h/ }).click();
+  await expect(page.getByText(/Modo: Forçar aberta até/)).toBeVisible();
+}
+
+test.beforeAll(async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await entrar(page);
+  await forcarAberta(page);
+  await page.context().close();
+});
+
 async function abrirLoja(page: Page) {
   await page.clock.setFixedTime(SEXTA_20H);
   await page.addInitScript(() => localStorage.setItem("adega011:maior-de-idade", "sim"));
@@ -190,12 +208,14 @@ test("taxa de entrega, banner e loja fechada", async ({ page, browser }) => {
 
   await irPara(page, "Configurações");
   await page.getByRole("radio", { name: /Forçar fechada/ }).click();
+  await page.getByRole("button", { name: /Até eu reabrir/ }).click();
   await expect(page.getByText("Modo: Forçar fechada")).toBeVisible();
+  await expect(page.getByText("Fechada até você reabrir.")).toBeVisible();
   await loja.reload();
   await expect(loja.getByText("Fechado agora")).toBeVisible();
 
-  // Restaura
-  await page.getByRole("radio", { name: /Automático/ }).click();
+  // Restaura (aberta por 3 h, como no começo dos testes)
+  await forcarAberta(page);
   await irPara(page, "Banner");
   await page.getByLabel("Título").fill("São Paulo no copo");
   await page.getByRole("button", { name: "Salvar banner" }).click();

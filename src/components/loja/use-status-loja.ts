@@ -9,7 +9,7 @@ import type { Configuracoes } from "@/lib/tipos";
  * atualizado a cada 30 s. Retorna null até montar, para não divergir do HTML
  * pré-renderizado.
  */
-export function useStatusLoja(config: Pick<Configuracoes, "horarios" | "status_manual">): StatusLoja | null {
+export function useStatusLoja(config: Pick<Configuracoes, "horarios" | "status_manual" | "status_ate">): StatusLoja | null {
   const [status, setStatus] = useState<StatusLoja | null>(null);
   useEffect(() => {
     const atualizar = () => setStatus(statusDaLoja(config));
