@@ -133,10 +133,30 @@ export function PaginaProdutos() {
   };
 
   const excluir = async (p: Produto) => {
-    const ok = await salvar(supabaseNavegador().from("produtos").delete().eq("id", p.id), "Produto excluído");
+    const sb = supabaseNavegador();
+    // Um único DELETE mantém a exclusão da família atômica, inclusive quando
+    // uma das variações está vinculada a kits/adicionais ou ordens de entrada.
+    const resultado = await sb.from("produtos").delete()
+      .eq(p.variacoes ? "familia_id" : "id", p.variacoes ? p.familia_id : p.id)
+      .select("id,foto_url");
+    if (resultado.error?.code === "23503") {
+      toast.error("Este produto ou uma de suas variações está vinculado a kits, adicionais ou ordens de entrada. Remova os vínculos ou oculte o produto antes de excluir.");
+      return;
+    }
+    const ok = await salvar(Promise.resolve(resultado), p.variacoes ? "Produto e variações excluídos" : "Produto excluído");
     if (ok) {
-      produtos.setDados((lista) => lista.filter((x) => x.id !== p.id));
-      void removerImagem(p.foto_url);
+      const removidos = resultado.data ?? [];
+      const ids = new Set(removidos.map((x) => x.id));
+      produtos.setDados((lista) => lista.filter((x) => !ids.has(x.id)));
+      const fotos = [...new Set(removidos.map((x) => x.foto_url).filter((url): url is string => !!url))];
+      if (fotos.length) {
+        // Variações podem compartilhar a foto com produtos que continuam ativos.
+        const restantes = await sb.from("produtos").select("foto_url").in("foto_url", fotos);
+        if (!restantes.error) {
+          const usadas = new Set(restantes.data?.map((x) => x.foto_url));
+          for (const foto of fotos) if (!usadas.has(foto)) void removerImagem(foto);
+        }
+      }
     }
   };
 
@@ -250,11 +270,11 @@ export function PaginaProdutos() {
                           {!p.variacoes && <>
                             <DropdownMenu.Separator className="my-1 h-px bg-borda" />
                             {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja'], ['ativo', 'Visível na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa-texto" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
-                            <DropdownMenu.Separator className="my-1 h-px bg-borda" />
-                            <Confirmar titulo="Excluir produto?" descricao={`“${p.nome}” será removido do cardápio. Isso não pode ser desfeito.`} onConfirmar={() => excluir(p)}>
-                              <button type="button" className="menu-produto-item w-full text-perigo"><Trash2 className="size-4" />Excluir produto</button>
-                            </Confirmar>
                           </>}
+                          <DropdownMenu.Separator className="my-1 h-px bg-borda" />
+                          <Confirmar titulo={p.variacoes ? "Excluir produto e variações?" : "Excluir produto?"} descricao={p.variacoes ? `“${p.nome}” e suas ${membros.length} variações serão excluídos. Isso não pode ser desfeito.` : `“${p.nome}” será removido do cardápio. Isso não pode ser desfeito.`} onConfirmar={() => excluir(p)}>
+                            <button type="button" className="menu-produto-item w-full text-perigo"><Trash2 className="size-4" />{p.variacoes ? "Excluir produto e variações" : "Excluir produto"}</button>
+                          </Confirmar>
                         </DropdownMenu.Content></DropdownMenu.Portal>
                       </DropdownMenu.Root>
                     </td>
