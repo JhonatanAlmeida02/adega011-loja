@@ -18,7 +18,7 @@ async function entrar(page: Page) {
 async function irPara(page: Page, nome: string) {
   const link = page.getByRole("link", { name: nome, exact: true });
   if (await link.first().isVisible()) return link.first().click();
-  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("button", { name: "Mais", exact: true }).click();
   await page.getByRole("dialog").getByRole("link", { name: nome, exact: true }).click();
 }
 
@@ -976,4 +976,111 @@ test("usuários: admin cadastra operador; operador só usa Pedidos e PDV", async
   await linha.getByRole("button", { name: /Tirar o acesso/ }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Tirar acesso" }).click();
   await expect(page.getByRole("listitem").filter({ hasText: emailOperador })).toHaveCount(0);
+});
+
+test("maquininhas e taxa do Pix: cadastro, PDV mostra quanto a loja recebe e o relatório desconta a tarifa", async ({ browser }) => {
+  const sufixo = Date.now().toString(36).slice(-4).toUpperCase();
+  const maquininha = `Stone ${sufixo}`;
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.goto("/admin/loja");
+  await page.getByRole("button", { name: "Adicionar maquininha" }).click();
+  const form = page.getByRole("form", { name: "Maquininha" });
+  await form.getByLabel("Nome da maquininha").fill(maquininha);
+  await form.getByLabel("Taxa (%)").fill("10");
+  await expect(form.getByText("Venda de R$ 100,00 → loja recebe R$ 90,00")).toBeVisible();
+  const padrao = form.getByRole("switch", { name: "Padrão" });
+  if ((await padrao.getAttribute("aria-checked")) !== "true") await padrao.click();
+  await form.getByRole("button", { name: "Salvar maquininha" }).click();
+  await expect(page.getByText(`Maquininha ${maquininha} salva`)).toBeVisible();
+  const linha = page.getByRole("list", { name: "Maquininhas" }).getByRole("listitem").filter({ hasText: maquininha });
+  await expect(linha).toContainText("Padrão");
+  await expect(linha).toContainText("Taxa 10% · venda de R$ 100,00 → recebe R$ 90,00");
+  await page.getByLabel("Taxa do Pix (%)").fill("1");
+  await page.getByRole("button", { name: "Salvar taxa do Pix" }).click();
+  await expect(page.getByText("Taxa do Pix: 1%")).toBeVisible();
+
+  // PDV: cartão nessa maquininha → R$ 14,90 − 10% = R$ 13,41
+  await page.goto("/admin/pdv");
+  await page.getByLabel("Troco inicial (R$)").fill("0");
+  await page.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(page.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+  await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+  const venda = page.getByRole("complementary");
+  await venda.getByRole("button", { name: "Ir para pagamento", exact: true }).click();
+  await venda.getByRole("radio", { name: "Pix" }).click();
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText("Tarifa do Pix (1%): − R$ 0,15");
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText("A loja recebe R$ 14,75");
+  await venda.getByRole("radio", { name: "Cartão" }).click();
+  await venda.getByLabel("Maquininha").selectOption({ label: `${maquininha} · 10%` });
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText(`Tarifa ${maquininha} (10%): − R$ 1,49`);
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText("A loja recebe R$ 13,41");
+  await venda.getByRole("radio", { name: "Dinheiro" }).click();
+  await expect(venda.getByTestId("pdv-tarifa")).toHaveCount(0);
+  await venda.getByRole("radio", { name: "Cartão" }).click();
+  await venda.getByRole("button", { name: "Finalizar · R$ 14,90" }).click();
+  const cupom = page.getByRole("dialog", { name: /Venda #/ });
+  await expect(cupom).toContainText("IPA 473 ml");
+  await expect(cupom).not.toContainText("Tarifa");
+  await cupom.getByRole("button", { name: "Nova venda" }).click();
+  await page.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = page.getByRole("dialog", { name: "Fechar caixa" });
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("0");
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+  await expect(page.getByText(/Caixa fechado/).first()).toBeVisible();
+
+  // Relatório: a tarifa aparece e sai do lucro
+  await page.goto("/admin/relatorios");
+  await page.getByRole("button", { name: "Hoje" }).click();
+  await expect(page.getByText("Tarifas (maquininhas e Pix)")).toBeVisible();
+  await expect(page.getByText(`${maquininha} · 1 venda`)).toBeVisible();
+
+  // Limpa: sem taxa do Pix e sem a maquininha (as vendas guardam a tarifa)
+  await page.goto("/admin/loja");
+  await expect(page.getByLabel("Taxa do Pix (%)")).toHaveValue("1");
+  await page.getByLabel("Taxa do Pix (%)").fill("0");
+  await page.getByRole("button", { name: "Salvar taxa do Pix" }).click();
+  await expect(page.getByText("Pix sem taxa")).toBeVisible();
+  await page.getByRole("button", { name: `Excluir ${maquininha}` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Excluir" }).click();
+  await expect(page.getByRole("list", { name: "Maquininhas" })).not.toContainText(maquininha);
+  await page.context().close();
+});
+
+test("custo do kit é a soma dos componentes, sem digitar", async ({ page }) => {
+  const sufixo = Date.now().toString(36).slice(-4).toUpperCase();
+  await entrar(page);
+  // Componente com custo R$ 1,50
+  await page.goto("/admin/produtos/novo");
+  const form = page.locator('[data-testid="cadastro-produto"]:visible');
+  await form.getByLabel("Nome", { exact: true }).fill(`Gelo QA ${sufixo}`);
+  await form.getByLabel("Preço (R$)").fill("2,00");
+  await form.getByLabel("Custo (R$)").fill("1,50");
+  await form.getByLabel("Controlar estoque").check();
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+
+  // Kit com 4 desse componente → custo automático R$ 6,00
+  await page.goto("/admin/produtos/novo");
+  await form.getByLabel("Nome", { exact: true }).fill(`Kit Gelo ${sufixo}`);
+  await form.getByLabel("Tipo de produto").selectOption("kit");
+  await form.getByLabel("Preço (R$)").fill("10,00");
+  await expect(form.getByLabel("Custo (R$)")).toHaveCount(0);
+  await expect(form.getByTestId("custo-kit")).toHaveText("—");
+  await form.getByRole("tab", { name: "Composição", exact: true }).click();
+  await form.getByLabel("Pesquisar componente 1").fill(`Gelo QA ${sufixo}`);
+  await form.locator("#kit-componente-0").selectOption({ label: `Gelo QA ${sufixo} · un` });
+  await form.getByLabel("Consumo (un)").fill("4");
+  await expect(form.getByText("Custo do kit: R$ 6,00")).toBeVisible();
+  await form.getByRole("tab", { name: "Dados gerais", exact: true }).click();
+  await expect(form.getByTestId("custo-kit")).toHaveText("6,00");
+  await expect(form.getByText(/Soma dos componentes/)).toBeVisible();
+  await page.getByRole("button", { name: "Salvar produto" }).click();
+  await expect(page.getByText("Produto criado")).toBeVisible();
+
+  await page.goto("/admin/produtos");
+  await page.getByLabel("Buscar produto").fill(`Kit Gelo ${sufixo}`);
+  const tabela = page.getByRole("region", { name: "Tabela de produtos" });
+  await expect(tabela.locator("tbody tr")).toHaveCount(1);
+  await expect(tabela.locator("tbody tr").first()).toContainText("R$ 6,00");
 });

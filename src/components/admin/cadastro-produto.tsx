@@ -127,6 +127,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const alterarCusto = (id: string, valor: string) => setCustosEditados((c) => ({ ...c, [id]: valor.replace(/[^\d,.-]/g, "") }));
   const fotoVariacao = variacoes.find((v) => v.id === fotoVariacaoId) ?? variacoes[0];
   const [componentes, setComponentes] = useState(dados.componentes);
+  const custoKit = useCustoKitPrevia(f.id, componentes, !!f.eh_kit);
   const [aba, setAba] = useState("gerais");
   const [erros, setErros] = useState<Record<string, string | undefined>>({});
   const [salvando, setSalvando] = useState(false);
@@ -168,7 +169,8 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     const preco = paraCentavos(f.preco);
     const novos: Record<string, string> = {};
     const idsCadastro = new Set(comVariacoes ? variacoes.map((v) => v.id) : [f.id]);
-    const custosParaSalvar = Object.entries(custosEditados).filter(([id]) => idsCadastro.has(id));
+    // Kit não tem custo digitado: é a soma dos componentes
+    const custosParaSalvar = f.eh_kit ? [] : Object.entries(custosEditados).filter(([id]) => idsCadastro.has(id));
     if (custosParaSalvar.some(([, valor]) => custoInvalido(valor))) novos.custo = "Informe um custo válido, positivo ou zero.";
     if (!f.nome.trim()) novos.nome = "Informe o nome.";
     if (!comVariacoes && preco === null) novos.preco = "Informe um preço válido (ex.: 49,90).";
@@ -273,7 +275,8 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
             <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{ordenarArvore(dados.categorias).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, dados.categorias)}</option>)}</Select></Campo>
             <Campo label={comVariacoes ? "SKU do produto" : "SKU (código)"} htmlFor="p-sku" erro={erros.sku} ajuda={comVariacoes ? "Código geral. Cada variação tem o seu SKU na aba Variações." : "Opcional. Código interno para achar o produto na busca."}><Input id="p-sku" value={sku} onChange={(e) => setSku(e.target.value)} maxLength={100} autoComplete="off" spellCheck={false} className="font-mono" aria-invalid={!!erros.sku} /></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
-            {!comVariacoes && (() => {
+            {!comVariacoes && f.eh_kit && <CampoCustoKit preco={f.preco} custo={custoKit} onVerComposicao={() => setAba("composicao")} />}
+            {!comVariacoes && !f.eh_kit && (() => {
               const c = resumoCusto(f.preco, paraCentavos(valorCusto(f.id)) ?? undefined);
               return <Campo label="Custo (R$)" htmlFor="p-custo" erro={erros.custo} ajuda={c.detalhe} className={c.prejuizo ? "[&_p]:text-perigo" : undefined}><Input id="p-custo" inputMode="decimal" placeholder="0,00" maxLength={16} value={valorCusto(f.id)} onChange={(e) => alterarCusto(f.id, e.target.value)} aria-invalid={!!erros.custo} className="font-mono" /></Campo>;
             })()}
@@ -337,6 +340,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
           <div><h2 className="font-semibold">Composição do kit</h2><p className="mt-1 text-xs text-suave">Itens consumidos em cada unidade vendida.</p></div>
           {erros.kit && <p role="alert" className="text-sm text-perigo">{erros.kit}</p>}
           <div className="max-w-4xl"><EditorKit produtos={dados.bases} value={componentes} onChange={setComponentes} disabled={salvando} /></div>
+          <ResumoCustoKit custo={custoKit} />
         </Tabs.Content>}
 
 
@@ -373,4 +377,60 @@ function OpcaoCadastro({ rotulo, checked, onChange, centralizada = false }: { ro
     <input type="checkbox" className="size-4 shrink-0 cursor-pointer accent-rosa" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     <span className={centralizada ? "sr-only" : "text-[13px]"}>{rotulo}</span>
   </label>;
+}
+
+type CustoKitPrevia = { minimo: number | null; maximo: number | null; faltam: string[]; tem_componentes: boolean } | null;
+type CustoKitPronto = { minimo: number; maximo: number; faltam: string[]; tem_componentes: true };
+const custoPronto = (c: CustoKitPrevia | "carregando"): c is CustoKitPronto => c !== "carregando" && c !== null && c.tem_componentes && c.minimo != null && c.maximo != null;
+
+/** Custo do kit com a composição da tela (o banco soma: custo do componente × consumo). */
+function useCustoKitPrevia(produtoId: string, componentes: ComponenteKit[], ativo: boolean): CustoKitPrevia | "carregando" {
+  const [custo, setCusto] = useState<CustoKitPrevia | "carregando">("carregando");
+  const chave = JSON.stringify(componentes.filter((c) => c.componente_id && Number.isInteger(c.quantidade) && c.quantidade >= 1));
+  useEffect(() => {
+    if (!ativo) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      supabaseNavegador().rpc("custo_kit_previa", { p_produto: produtoId, p_componentes: JSON.parse(chave) }).then(({ data, error }) => {
+        if (vivo) setCusto(error ? null : (data as CustoKitPrevia));
+      });
+    }, 250);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [produtoId, chave, ativo]);
+  return custo;
+}
+
+function textoCustoKit(c: CustoKitPronto) {
+  return c.minimo === c.maximo ? centavosParaCampo(c.minimo) : `${centavosParaCampo(c.minimo)} a ${centavosParaCampo(c.maximo)}`;
+}
+
+/** Campo de custo do kit: só leitura, calculado pelos componentes. */
+function CampoCustoKit({ preco, custo, onVerComposicao }: { preco: string; custo: CustoKitPrevia | "carregando"; onVerComposicao: () => void }) {
+  const pronto = custoPronto(custo);
+  const c = pronto ? resumoCusto(preco, custo.minimo) : null;
+  const faltam = custo !== "carregando" && custo !== null && custo.tem_componentes ? custo.faltam : [];
+  return (
+    <div>
+      <span className="rotulo mb-1.5 block text-suave">Custo (R$) · automático</span>
+      <div className="flex h-10 items-center rounded-lg border border-borda bg-superficie-2 px-3 font-mono text-suave" data-testid="custo-kit" aria-live="polite">
+        {custo === "carregando" ? "…" : pronto ? textoCustoKit(custo) : "—"}
+      </div>
+      <p className={cn("mt-1.5 text-sm", c?.prejuizo ? "text-perigo" : "text-suave")}>
+        {pronto ? <>Soma dos componentes{custo.minimo !== custo.maximo ? " (varia com a escolha)" : ""}. {c?.detalhe}</> : faltam.length ? "Soma dos componentes." : "Soma dos componentes: monte a "}
+        {!pronto && !faltam.length && <button type="button" onClick={onVerComposicao} className="cursor-pointer underline hover:text-rosa-texto">composição</button>}
+        {faltam.length > 0 && <span className="block text-amarelo-texto">Sem custo cadastrado: {faltam.join(", ")}.</span>}
+      </p>
+    </div>
+  );
+}
+
+function ResumoCustoKit({ custo }: { custo: CustoKitPrevia | "carregando" }) {
+  if (custo === "carregando" || custo === null || !custo.tem_componentes) return null;
+  return (
+    <p className="max-w-4xl rounded-lg border border-borda bg-superficie px-4 py-3 text-sm">
+      Custo do kit: <strong className="font-mono">{custoPronto(custo) ? `R$ ${textoCustoKit(custo)}` : "—"}</strong>
+      <span className="text-suave"> · soma do custo de cada componente × consumo{custo.minimo !== custo.maximo ? "; escolhas obrigatórias entram pela opção mais barata e pela mais cara" : ""}.</span>
+      {custo.faltam.length > 0 && <span className="mt-1 block text-amarelo-texto">Sem custo cadastrado: {custo.faltam.join(", ")}. Cadastre o custo desses produtos para o valor ficar certo.</span>}
+    </p>
+  );
 }
