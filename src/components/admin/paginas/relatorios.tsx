@@ -368,6 +368,10 @@ function LucroLiquido({ dados }: { dados: Relatorio }) {
         <LinhaConta rotulo="Faturamento" valor={dados.faturamento} />
         <LinhaConta rotulo="Custo dos produtos vendidos" valor={-dados.custo_produtos} />
         <LinhaConta rotulo="Lucro bruto" valor={dados.lucro_bruto} forte />
+        <LinhaConta rotulo="Tarifas (maquininhas e Pix)" valor={-dados.tarifas} />
+        {dados.tarifas_por_forma.map((t) => (
+          <LinhaConta key={t.chave} rotulo={`${t.chave} · ${t.pedidos} ${t.pedidos === 1 ? "venda" : "vendas"}`} valor={-t.total} recuo />
+        ))}
         <LinhaConta rotulo="Despesas pagas" valor={-dados.despesas} />
         {dados.despesas_por_categoria.map((d) => (
           <LinhaConta key={d.categoria} rotulo={d.categoria} valor={-d.total} recuo />
@@ -426,6 +430,7 @@ function Comparativo({ atual, inicio, fim }: { atual: Relatorio; inicio: string;
         { rotulo: "Pedidos", a: atual.pedidos, b: outro.pedidos, tipo: "numero" },
         { rotulo: "Ticket médio", a: atual.ticket_medio, b: outro.ticket_medio, tipo: "dinheiro" },
         { rotulo: "Custo dos produtos", a: atual.custo_produtos, b: outro.custo_produtos, tipo: "dinheiro", menorMelhor: true },
+        { rotulo: "Tarifas", a: atual.tarifas, b: outro.tarifas, tipo: "dinheiro", menorMelhor: true },
         { rotulo: "Despesas", a: atual.despesas, b: outro.despesas, tipo: "dinheiro", menorMelhor: true },
         { rotulo: "Lucro líquido", a: atual.lucro_liquido, b: outro.lucro_liquido, tipo: "dinheiro", forte: true },
         { rotulo: "Margem líquida", a: pctLiquida(atual), b: pctLiquida(outro), tipo: "pct" },

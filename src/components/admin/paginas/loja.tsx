@@ -10,17 +10,19 @@ import { apenasDigitos, cn, mascararTelefone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Interruptor } from "@/components/ui/campos";
 import { CabecalhoPagina, Carregando, Cartao } from "../ui";
+import { TaxasPagamento } from "../maquininhas";
 
 export function PaginaLoja() {
   const { config, gravar } = useConfiguracoes();
   if (!config) return <Carregando />;
   return (
     <>
-      <CabecalhoPagina titulo="Loja" descricao="Status, dados de contato, pagamentos e horário." />
+      <CabecalhoPagina titulo="Loja" descricao="Status, dados de contato, pagamentos, maquininhas e horário." />
       <div className="space-y-6">
         <StatusManualCard config={config} gravar={gravar} />
         <DadosLoja key={config.whatsapp + config.nome} config={config} gravar={gravar} />
         <Pagamentos config={config} gravar={gravar} />
+        <TaxasPagamento />
         <EditorHorarios config={config} gravar={gravar} />
       </div>
     </>

@@ -42,6 +42,17 @@ export function PaginaProdutos() {
     return () => { ativo = false; };
   }, []);
   const metadata = useMemo(() => new Map(metadados.dados.map((m) => [m.produto_id, m])), [metadados.dados]);
+  // Custo dos kits: automático, pela soma dos componentes (calculado no banco)
+  const [custosKit, setCustosKit] = useState<Map<string, CustoKit>>(new Map());
+  useEffect(() => {
+    let ativo = true;
+    supabaseNavegador().rpc("custos_kits").then(({ data, error }) => {
+      if (!ativo || error) return;
+      setCustosKit(new Map(((data ?? []) as { produto_id: string; custo_min: number | null; custo_max: number | null; faltam: string[] }[])
+        .map((k) => [k.produto_id, { min: k.custo_min, max: k.custo_max, faltam: k.faltam ?? [] }])));
+    });
+    return () => { ativo = false; };
+  }, []);
   const router = useRouter();
   const [clonando, setClonando] = useState(false);
   const travaClonagem = useRef(false);
@@ -68,9 +79,9 @@ export function PaginaProdutos() {
   const agrupados = useMemo(() => agruparVariacoes([...produtos.dados].sort((a, b) => a.ordem - b.ordem)), [produtos.dados]);
   const valores = useMemo(() => {
     const m = new Map<string, ValoresLinha>();
-    for (const p of agrupados) m.set(p.id, valoresLinha(p, metadata, saldos));
+    for (const p of agrupados) m.set(p.id, valoresLinha(p, metadata, saldos, custosKit));
     return m;
-  }, [agrupados, metadata, saldos]);
+  }, [agrupados, metadata, saldos, custosKit]);
   const contagens = useMemo(() => ({
     todos: agrupados.length,
     simples: agrupados.filter((p) => !p.eh_kit && !p.variacoes).length,
@@ -197,8 +208,8 @@ export function PaginaProdutos() {
               <tbody className="divide-y divide-borda">
                 {visiveis.map((p) => {
                   const membros = p.variacoes ?? [p];
-                  const { codigo, unidade, unidadeFisico, fisico, disponivel, custos, precos } = valores.get(p.id) ?? valoresLinha(p, metadata, saldos);
-                  const custo = custos ? faixa(custos) : "—";
+                  const { codigo, unidade, unidadeFisico, fisico, disponivel, custos, precos, kit } = valores.get(p.id) ?? valoresLinha(p, metadata, saldos, custosKit);
+                  const custo = kit ? textoCustoKit(kit) : custos ? faixa(custos) : "—";
                   return <tr key={p.id} className="bg-superficie transition-colors hover:bg-superficie-2">
                     <td className="min-w-64 px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
@@ -219,7 +230,9 @@ export function PaginaProdutos() {
                     <td className="px-3 py-2.5 text-xs text-suave">{codigo || "—"}</td>
                     <td className="px-3 py-2.5 text-xs">{unidade}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{precos.length ? faixa(precos) : <span className="text-xs text-amarelo-texto">Pendente</span>}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-suave tabular-nums">{custo}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-suave tabular-nums" title={kit ? (kit.faltam.length ? `Automático. Sem custo: ${kit.faltam.join(", ")}` : "Automático: soma dos componentes") : undefined}>
+                      {custo}{kit && kit.min != null && kit.faltam.length > 0 && <span className="text-amarelo-texto" aria-label=" (incompleto: componente sem custo)">*</span>}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{fisico === null ? "—" : `${fisico.toLocaleString("pt-BR")} ${unidadeFisico}`}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums" title="Quantidade possível pelo estoque; a situação de venda é controlada separadamente.">{disponivel === null ? "—" : disponivel.toLocaleString("pt-BR")}</td>
                     <td className="px-2 py-2">
@@ -261,6 +274,14 @@ function faixa(valores: number[]) {
   return `${valores.some((v) => v !== minimo) ? "A partir de " : ""}${formatarPreco(minimo)}`;
 }
 
+type CustoKit = { min: number | null; max: number | null; faltam: string[] };
+
+/** Custo do kit: "R$ 2,56" ou, com escolhas (ex.: vodka do copão), "R$ 1,00 – R$ 2,56". */
+function textoCustoKit(k: CustoKit) {
+  if (k.min == null || k.max == null) return "—";
+  return k.min === k.max ? formatarPreco(k.min) : `${formatarPreco(k.min)} – ${formatarPreco(k.max)}`;
+}
+
 type Coluna = "nome" | "codigo" | "unidade" | "preco" | "custo" | "fisico" | "disponivel";
 
 const COLUNAS: [Coluna | null, string][] = [
@@ -276,12 +297,13 @@ type ValoresLinha = {
   disponivel: number | null;
   custos: number[] | null;
   precos: number[];
+  kit: CustoKit | null;
 };
 
 type Meta = { codigo: string; codigo_pai: string | null; custo: number | null };
 
 /** O que cada linha mostra; serve tanto para desenhar quanto para ordenar pelas colunas. */
-function valoresLinha(p: Produto & { variacoes?: Produto[] }, metadata: Map<string, Meta>, saldos: Map<string, number> | null): ValoresLinha {
+function valoresLinha(p: Produto & { variacoes?: Produto[] }, metadata: Map<string, Meta>, saldos: Map<string, number> | null, custosKit: Map<string, CustoKit>): ValoresLinha {
   const membros = p.variacoes ?? [p];
   const meta = metadata.get(membros[0].id);
   const unidades = new Set(membros.map((v) => v.unidade_estoque ?? "un"));
@@ -294,6 +316,7 @@ function valoresLinha(p: Produto & { variacoes?: Produto[] }, metadata: Map<stri
     disponivel: p.eh_kit ? saldos?.get(p.id) ?? null : membros.every((v) => v.controla_estoque) ? membros.reduce((s, v) => s + saldoVendavel(v), 0) : null,
     custos: custos.every((v) => v != null) ? (custos as number[]) : null,
     precos: membros.filter((v) => !v.preco_pendente).map((v) => v.preco),
+    kit: p.eh_kit ? custosKit.get(p.id) ?? { min: null, max: null, faltam: [] } : null,
   };
 }
 
@@ -305,7 +328,7 @@ function compararColuna(a: ValoresLinha, b: ValoresLinha, nomeA: string, nomeB: 
       case "codigo": return v.codigo;
       case "unidade": return v.unidade;
       case "preco": return v.precos.length ? Math.min(...v.precos) : null;
-      case "custo": return v.custos ? Math.min(...v.custos) : null;
+      case "custo": return v.kit ? v.kit.min : v.custos ? Math.min(...v.custos) : null;
       case "fisico": return v.fisico;
       case "disponivel": return v.disponivel;
     }

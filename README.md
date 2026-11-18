@@ -440,6 +440,19 @@ produtos vendidos como pacote completo. Teste SQL: tests/sql/venda_por_embalagem
 (valida os dois canais, preço, falta de estoque conjunta, cancelamento e litros).
 
 
+## Maquininhas e taxa do Pix
+
+Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a porcentagem que ela cobra (ex.: Stone crédito 2,99%) e a taxa do Pix.
+
+- **PDV:** no cartão, escolha a maquininha; a tela mostra a tarifa e quanto a loja recebe (venda de R$ 100,00 com 10% → recebe R$ 90,00). O cupom do cliente não mostra a tarifa.
+- **Pedidos do site** pagos no cartão usam a maquininha marcada como **padrão**; no Pix, a taxa do Pix.
+- A tarifa é gravada na venda quando ela é concluída: mudar a porcentagem depois não altera vendas antigas.
+- O **financeiro** lança o valor líquido (o que cai na conta), e o **relatório** mostra as tarifas e as tira do lucro líquido.
+
+## Custo dos kits (automático)
+
+O custo de um kit, fardo ou copão é a **soma dos componentes**: custo de cada componente × quantidade consumida (em ml, proporcional ao volume). Escolhas obrigatórias (ex.: a vodka do copão) entram como faixa, da opção mais barata à mais cara; no relatório vale a escolha de cada venda. Não há campo para digitar o custo do kit. Se algum componente estiver sem custo, a tela avisa qual é.
+
 ## PDV: itens e pagamento em etapas
 
 A tela principal prioriza busca e lista de itens, com total e Ir para pagamento

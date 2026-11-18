@@ -11,6 +11,7 @@ import { ordenarGrupos } from "@/lib/loja-ordenacao";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { idsDaCategoria, ordenarArvore, rotuloCategoria } from "@/lib/categorias";
 import { NOMES_ORIGEM, produtoDisponivel, controlaSaldo, saldoVendavel, aplicarSaldos, type Categoria, type FormaPagamento, type Opcao, type Produto } from "@/lib/tipos";
+import { calcularTarifa, formatarPercentual, tarifaDaVenda, type TarifasPagamento } from "@/lib/tarifas";
 import { centavosParaCampo, cn, formatarPreco, paraCentavos } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Campo, Input, Select } from "@/components/ui/campos";
@@ -399,6 +400,20 @@ function PainelVenda({
   const [recebido, setRecebido] = useState("");
   const [cliente, setCliente] = useState("");
   const [finalizando, setFinalizando] = useState(false);
+  // Maquininhas e taxa do Pix (Configurações): mostram quanto a loja recebe de fato
+  const [tarifas, setTarifas] = useState<TarifasPagamento | null>(null);
+  const [maquininha, setMaquininha] = useState<string | null>(null);
+  useEffect(() => {
+    if (!recebimento) return;
+    let ativo = true;
+    supabaseNavegador().rpc("tarifas_pagamento").then(({ data, error }) => {
+      if (!ativo || error || !data) return;
+      const t = data as TarifasPagamento;
+      setTarifas(t);
+      setMaquininha((atual) => (atual && t.maquininhas.some((m) => m.id === atual) ? atual : (t.maquininhas.find((m) => m.padrao) ?? t.maquininhas[0])?.id ?? null));
+    });
+    return () => { ativo = false; };
+  }, [recebimento]);
   // ids únicos por instância do painel
   const uid = useId();
   const ids = { desconto: `${uid}-desconto`, recebido: `${uid}-recebido`, cliente: `${uid}-cliente` };
@@ -414,6 +429,8 @@ function PainelVenda({
   const total = subtotal - valorDesconto;
   const valorRecebido = recebido.trim() ? paraCentavos(recebido) : null;
   const troco = valorRecebido != null ? valorRecebido - total : null;
+  const { bp: tarifaBp, maquininha: maquininhaVenda } = tarifaDaVenda(tarifas, pagamento, maquininha);
+  const tarifa = calcularTarifa(total, tarifaBp);
   const recebidoInsuficiente = pagamento === "dinheiro" && valorRecebido != null && valorRecebido < total;
 
   const recebidoInvalido = pagamento === "dinheiro" && recebido.trim() !== "" && valorRecebido === null;
@@ -428,6 +445,7 @@ function PainelVenda({
       p_desconto: valorDesconto,
       p_valor_recebido: pagamento === "dinheiro" ? valorRecebido : null,
       p_cliente_nome: cliente.trim() || null,
+      p_maquininha: pagamento === "cartao" ? maquininhaVenda?.id ?? null : null,
     });
     if (error) return toast.error(error.message);
     const r = data as Omit<DadosCupom, "pagamento">;
@@ -476,6 +494,22 @@ function PainelVenda({
               </button>
             ))}
           </div>
+
+          {pagamento === "cartao" && tarifas && tarifas.maquininhas.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor={`${uid}-maquininha`} className="rotulo w-20 shrink-0 text-suave">Maquininha</label>
+              <Select id={`${uid}-maquininha`} value={maquininhaVenda?.id ?? ""} onChange={(e) => setMaquininha(e.target.value)} className="h-10">
+                {tarifas.maquininhas.map((m) => <option key={m.id} value={m.id}>{m.nome} · {formatarPercentual(m.taxa_bp)}</option>)}
+              </Select>
+            </div>
+          )}
+
+          {tarifa > 0 && (
+            <p className="rounded-lg bg-superficie-2 px-3 py-2 text-sm" aria-live="polite" data-testid="pdv-tarifa">
+              Tarifa {maquininhaVenda ? maquininhaVenda.nome : "do Pix"} ({formatarPercentual(tarifaBp)}): <span className="font-mono">− {formatarPreco(tarifa)}</span>
+              <span className="block text-suave">A loja recebe <strong className="font-mono text-texto">{formatarPreco(total - tarifa)}</strong></span>
+            </p>
+          )}
 
           {pagamento === "dinheiro" && (
             <div>
