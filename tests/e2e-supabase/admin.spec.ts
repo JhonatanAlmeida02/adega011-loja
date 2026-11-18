@@ -987,20 +987,24 @@ test("maquininhas e taxa do Pix: cadastro, PDV mostra quanto a loja recebe e o r
   await page.getByRole("button", { name: "Adicionar maquininha" }).click();
   const form = page.getByRole("form", { name: "Maquininha" });
   await form.getByLabel("Nome da maquininha").fill(maquininha);
-  await form.getByLabel("Taxa (%)").fill("10");
+  await form.getByLabel("Taxa no débito (%)").fill("2");
+  await form.getByLabel("Taxa no crédito (%)").fill("10");
+  await expect(form.getByText("Venda de R$ 100,00 → loja recebe R$ 98,00")).toBeVisible();
   await expect(form.getByText("Venda de R$ 100,00 → loja recebe R$ 90,00")).toBeVisible();
-  const padrao = form.getByRole("switch", { name: "Padrão" });
+  const padrao = form.getByRole("switch", { name: "Padrão no PDV" });
   if ((await padrao.getAttribute("aria-checked")) !== "true") await padrao.click();
+  await expect(form.getByRole("switch", { name: "Padrão no site" })).toBeVisible();
   await form.getByRole("button", { name: "Salvar maquininha" }).click();
   await expect(page.getByText(`Maquininha ${maquininha} salva`)).toBeVisible();
   const linha = page.getByRole("list", { name: "Maquininhas" }).getByRole("listitem").filter({ hasText: maquininha });
-  await expect(linha).toContainText("Padrão");
-  await expect(linha).toContainText("Taxa 10% · venda de R$ 100,00 → recebe R$ 90,00");
+  await expect(linha).toContainText("Padrão PDV");
+  await expect(linha).toContainText("Débito 2% · Crédito 10%");
+  await expect(linha).toContainText("débito recebe R$ 98,00 · crédito recebe R$ 90,00");
   await page.getByLabel("Taxa do Pix (%)").fill("1");
   await page.getByRole("button", { name: "Salvar taxa do Pix" }).click();
   await expect(page.getByText("Taxa do Pix: 1%")).toBeVisible();
 
-  // PDV: cartão nessa maquininha → R$ 14,90 − 10% = R$ 13,41
+  // PDV: a maquininha padrão já vem escolhida; débito 2% → R$ 14,60, crédito 10% → R$ 13,41
   await page.goto("/admin/pdv");
   await page.getByLabel("Troco inicial (R$)").fill("0");
   await page.getByRole("button", { name: "Abrir caixa" }).click();
@@ -1012,8 +1016,14 @@ test("maquininhas e taxa do Pix: cadastro, PDV mostra quanto a loja recebe e o r
   await expect(venda.getByTestId("pdv-tarifa")).toContainText("Tarifa do Pix (1%): − R$ 0,15");
   await expect(venda.getByTestId("pdv-tarifa")).toContainText("A loja recebe R$ 14,75");
   await venda.getByRole("radio", { name: "Cartão" }).click();
-  await venda.getByLabel("Maquininha").selectOption({ label: `${maquininha} · 10%` });
-  await expect(venda.getByTestId("pdv-tarifa")).toContainText(`Tarifa ${maquininha} (10%): − R$ 1,49`);
+  await expect(venda.getByLabel("Maquininha").locator("option:checked")).toHaveText(maquininha);
+  await expect(venda.getByText("Escolha débito ou crédito.")).toBeVisible();
+  await expect(venda.getByRole("button", { name: "Finalizar · R$ 14,90" })).toBeDisabled();
+  await venda.getByRole("radio", { name: /^Débito/ }).click();
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText(`Tarifa ${maquininha} débito (2%): − R$ 0,30`);
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText("A loja recebe R$ 14,60");
+  await venda.getByRole("radio", { name: /^Crédito/ }).click();
+  await expect(venda.getByTestId("pdv-tarifa")).toContainText(`Tarifa ${maquininha} crédito (10%): − R$ 1,49`);
   await expect(venda.getByTestId("pdv-tarifa")).toContainText("A loja recebe R$ 13,41");
   await venda.getByRole("radio", { name: "Dinheiro" }).click();
   await expect(venda.getByTestId("pdv-tarifa")).toHaveCount(0);
@@ -1033,7 +1043,7 @@ test("maquininhas e taxa do Pix: cadastro, PDV mostra quanto a loja recebe e o r
   await page.goto("/admin/relatorios");
   await page.getByRole("button", { name: "Hoje" }).click();
   await expect(page.getByText("Tarifas (maquininhas e Pix)")).toBeVisible();
-  await expect(page.getByText(`${maquininha} · 1 venda`)).toBeVisible();
+  await expect(page.getByText(`${maquininha} (crédito) · 1 venda`)).toBeVisible();
 
   // Limpa: sem taxa do Pix e sem a maquininha (as vendas guardam a tarifa)
   await page.goto("/admin/loja");

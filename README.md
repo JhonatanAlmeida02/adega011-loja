@@ -442,10 +442,10 @@ produtos vendidos como pacote completo. Teste SQL: tests/sql/venda_por_embalagem
 
 ## Maquininhas e taxa do Pix
 
-Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a porcentagem que ela cobra (ex.: Stone crédito 2,99%) e a taxa do Pix.
+Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a taxa do **débito** e a do **crédito** (ex.: Stone 1,37% / 2,99%) e a taxa do Pix. Marque uma como **Padrão no PDV** e uma como **Padrão no site**.
 
-- **PDV:** no cartão, escolha a maquininha; a tela mostra a tarifa e quanto a loja recebe (venda de R$ 100,00 com 10% → recebe R$ 90,00). O cupom do cliente não mostra a tarifa.
-- **Pedidos do site** pagos no cartão usam a maquininha marcada como **padrão**; no Pix, a taxa do Pix.
+- **PDV:** no cartão, a maquininha padrão do PDV já vem escolhida (dá para trocar); toque em **Débito** ou **Crédito** e a tela mostra a tarifa e quanto a loja recebe (venda de R$ 100,00 com 10% → recebe R$ 90,00). Só finaliza depois de escolher débito ou crédito. O cupom do cliente não mostra a tarifa.
+- **Pedidos do site** pagos no cartão usam a maquininha **padrão do site** com a taxa de **crédito** (o cliente não informa débito/crédito no site); no Pix, a taxa do Pix.
 - A tarifa é gravada na venda quando ela é concluída: mudar a porcentagem depois não altera vendas antigas.
 - O **financeiro** lança o valor líquido (o que cai na conta), e o **relatório** mostra as tarifas e as tira do lucro líquido.
 
