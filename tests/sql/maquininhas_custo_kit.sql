@@ -21,51 +21,68 @@ begin
   rel_antes := public.relatorio_vendas(hoje, hoje);
   insert into public.produtos (id, nome, preco, ativo, disponivel, controla_estoque) values (produto, 'QA Produto 100', 10000, true, true, false);
 
-  -- Cadastro: Stone 10% (padrão) e Cielo 2,99%; Pix 0,99%
-  perform public.salvar_maquininha(stone, 'Stone', 1000, true, true);
-  perform public.salvar_maquininha(cielo, 'Cielo', 299, true, true);       -- vira a padrão
-  if (select padrao from public.maquininhas where id = stone) then raise exception 'FAIL só uma padrão'; end if;
-  perform public.salvar_maquininha(stone, 'Stone', 1000, true, true);      -- volta a ser a padrão
+  -- Cadastro: Stone débito 1,37% / crédito 10% (padrão no PDV e no site); Cielo 2% / 2,99% vira a padrão do PDV
+  perform public.salvar_maquininha(stone, 'Stone', 137, 1000, true, true, true);
+  perform public.salvar_maquininha(cielo, 'Cielo', 200, 299, true, false, true);
+  if (select padrao_pdv::text || padrao_site::text from public.maquininhas where id = stone) <> 'falsetrue'
+     or not (select padrao_pdv from public.maquininhas where id = cielo) then raise exception 'FAIL padrões PDV/site'; end if;
   begin
-    perform public.salvar_maquininha(gen_random_uuid(), 'stone ', 100, false, true);
+    perform public.salvar_maquininha(gen_random_uuid(), 'stone ', 100, 100, false, false, true);
     raise exception using errcode = 'XX000', message = 'FAIL nome repetido';
   exception when sqlstate 'P0001' then null; end;
   begin
-    perform public.salvar_maquininha(gen_random_uuid(), 'X', 10001, false, true);
+    perform public.salvar_maquininha(gen_random_uuid(), 'X', 100, 10001, false, false, true);
     raise exception using errcode = 'XX000', message = 'FAIL taxa acima de 100%';
   exception when sqlstate 'P0001' or check_violation then null; end;
   perform public.salvar_taxa_pix(99);
-  if (public.tarifas_pagamento() ->> 'pix_bp')::int <> 99 or jsonb_array_length(public.tarifas_pagamento() -> 'maquininhas') <> 2 then raise exception 'FAIL tarifas_pagamento'; end if;
+  r := public.tarifas_pagamento();
+  if (r ->> 'pix_bp')::int <> 99 or jsonb_array_length(r -> 'maquininhas') <> 2
+     or r #>> '{maquininhas,0,nome}' <> 'Cielo' or (r #>> '{maquininhas,0,taxa_debito_bp}')::int <> 200 then raise exception 'FAIL tarifas_pagamento: %', r; end if;
 
-  -- PDV: cartão na Cielo (2,99%): R$ 100 → tarifa R$ 2,99, entra R$ 97,01
+  -- PDV: Cielo no crédito (2,99%): R$ 100 → tarifa R$ 2,99, entra R$ 97,01
   perform public.abrir_caixa(0);
-  r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, cielo);
+  r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, cielo, 'credito');
   v_id := (r ->> 'id')::uuid;
-  if (r ->> 'tarifa')::int <> 299 or r ->> 'maquininha' <> 'Cielo' then raise exception 'FAIL tarifa no retorno: %', r; end if;
+  if (r ->> 'tarifa')::int <> 299 or r ->> 'maquininha' <> 'Cielo (crédito)' then raise exception 'FAIL tarifa no retorno: %', r; end if;
   if (select valor from public.financeiro_vendas where pedido_id = v_id) <> 9701 then raise exception 'FAIL financeiro líquido'; end if;
-  if (select descricao from public.financeiro_lancamentos where pedido_id = v_id and tipo = 'venda') not like '%tarifa Cielo R$ 2,99%' then raise exception 'FAIL descrição'; end if;
-  -- Cartão sem escolher: a padrão (Stone 10%): R$ 100 → R$ 90
+  if (select descricao from public.financeiro_lancamentos where pedido_id = v_id and tipo = 'venda') not like '%tarifa Cielo (crédito) R$ 2,99%' then raise exception 'FAIL descrição'; end if;
+  -- Débito sem escolher a maquininha: a padrão do PDV (Cielo) no débito, 2% → entra R$ 98,00
+  r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, null, 'debito');
+  if (select tarifa || '|' || maquininha_nome || '|' || cartao_tipo from public.pedidos where id = (r ->> 'id')::uuid) <> '200|Cielo (débito)|debito' then raise exception 'FAIL débito padrão PDV'; end if;
+  if (select valor from public.financeiro_vendas where pedido_id = (r ->> 'id')::uuid) <> 9800 then raise exception 'FAIL R$ 98'; end if;
+  -- Sem informar débito/crédito: crédito
   r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao');
-  if (select tarifa || '|' || maquininha_nome from public.pedidos where id = (r ->> 'id')::uuid) <> '1000|Stone' then raise exception 'FAIL padrão'; end if;
-  if (select valor from public.financeiro_vendas where pedido_id = (r ->> 'id')::uuid) <> 9000 then raise exception 'FAIL R$ 90'; end if;
+  if (select tarifa from public.pedidos where id = (r ->> 'id')::uuid) <> 299 then raise exception 'FAIL crédito por padrão'; end if;
   -- Pix 0,99% e dinheiro sem taxa
   r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 2)), 'pix');
-  if (select tarifa from public.pedidos where id = (r ->> 'id')::uuid) <> 198 then raise exception 'FAIL pix'; end if;
+  if (select tarifa::text || coalesce(cartao_tipo, '-') from public.pedidos where id = (r ->> 'id')::uuid) <> '198-' then raise exception 'FAIL pix'; end if;
   r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'dinheiro', 0, 10000);
   if (select tarifa from public.pedidos where id = (r ->> 'id')::uuid) <> 0 then raise exception 'FAIL dinheiro'; end if;
-  -- Maquininha só no cartão e ativa
+  -- Maquininha e débito/crédito só no cartão; débito/crédito válido
   begin
     perform public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'pix', 0, null, null, cielo);
     raise exception using errcode = 'XX000', message = 'FAIL maquininha no pix';
   exception when sqlstate 'P0001' then null; end;
-  perform public.salvar_maquininha(cielo, 'Cielo', 299, false, false);
   begin
-    perform public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, cielo);
+    perform public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'dinheiro', 0, null, null, null, 'debito');
+    raise exception using errcode = 'XX000', message = 'FAIL débito no dinheiro';
+  exception when sqlstate 'P0001' then null; end;
+  begin
+    perform public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, cielo, 'parcelado');
+    raise exception using errcode = 'XX000', message = 'FAIL tipo inválido';
+  exception when sqlstate 'P0001' then null; end;
+  -- Cielo inativa: deixa de ser padrão e não vende; sem padrão no PDV vale a padrão do site (Stone crédito 10%)
+  perform public.salvar_maquininha(cielo, 'Cielo', 200, 299, true, false, false);
+  if (select padrao_pdv from public.maquininhas where id = cielo) then raise exception 'FAIL inativa padrão'; end if;
+  begin
+    perform public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, cielo, 'credito');
     raise exception using errcode = 'XX000', message = 'FAIL maquininha inativa';
   exception when sqlstate 'P0001' then null; end;
+  r := public.registrar_venda_balcao(jsonb_build_array(jsonb_build_object('produto_id', produto, 'quantidade', 1)), 'cartao', 0, null, null, null, 'credito');
+  if (select tarifa || '|' || maquininha_nome from public.pedidos where id = (r ->> 'id')::uuid) <> '1000|Stone (crédito)' then raise exception 'FAIL padrão site no PDV'; end if;
 
   -- Mudar a taxa depois não muda a venda antiga; mudar o total mantém a % da venda
-  perform public.salvar_maquininha(stone, 'Stone', 500, true, true);
+  perform public.salvar_maquininha(stone, 'Stone', 137, 500, false, true, true);
   if (select tarifa from public.pedidos where id = v_id) <> 299 then raise exception 'FAIL venda antiga mudou'; end if;
   update public.pedidos set total = 20000 where id = v_id;
   if (select tarifa || '|' || tarifa_bp from public.pedidos where id = v_id) <> '598|299' then raise exception 'FAIL total alterado'; end if;
@@ -77,18 +94,18 @@ begin
      or (select string_agg(valor::text, ',' order by valor) from public.financeiro_lancamentos where pedido_id = v_id and tipo = 'venda') <> '9701,19402'
     then raise exception 'FAIL estorno líquido'; end if;
 
-  -- Pedido do site pago no cartão: ao concluir usa a maquininha padrão (Stone, agora 5%)
+  -- Pedido do site pago no cartão: ao concluir usa a padrão do site (Stone) no crédito, agora 5%
   insert into public.pedidos (cliente_nome, cliente_telefone, tipo, pagamento, itens, subtotal, total, origem, status)
   values ('QA', '11999999999', 'retirada', 'cartao', '[]', 5000, 5000, 'site', 'novo') returning id into site;
   if (select tarifa from public.pedidos where id = site) <> 0 then raise exception 'FAIL tarifa antes de concluir'; end if;
   update public.pedidos set status = 'concluido' where id = site;
-  if (select tarifa || '|' || maquininha_nome from public.pedidos where id = site) <> '250|Stone' then raise exception 'FAIL site'; end if;
+  if (select tarifa || '|' || maquininha_nome || '|' || cartao_tipo from public.pedidos where id = site) <> '250|Stone (crédito)|credito' then raise exception 'FAIL site'; end if;
 
-  -- Relatório: tarifas saem do lucro
+  -- Relatório: tarifas saem do lucro (a venda cancelada não conta)
   rel := public.relatorio_vendas(hoje, hoje);
-  if (rel ->> 'tarifas')::int - (rel_antes ->> 'tarifas')::int <> 1000 + 198 + 250 then raise exception 'FAIL relatório tarifas: %', rel ->> 'tarifas'; end if;
+  if (rel ->> 'tarifas')::int - (rel_antes ->> 'tarifas')::int <> 200 + 299 + 198 + 1000 + 250 then raise exception 'FAIL relatório tarifas: %', rel ->> 'tarifas'; end if;
   if (rel ->> 'lucro_liquido')::bigint <> (rel ->> 'faturamento')::bigint - (rel ->> 'custo_produtos')::bigint - (rel ->> 'tarifas')::bigint - (rel ->> 'despesas')::bigint then raise exception 'FAIL lucro líquido'; end if;
-  if not exists (select 1 from jsonb_array_elements(rel -> 'tarifas_por_forma') e where e ->> 'chave' = 'Stone') then raise exception 'FAIL tarifas por forma'; end if;
+  if not exists (select 1 from jsonb_array_elements(rel -> 'tarifas_por_forma') e where e ->> 'chave' = 'Cielo (débito)') then raise exception 'FAIL tarifas por forma'; end if;
 
   -- Custo automático do kit: A (R$ 3,00/un) × 2 + B (R$ 50,00 por 1000 ml) × 50 ml = 6,00 + 2,50
   insert into public.produtos (id, nome, preco, controla_estoque, estoque) values (a, 'QA A', 1, true, 100), (c, 'QA C', 1, true, 100), (d, 'QA D', 1, true, 100);
@@ -128,7 +145,7 @@ begin
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000cc","role":"authenticated"}', true);
   perform public.tarifas_pagamento();
   begin
-    perform public.salvar_maquininha(gen_random_uuid(), 'Op', 0, false, true);
+    perform public.salvar_maquininha(gen_random_uuid(), 'Op', 0, 0, false, false, true);
     raise exception using errcode = 'XX000', message = 'FAIL operador cadastrou maquininha';
   exception when sqlstate 'P0001' then null; end;
   begin
@@ -138,4 +155,4 @@ begin
 end;
 $test$;
 rollback;
-select 'PASS: maquininhas com % própria e padrão, Pix com %, tarifa gravada na venda, financeiro líquido (R$ 100 a 10% = R$ 90), estorno, relatório sem as tarifas no lucro; custo do kit = soma dos componentes, com faixa nas escolhas e aviso de custo faltando. Dados desfeitos.' as resultado;
+select 'PASS: maquininhas com taxa de débito e crédito, padrão no PDV e no site, Pix com %, tarifa gravada na venda, financeiro líquido (R$ 100 a 10% = R$ 90), estorno, relatório sem as tarifas no lucro; custo do kit = soma dos componentes, com faixa nas escolhas e aviso de custo faltando. Dados desfeitos.' as resultado;
