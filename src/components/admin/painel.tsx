@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   ExternalLink,
+  FileDown,
   Image as IconeImagem,
   LayoutGrid,
   LogOut,
@@ -60,6 +61,7 @@ const SECOES: { titulo: string; icone: LucideIcon; links: LinkPainel[] }[] = [
     links: [
       { href: "/admin/produtos", rotulo: "Produtos", icone: Package, principal: true },
       { href: "/admin/categorias", rotulo: "Categorias", icone: LayoutGrid, principal: false },
+      { href: "/admin/exportar-catalogo", rotulo: "Exportar catálogo", icone: FileDown, principal: false },
     ],
   },
   {
@@ -267,6 +269,8 @@ export function Painel({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
         "mx-auto min-w-0 w-full flex-1 px-4 pt-6 pb-32 md:px-6",
+        // Catálogo exportado: a folha ocupa a página impressa inteira
+        "print:m-0 print:max-w-none print:p-0",
         pathname.startsWith("/admin/pdv") ? "max-w-none pt-3 md:pt-5 md:pb-5" : pathname.startsWith("/admin/produtos") || pathname.startsWith("/admin/estoque") || pathname.startsWith("/admin/financeiro") || pathname.startsWith("/admin/contas-a-") || pathname.startsWith("/admin/calendario") ? "max-w-none md:pt-6 md:pb-12" : "max-w-5xl md:pt-6 md:pb-12",
       )}>
         <PapelPainel value={papel}>

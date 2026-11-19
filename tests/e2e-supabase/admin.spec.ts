@@ -438,10 +438,11 @@ test("estoque: entrada, esgota com pedidos e volta ao cancelar", async ({ page, 
   await loja.getByRole("button", { name: "Enviar pedido pelo WhatsApp" }).click();
   await expect.poll(async () => (await loja.evaluate(() => location.href)) + "").not.toBe("");
 
-  // Esgotou: a loja mostra esgotado
+  // Esgotou: com a visibilidade automática pelo estoque, o produto sai da loja
   const outra = await (await browser.newContext()).newPage();
   await abrirLoja(outra);
-  await expect(outra.getByRole("article", { name: "Whisky 12 anos 1 L" })).toContainText("Esgotado");
+  await expect(outra.getByRole("article", { name: "IPA 473 ml" })).toBeVisible();
+  await expect(outra.getByRole("article", { name: "Whisky 12 anos 1 L" })).toHaveCount(0);
 
   // Cancelar o pedido devolve as 2 unidades
   await page.getByRole("link", { name: "Pedidos", exact: true }).click();
@@ -1093,4 +1094,32 @@ test("custo do kit é a soma dos componentes, sem digitar", async ({ page }) => 
   const tabela = page.getByRole("region", { name: "Tabela de produtos" });
   await expect(tabela.locator("tbody tr")).toHaveCount(1);
   await expect(tabela.locator("tbody tr").first()).toContainText("R$ 6,00");
+});
+
+test("exportar catálogo: folha com os produtos da loja, opções, planilha e impressão", async ({ page }) => {
+  await entrar(page);
+  await irPara(page, "Exportar catálogo");
+  const folha = page.getByTestId("folha-catalogo");
+  const ipa = folha.getByRole("article", { name: "IPA 473 ml" });
+  await expect(ipa).toContainText("R$ 14,90");
+
+  await page.getByRole("switch", { name: "Mostrar preços" }).click();
+  await expect(ipa).not.toContainText("R$ 14,90");
+  await page.getByRole("switch", { name: "Mostrar preços" }).click();
+  await page.getByRole("checkbox", { name: "Cervejas", exact: true }).uncheck();
+  await expect(ipa).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Cervejas", exact: true }).check();
+  await expect(ipa).toBeVisible();
+
+  const [arquivo] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Baixar planilha" }).click()]);
+  expect(arquivo.suggestedFilename()).toMatch(/^catalogo-adega011-\d{4}-\d{2}-\d{2}\.csv$/);
+  const conteudo = (await import("node:fs")).readFileSync(await arquivo.path(), "utf8");
+  expect(conteudo.startsWith("﻿Categoria;Subcategoria;Produto;")).toBe(true);
+  expect(conteudo).toContain("Cervejas;;IPA 473 ml;;");
+  expect(conteudo).toContain(";14,90;Sim;");
+
+  // Imprimir/PDF: espera as fotos e chama a impressão do navegador
+  await page.evaluate(() => { (window as unknown as { impresso: boolean }).impresso = false; window.print = () => { (window as unknown as { impresso: boolean }).impresso = true; }; });
+  await page.getByRole("button", { name: "Salvar PDF / imprimir" }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { impresso: boolean }).impresso)).toBe(true);
 });

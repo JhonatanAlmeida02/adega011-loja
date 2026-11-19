@@ -440,6 +440,14 @@ produtos vendidos como pacote completo. Teste SQL: tests/sql/venda_por_embalagem
 (valida os dois canais, preço, falta de estoque conjunta, cancelamento e litros).
 
 
+## Exportar catálogo
+
+Em **Catálogo → Exportar catálogo** o painel monta um catálogo com os produtos que aparecem na loja (mesmas regras de visibilidade do site), separado por categoria e subcategoria, com logo, WhatsApp, Instagram e a data dos preços.
+
+- **Salvar PDF / imprimir:** abre a impressão do navegador em folha A4 (escolha "Salvar como PDF"). Sai sempre em fundo branco, mesmo no tema escuro.
+- **Baixar planilha:** arquivo CSV que abre no Excel (uma linha por SKU: categoria, produto, variação, SKU, preço, disponível, descrição).
+- Opções: título e subtítulo, categorias, só o que está disponível agora, mostrar preços e mostrar fotos. Variações (sabores, cores) aparecem juntas no mesmo item.
+
 ## Maquininhas e taxa do Pix
 
 Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a taxa do **débito** e a do **crédito** (ex.: Stone 1,37% / 2,99%) e a taxa do Pix. Marque uma como **Padrão no PDV** e uma como **Padrão no site**.
