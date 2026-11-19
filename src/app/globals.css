@@ -260,11 +260,11 @@ body {
   display: none;
 }
 @media print {
-  body * {
+  html:not(.imprimir-catalogo) body * {
     visibility: hidden !important;
   }
-  .area-cupom,
-  .area-cupom * {
+  html:not(.imprimir-catalogo) .area-cupom,
+  html:not(.imprimir-catalogo) .area-cupom * {
     visibility: visible !important;
   }
   .area-cupom {
@@ -282,6 +282,28 @@ body {
   }
 }
 
+
+/* Catálogo exportado (Painel › Exportar catálogo): folha A4 clara, mesmo no tema escuro */
+@page catalogo {
+  size: A4;
+  margin: 10mm;
+}
+@media print {
+  html.imprimir-catalogo,
+  html.imprimir-catalogo body {
+    background: #fff !important;
+    /* Sem isto o Chrome pinta as margens da página com a cor do tema escuro */
+    color-scheme: light !important;
+  }
+  html.imprimir-catalogo .area-catalogo {
+    page: catalogo;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  html.imprimir-catalogo [data-sonner-toaster] {
+    display: none !important;
+  }
+}
 
 /* Compact product registration. Storefront and PDV retain their own density. */
 .cadastro-erp [data-slot="input"],
