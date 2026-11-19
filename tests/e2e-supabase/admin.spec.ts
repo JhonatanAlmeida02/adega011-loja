@@ -1123,3 +1123,52 @@ test("exportar catálogo: folha com os produtos da loja, opções, planilha e im
   await page.getByRole("button", { name: "Salvar PDF / imprimir" }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { impresso: boolean }).impresso)).toBe(true);
 });
+
+test("catálogo: descrição opcional, exportar folha para o Figma, reimportar o design e voltar ao padrão", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.goto("/admin/exportar-catalogo");
+  const folha = page.getByTestId("folha-catalogo");
+  await expect(folha.getByRole("article", { name: "IPA 473 ml" })).toBeVisible();
+  const descricoes = folha.getByTestId("descricao-produto");
+  expect(await descricoes.count()).toBeGreaterThan(0);
+  await page.getByRole("switch", { name: "Mostrar descrição" }).click();
+  await expect(descricoes).toHaveCount(0);
+
+  // Exportar: uma folha A4 em SVG com as camadas nomeadas
+  const [arquivo] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Exportar para o Figma (1 folha)" }).click()]);
+  expect(arquivo.suggestedFilename()).toBe("modelo-catalogo-adega011.svg");
+  const svg = (await import("node:fs")).readFileSync(await arquivo.path(), "utf8");
+  expect(svg).toContain('width="794" height="1123"');
+  for (const camada of ["Fundo da página", "Logo", "Título", "Faixa da categoria", "Fundo do cartão", "Nome do produto", "Preço"]) expect(svg).toContain(`id="${camada}"`);
+  expect(svg).not.toContain('id="Descrição"');
+  expect(svg).toContain("data:image/png;base64,");
+
+  // Reimportar: a função lê a folha (em teste, o documento vai junto do pedido)
+  const documento = { name: "Frame", type: "FRAME", children: [
+    { name: "Faixa da categoria", type: "VECTOR", fills: [{ type: "SOLID", color: { r: 0, g: 0, b: 0.5, a: 1 } }] },
+    { name: "Preço", type: "TEXT", fills: [{ type: "SOLID", color: { r: 0, g: 0.5, b: 0, a: 1 } }], style: { fontFamily: "Montserrat", fontWeight: 800, fontSize: 18 } },
+  ] };
+  await page.route("**/functions/v1/catalogo-figma", async (rota) => {
+    if (rota.request().method() !== "POST") return rota.continue();
+    await rota.continue({ postData: JSON.stringify({ ...rota.request().postDataJSON(), documento }) });
+  });
+  await page.getByLabel("Link da folha no Figma").fill("https://www.figma.com/design/eC9GXWBGSP7hMPZGTUxeBV/Catalogo?node-id=1-2");
+  await page.getByRole("button", { name: "Importar" }).click();
+  await expect(page.getByTestId("design-importado")).toContainText("Li 2 de 19 camadas");
+  const faixa = folha.getByRole("region", { name: "Cervejas" }).getByRole("heading", { level: 3 });
+  await expect(faixa).toHaveCSS("background-color", "rgb(0, 0, 128)");
+  await expect(folha.getByRole("article", { name: "IPA 473 ml" }).getByText("R$ 14,90")).toHaveCSS("color", "rgb(0, 128, 0)");
+
+  await page.getByRole("button", { name: "Salvar e usar este design" }).click();
+  await expect(page.getByText("O catálogo agora usa o design do Figma")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Design do Figma" })).toHaveAttribute("aria-checked", "true");
+  await expect(folha.getByRole("region", { name: "Cervejas" }).getByRole("heading", { level: 3 })).toHaveCSS("background-color", "rgb(0, 0, 128)");
+
+  // Usar padrão
+  await page.getByRole("radio", { name: "Design padrão" }).click();
+  await expect(page.getByText("O catálogo voltou ao design padrão")).toBeVisible();
+  await expect(folha.getByRole("region", { name: "Cervejas" }).getByRole("heading", { level: 3 })).toHaveCSS("background-color", "rgb(23, 23, 23)");
+  await page.context().close();
+});

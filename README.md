@@ -446,7 +446,16 @@ Em **Catálogo → Exportar catálogo** o painel monta um catálogo com os produ
 
 - **Salvar PDF / imprimir:** abre a impressão do navegador em folha A4 (escolha "Salvar como PDF"). Sai sempre em fundo branco, mesmo no tema escuro.
 - **Baixar planilha:** arquivo CSV que abre no Excel (uma linha por SKU: categoria, produto, variação, SKU, preço, disponível, descrição).
-- Opções: título e subtítulo, categorias, só o que está disponível agora, mostrar preços e mostrar fotos. Variações (sabores, cores) aparecem juntas no mesmo item.
+- Opções: título e subtítulo, categorias, só o que está disponível agora, mostrar preços, fotos e descrição. Variações (sabores, cores) aparecem juntas no mesmo item.
+
+### Design pelo Figma
+
+1. **Exportar para o Figma (1 folha):** baixa um SVG com a primeira folha A4 do catálogo, com as camadas nomeadas ("Título", "Faixa da categoria", "Fundo do cartão", "Preço", "Logo"…). Arraste o arquivo para o Figma.
+2. No Figma, mude cores, fontes, tamanhos e cantos; troque a imagem da camada "Logo" ou ponha uma imagem na "Fundo da página". **Não renomeie as camadas.**
+3. **Reimportar:** botão direito na folha → Copiar link, cole no painel e clique em Importar. A prévia mostra o design; **Salvar e usar este design** aplica a todas as páginas.
+4. **Design padrão / Design do Figma** troca entre os dois a qualquer momento.
+
+A leitura usa a API do Figma pela Edge Function `catalogo-figma` (publicada com `verify_jwt = false`; só admin, conferido no banco). Ela precisa do segredo **`FIGMA_TOKEN`** em Supabase → Edge Functions → Secrets: no Figma, *Settings → Security → Personal access tokens*, com permissão de leitura de arquivos (*File content: read*). Logo e fundo trocados no Figma são copiados para o Storage (`produtos/catalogo/`).
 
 ## Maquininhas e taxa do Pix
 
