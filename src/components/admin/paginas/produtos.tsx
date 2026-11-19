@@ -6,6 +6,7 @@ import { ChevronRight, Copy, MoreHorizontal, Pencil, Plus, Search, Trash2 } from
 import { DropdownMenu } from "radix-ui";
 import { toast } from "sonner";
 import { agruparVariacoes, textoBuscaProduto } from "@/lib/variacoes";
+import { modoVisibilidade, OPCOES_VISIBILIDADE, produtoVisivel, type Visibilidade } from "@/lib/visibilidade";
 import { combina } from "@/lib/busca";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { removerImagem } from "@/lib/admin/imagens";
@@ -42,6 +43,7 @@ export function PaginaProdutos() {
     return () => { ativo = false; };
   }, []);
   const metadata = useMemo(() => new Map(metadados.dados.map((m) => [m.produto_id, m])), [metadados.dados]);
+  const visivel = (p: Produto) => produtoVisivel({ ...p, saldo_venda: saldos?.get(p.id) });
   // Custo dos kits: automático, pela soma dos componentes (calculado no banco)
   const [custosKit, setCustosKit] = useState<Map<string, CustoKit>>(new Map());
   useEffect(() => {
@@ -95,14 +97,14 @@ export function PaginaProdutos() {
       const membros = p.variacoes ?? [p];
       if (filtro === "sem" ? !!p.categoria_id : filtro !== "todas" && !doFiltro.has(p.categoria_id ?? "")) return false;
       if (tipo === "kits" && !p.eh_kit || tipo === "variacoes" && !p.variacoes || tipo === "simples" && (p.eh_kit || p.variacoes)) return false;
-      if (situacao !== "todas" && !membros.some((v) => situacao === "pendente" ? v.preco_pendente : situacao === "ativos" ? v.ativo : !v.ativo)) return false;
+      if (situacao !== "todas" && !membros.some((v) => situacao === "pendente" ? v.preco_pendente : situacao === "ativos" ? produtoVisivel({ ...v, saldo_venda: saldos?.get(v.id) }) : !produtoVisivel({ ...v, saldo_venda: saldos?.get(v.id) }))) return false;
       return combina(`${textoBuscaProduto(p)} ${membros.map((v) => `${metadata.get(v.id)?.codigo ?? ""} ${metadata.get(v.id)?.codigo_pai ?? ""}`).join(" ")}`, busca);
     });
     if (ordem === "nome") lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     if (ordem === "preco") lista.sort((a, b) => a.preco - b.preco);
     if (coluna) lista.sort((a, b) => compararColuna(valores.get(a.id)!, valores.get(b.id)!, a.nome, b.nome, coluna.chave, coluna.desc));
     return lista;
-  }, [agrupados, filtro, busca, tipo, situacao, ordem, metadata, coluna, valores, doFiltro]);
+  }, [agrupados, filtro, busca, tipo, situacao, ordem, metadata, coluna, valores, doFiltro, saldos]);
   const podeOrdenar = filtro !== "todas" && !busca.trim() && tipo === "todos" && situacao === "todas" && ordem === "cadastro" && !coluna;
   // Clique no título: A→Z (menor primeiro), de novo Z→A, de novo volta à ordem anterior
   const ordenarPor = (chave: Coluna) => {
@@ -112,6 +114,12 @@ export function PaginaProdutos() {
 
   const atualizarLocal = (id: string, campos: Partial<Produto>) =>
     produtos.setDados((lista) => lista.map((p) => (p.id === id ? { ...p, ...campos } : p)));
+
+  const definirVisibilidade = async (p: Produto, visibilidade: Visibilidade) => {
+    const campos = { visibilidade, ativo: visibilidade !== "oculto" };
+    const ok = await salvar(supabaseNavegador().from("produtos").update(campos).eq("id", p.id), "Visibilidade atualizada");
+    if (ok) atualizarLocal(p.id, campos);
+  };
 
   const alternar = async (p: Produto, campo: "disponivel" | "destaque" | "ativo") => {
     const valor = !p[campo];
@@ -241,7 +249,8 @@ export function PaginaProdutos() {
                       <span className="ml-2 inline-flex flex-wrap gap-x-2 text-[.7rem] text-suave">
                         {p.eh_kit && <span className="text-rosa-texto">Kit</span>}
                         {p.preco_pendente && <span className="text-amarelo-texto">Preço pendente</span>}
-                        {!p.ativo && <span>Oculto</span>}
+                        {!membros.some(visivel) && <span>Oculto</span>}
+                        {!p.variacoes && modoVisibilidade(p) === "automatico" && <span>Automático pelo estoque</span>}
                         {!p.disponivel && !p.preco_pendente && !p.variacoes && <span>Venda pausada</span>}
                       </span>
                         </div>
@@ -269,7 +278,11 @@ export function PaginaProdutos() {
                           </DropdownMenu.Sub>}
                           {!p.variacoes && <>
                             <DropdownMenu.Separator className="my-1 h-px bg-borda" />
-                            {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja'], ['ativo', 'Visível na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa-texto" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
+                            {([['disponivel', 'Disponível para venda'], ['destaque', 'Destaque na loja']] as const).map(([campo, label]) => <DropdownMenu.CheckboxItem key={campo} checked={p[campo]} disabled={campo === "disponivel" && p.preco_pendente} onCheckedChange={() => void alternar(p, campo)} className="menu-produto-item justify-between disabled:opacity-50 data-[disabled]:opacity-50">{label}<span aria-hidden className={p[campo] ? "text-rosa-texto" : "text-suave"}>{p[campo] ? "✓" : "—"}</span></DropdownMenu.CheckboxItem>)}
+                            <DropdownMenu.Separator className="my-1 h-px bg-borda" />
+                            <DropdownMenu.RadioGroup value={modoVisibilidade(p)} onValueChange={(v) => void definirVisibilidade(p, v as Visibilidade)}>
+                              {OPCOES_VISIBILIDADE.map(([v, nome]) => <DropdownMenu.RadioItem key={v} value={v} className="menu-produto-item justify-between">{nome}<DropdownMenu.ItemIndicator aria-hidden>✓</DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>)}
+                            </DropdownMenu.RadioGroup>
                           </>}
                           <DropdownMenu.Separator className="my-1 h-px bg-borda" />
                           <Confirmar titulo={p.variacoes ? "Excluir produto e variações?" : "Excluir produto?"} descricao={p.variacoes ? `“${p.nome}” e suas ${membros.length} variações serão excluídos. Isso não pode ser desfeito.` : `“${p.nome}” será removido do cardápio. Isso não pode ser desfeito.`} onConfirmar={() => excluir(p)}>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { History, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { normalizar } from "@/lib/busca";
+import { modoVisibilidade, produtoVisivel, type Visibilidade } from "@/lib/visibilidade";
+import { SeletorVisibilidade } from "../visibilidade-produto";
 import { salvar, useTabela } from "@/lib/admin/dados";
 import { revalidarLoja } from "@/app/admin/acoes";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
@@ -62,6 +64,7 @@ export function PaginaEstoque() {
   const [situacao, setSituacao] = useState("todos");
   const [categoria, setCategoria] = useState("todas");
   const [saldos, setSaldos] = useState<Map<string, number> | null>(null);
+  const visivel = (p: Produto) => produtoVisivel({ ...p, saldo_venda: saldos?.get(p.id) });
   const [acao, setAcao] = useState<{ produto: Produto; modo: "entrada" | "ajuste" | "historico" } | null>(null);
 
   useEffect(() => {
@@ -88,7 +91,7 @@ export function PaginaEstoque() {
     .map((p) => ({
       produto: p,
       texto: normalizar(p.nome + " " + (metadata.get(p.id)?.codigo ?? "")),
-      tipo: p.eh_kit ? "kits" : metadata.get(p.id)?.origem?.tipo === "insumo" || categoriasInsumos.has(p.categoria_id ?? "") ? "insumos" : "simples",
+      tipo: p.eh_kit ? "kits" : p.consumo_proprio || metadata.get(p.id)?.origem?.tipo === "insumo" || categoriasInsumos.has(p.categoria_id ?? "") ? "insumos" : "simples",
     })), [produtos.dados, metadata, categoriasInsumos]);
   const contagens = useMemo(() => {
     const totais = { todos: indice.length, simples: 0, kits: 0, insumos: 0 };
@@ -104,11 +107,11 @@ export function PaginaEstoque() {
       if (filtro === "controlados" && !p.controla_estoque && !p.eh_kit) return false;
       if (filtro === "baixo" && (p.eh_kit || !p.controla_estoque || p.estoque > (p.volume_unidade ?? 1) * 5)) return false;
       if (tipo !== "todos" && tipoItem !== tipo) return false;
-      if (situacao !== "todos" && (situacao === "ativos" ? !p.ativo : p.ativo)) return false;
+      if (situacao !== "todos" && (situacao === "ativos" ? !produtoVisivel({ ...p, saldo_venda: saldos?.get(p.id) }) : produtoVisivel({ ...p, saldo_venda: saldos?.get(p.id) }))) return false;
       if (categoria !== "todas" && !doFiltro.has(p.categoria_id ?? "")) return false;
       return palavras.every((palavra) => texto.includes(palavra));
     }).map((item) => item.produto);
-  }, [indice, filtro, buscaAplicada, tipo, situacao, categoria, doFiltro]);
+  }, [indice, filtro, buscaAplicada, tipo, situacao, categoria, doFiltro, saldos]);
   const totalPaginas = Math.max(1, Math.ceil(lista.length / ITENS_POR_PAGINA));
   const paginaAtual = Math.min(pagina, totalPaginas);
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
@@ -127,10 +130,10 @@ export function PaginaEstoque() {
     if (!ok) atualizar(p.id, { controla_estoque: p.controla_estoque });
   };
 
-  const alternarAtivo = async (p: Produto) => {
-    atualizar(p.id, { ativo: !p.ativo });
-    const ok = await salvar(supabaseNavegador().from("produtos").update({ ativo: !p.ativo }).eq("id", p.id), null);
-    if (!ok) atualizar(p.id, { ativo: p.ativo });
+  const definirVisibilidade = async (p: Produto, visibilidade: Visibilidade) => {
+    const campos = { ativo: visibilidade !== "oculto", visibilidade };
+    const ok = await salvar(supabaseNavegador().from("produtos").update(campos).eq("id", p.id), null);
+    if (ok) atualizar(p.id, campos);
   };
 
   const baixos = produtos.dados.filter((p) => !p.eh_kit && p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5).length;
@@ -155,7 +158,7 @@ export function PaginaEstoque() {
             {ordenarArvore(categorias.dados).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, categorias.dados)}</option>)}
           </Select>
           <Select className="h-9" aria-label="Filtrar por situação" value={situacao} onChange={(e) => { setSituacao(e.target.value); setPagina(1); }}>
-            <option value="todos">Ativos e inativos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option>
+            <option value="todos">Visíveis e ocultos</option><option value="ativos">Visíveis</option><option value="inativos">Ocultos</option>
           </Select>
           <Select className="h-9" aria-label="Filtrar por estoque" value={filtro} onChange={(e) => { setFiltro(e.target.value as Filtro); setPagina(1); }}>
             <option value="controlados">Com controle</option><option value="baixo">Estoque baixo ({baixos})</option><option value="todos">Todos os produtos</option>
@@ -189,7 +192,7 @@ export function PaginaEstoque() {
                   const baixo = p.controla_estoque && p.estoque <= (p.volume_unidade ?? 1) * 5;
                   return <tr key={p.id} className="bg-superficie transition-colors hover:bg-superficie-2">
                     <td className="min-w-60 px-3 py-2">
-                      <span className={cn("leading-snug", !p.ativo && "text-suave")}>{p.nome}</span>
+                      <span className={cn("leading-snug", !visivel(p) && "text-suave")}>{p.nome}</span>
                       <span className="ml-2 text-[.7rem] text-suave">{p.eh_kit ? "Kit" : tipoProduto(p) === "insumos" ? "Insumo" : ""}</span>
                     </td>
                     <td className="px-3 py-2 text-xs text-suave">{meta?.codigo || "—"}</td>
@@ -201,7 +204,7 @@ export function PaginaEstoque() {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums" title={p.eh_kit ? "Kits possíveis pelo saldo dos componentes e escolhas obrigatórias." : "Quantidade de vendas completas possível pelo estoque físico."}>{saldo === null ? "—" : saldo.toLocaleString("pt-BR")}</td>
                     <td className="px-3 py-2"><div className="flex justify-center"><Interruptor disabled={!!p.eh_kit} checked={p.controla_estoque || !!p.eh_kit} onCheckedChange={() => void alternarControle(p)} label={"Controlar estoque de " + p.nome} /></div></td>
-                    <td className="px-3 py-2"><div className="flex justify-center"><Interruptor checked={p.ativo} onCheckedChange={() => void alternarAtivo(p)} label={p.nome + " ativo na loja"} /></div></td>
+                    <td className="px-3 py-2"><div className="flex items-center gap-2"><Interruptor checked={visivel(p)} onCheckedChange={() => void definirVisibilidade(p, visivel(p) ? "oculto" : "visivel")} label={p.nome + " visível na loja"} /><SeletorVisibilidade valor={modoVisibilidade(p)} rotulo={`Visibilidade: ${p.nome}`} onChange={(v) => void definirVisibilidade(p, v)} /></div></td>
                     <td className="px-2 py-1.5">
                       <div className="flex items-center justify-end gap-1">
                         {!p.eh_kit && p.controla_estoque ? <>

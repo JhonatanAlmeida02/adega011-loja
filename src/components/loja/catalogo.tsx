@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { combina } from "@/lib/busca";
 import type { DadosLoja, Produto } from "@/lib/tipos";
@@ -13,6 +14,16 @@ import { CardProduto } from "./card-produto";
 import { ProdutoDetalhe } from "./produto-detalhe";
 
 export function Catalogo({ loja }: { loja: DadosLoja }) {
+  const router = useRouter();
+  // Atualiza também uma vitrine que ficou aberta durante a entrada/venda de saldo.
+  // Só consulta com a aba visível; usa o cache/revalidação da loja.
+  useEffect(() => {
+    const atualizar = () => { if (document.visibilityState === "visible") router.refresh(); };
+    const timer = setInterval(atualizar, 60_000);
+    window.addEventListener("focus", atualizar);
+    document.addEventListener("visibilitychange", atualizar);
+    return () => { clearInterval(timer); window.removeEventListener("focus", atualizar); document.removeEventListener("visibilitychange", atualizar); };
+  }, [router]);
   const secoes = useMemo(() => montarSecoes(loja.categorias, loja.produtos), [loja.categorias, loja.produtos]);
   const nomeCategoria = useMemo(
     () => new Map(loja.categorias.map((c) => [c.id, rotuloCategoria(c, loja.categorias)])),

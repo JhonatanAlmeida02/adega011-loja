@@ -1,5 +1,8 @@
 "use client";
 
+import { modoVisibilidade, type Visibilidade } from "@/lib/visibilidade";
+import { SeletorVisibilidade } from "./visibilidade-produto";
+
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,7 +41,7 @@ function resumoCusto(preco: string, custo: number | undefined): { valor: string;
     prejuizo: lucro < 0,
   };
 }
-interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; codigo: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; disponivel: boolean; estoque: number; existente: boolean; vinculadoAgora?: boolean }
+interface VariacaoRascunho { foto_url: string | null; id: string; nome: string; codigo: string; preco: string; volume_unidade: number; unidades_pacote: number; ativo: boolean; visibilidade?: Visibilidade; disponivel: boolean; estoque: number; existente: boolean; vinculadoAgora?: boolean }
 
 function custoInvalido(valor: string): boolean {
   const centavos = paraCentavos(valor);
@@ -107,14 +110,15 @@ export function CadastroProduto({ produtoId }: { produtoId?: string }) {
 }
 
 function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boolean }) {
-  const [f, setF] = useState<Rascunho>({ ...dados.produto, preco: existente && !dados.produto.preco_pendente ? centavosParaCampo(dados.produto.preco) : "", nome: dados.produto.familia_nome || dados.produto.nome });
+  const novoInsumo = !existente && dados.categorias.some((c) => c.id === dados.produto.categoria_id && ["insumos", "consumo-proprio"].includes(c.slug));
+  const [f, setF] = useState<Rascunho>({ ...dados.produto, ...(novoInsumo ? { consumo_proprio: true, visibilidade: "oculto", ativo: false } as const : {}), preco: existente && !dados.produto.preco_pendente ? centavosParaCampo(dados.produto.preco) : "", nome: dados.produto.familia_nome || dados.produto.nome });
   const [comVariacoes, setComVariacoes] = useState(!!dados.produto.familia_id);
   const [atributo, setAtributo] = useState(dados.produto.variacao_atributo ?? "Sabor");
   // SKU do produto simples/kit; com variações, é o SKU do produto (cada variação tem o seu)
   const [sku, setSku] = useState(dados.produto.familia_id ? dados.codigoPai : dados.codigos[dados.produto.id] ?? "");
   const [variacoes, setVariacoes] = useState<VariacaoRascunho[]>(dados.variacoes.map((p) => ({
     foto_url: p.foto_url, id: p.id, nome: p.variacao_nome ?? "", codigo: dados.codigos[p.id] ?? "", preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1, unidades_pacote: p.unidades_pacote ?? 1,
-    ativo: p.ativo, disponivel: p.disponivel, estoque: p.estoque, existente: true,
+    ativo: p.ativo, visibilidade: modoVisibilidade(p), disponivel: p.disponivel, estoque: p.estoque, existente: true,
   })));
   const alterarVariacao = (id: string, campos: Partial<VariacaoRascunho>) => setVariacoes((vs) => vs.map((v) => v.id === id ? { ...v, ...campos } : v));
   const [fotoVariacaoId, setFotoVariacaoId] = useState(dados.variacoes[0]?.id ?? "");
@@ -137,6 +141,13 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
   const emSalvar = useRef(false);
   const montado = useRef(true);
   const set = <K extends keyof Rascunho>(k: K, v: Rascunho[K]) => setF((x) => ({ ...x, [k]: v }));
+  const marcarConsumo = (valor: boolean) => {
+    set("consumo_proprio", valor);
+    if (valor) {
+      set("visibilidade", "oculto"); set("ativo", false);
+      setVariacoes((vs) => vs.map((v) => ({ ...v, visibilidade: "oculto", ativo: false })));
+    }
+  };
 
   const vincularProduto = (p: Produto) => {
     if (variacoes.length >= 50 || variacoes.some((v) => v.id === p.id)) return;
@@ -146,7 +157,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     setVariacoes((vs) => vs.some((v) => v.id === p.id) ? vs : [...vs.filter((v) => v.id !== f.id || v.existente || v.nome.trim() || v.preco || v.foto_url), {
       id: p.id, nome: nome.slice(0, 35), codigo: "", foto_url: p.foto_url,
       preco: p.preco_pendente ? "" : centavosParaCampo(p.preco), volume_unidade: p.volume_unidade ?? 1,
-      unidades_pacote: p.unidades_pacote ?? 1, ativo: p.ativo, disponivel: p.disponivel,
+      unidades_pacote: p.unidades_pacote ?? 1, ativo: p.ativo, visibilidade: modoVisibilidade(p), disponivel: p.disponivel,
       estoque: p.estoque, existente: true, vinculadoAgora: true,
     }]);
     void supabaseNavegador().from("produto_importacao").select("custo,codigo").eq("produto_id", p.id).maybeSingle().then(({ data }) => {
@@ -198,7 +209,8 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
     let salvo = false;
     try {
       const p_dados = { categoria_id: f.categoria_id, nome: f.nome.trim(), descricao: f.descricao.trim(), preco,
-        foto_url: f.foto_url, destaque: f.destaque, disponivel: f.disponivel, ativo: f.ativo,
+        foto_url: f.foto_url, destaque: f.destaque, disponivel: f.disponivel, ativo: modoVisibilidade(f) !== "oculto",
+        visibilidade: modoVisibilidade(f), consumo_proprio: !!f.consumo_proprio,
         controla_estoque: f.controla_estoque, eh_kit: !!f.eh_kit,
         unidade_estoque: f.unidade_estoque ?? "un", volume_unidade: f.volume_unidade ?? 1, unidades_pacote: f.unidades_pacote ?? 1, vende_pacote: !!f.vende_pacote, codigo: sku.trim() };
       const sb = supabaseNavegador();
@@ -206,7 +218,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
         p_id: f.id, p_dados, p_componentes: f.eh_kit ? componentes : [],
         p_familia: comVariacoes ? f.familia_id ?? f.id : null,
         p_atributo: atributo.trim(),
-        p_variacoes: comVariacoes ? variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), codigo: v.codigo.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: v.ativo, disponivel: v.disponivel })) : [],
+        p_variacoes: comVariacoes ? variacoes.map((v) => ({ id: v.id, foto_url: v.foto_url, nome: v.nome.trim(), codigo: v.codigo.trim(), preco: paraCentavos(v.preco), volume_unidade: v.volume_unidade, unidades_pacote: v.unidades_pacote, ativo: modoVisibilidade(v) !== "oculto", visibilidade: modoVisibilidade(v), disponivel: v.disponivel })) : [],
         p_custos: custosParaSalvar.map(([produto_id, valor]) => ({ produto_id, custo: valor.trim() ? paraCentavos(valor) : null })),
       });
       if (error || !data) { setErros({ geral: error?.message ?? "Não foi possível salvar." }); return; }
@@ -272,7 +284,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
               if (tipo !== "variacoes" && comVariacoes && !sku && variacoes.length === 1) setSku(variacoes[0].codigo);
               if (kit && !componentes.length) setComponentes([{ componente_id: "", quantidade: 1 }]);
             }}><option value="simples">Produto simples</option><option value="variacoes">Produto com variações</option><option value="kit">Kit / fardo / copão</option></Select></Campo>
-            <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => set("categoria_id", e.target.value || null)}><option value="">Sem categoria</option>{ordenarArvore(dados.categorias).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, dados.categorias)}</option>)}</Select></Campo>
+            <Campo label="Categoria" htmlFor="p-cat"><Select id="p-cat" value={f.categoria_id ?? ""} onChange={(e) => { set("categoria_id", e.target.value || null); if (dados.categorias.some((c) => c.id === e.target.value && ["insumos", "consumo-proprio"].includes(c.slug))) marcarConsumo(true); }}><option value="">Sem categoria</option>{ordenarArvore(dados.categorias).map((c) => <option key={c.id} value={c.id}>{rotuloCategoria(c, dados.categorias)}</option>)}</Select></Campo>
             <Campo label={comVariacoes ? "SKU do produto" : "SKU (código)"} htmlFor="p-sku" erro={erros.sku} ajuda={comVariacoes ? "Código geral. Cada variação tem o seu SKU na aba Variações." : "Opcional. Código interno para achar o produto na busca."}><Input id="p-sku" value={sku} onChange={(e) => setSku(e.target.value)} maxLength={100} autoComplete="off" spellCheck={false} className="font-mono" aria-invalid={!!erros.sku} /></Campo>
             {!comVariacoes && <Campo label="Preço (R$)" htmlFor="p-preco" erro={erros.preco}><Input id="p-preco" inputMode="decimal" placeholder="0,00" value={f.preco} onChange={(e) => set("preco", e.target.value.replace(/[^\d,.]/g, ""))} aria-invalid={!!erros.preco} /></Campo>}
             {!comVariacoes && f.eh_kit && <CampoCustoKit preco={f.preco} custo={custoKit} onVerComposicao={() => setAba("composicao")} />}
@@ -283,9 +295,11 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
           </div>
           <Campo label="Descrição" htmlFor="p-desc" ajuda={`${f.descricao.length}/500 caracteres`}><Textarea id="p-desc" value={f.descricao} onChange={(e) => set("descricao", e.target.value)} maxLength={500} rows={3} /></Campo>
           <div className="flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-borda pt-4">
-            {!comVariacoes && <><OpcaoCadastro rotulo="Visível na loja" checked={f.ativo} onChange={(v) => set("ativo", v)} /><OpcaoCadastro rotulo="Disponível para venda" checked={f.disponivel} onChange={(v) => set("disponivel", v)} /></>}
+            {!comVariacoes && <><SeletorVisibilidade valor={modoVisibilidade(f)} onChange={(v) => { set("visibilidade", v); set("ativo", v !== "oculto"); }} /><OpcaoCadastro rotulo="Disponível para venda" checked={f.disponivel} onChange={(v) => set("disponivel", v)} /></>}
+            <OpcaoCadastro rotulo="Consumo próprio / insumo" checked={!!f.consumo_proprio} onChange={marcarConsumo} />
             <OpcaoCadastro rotulo="Destaque" checked={f.destaque} onChange={(v) => set("destaque", v)} />
           </div>
+          <p className="text-xs text-suave">Automático: aparece quando há saldo para vender. Sempre visível permite exibir como esgotado. Consumo próprio começa oculto; você pode alterar a visibilidade.</p>
         <section aria-label="Controle de estoque" className="space-y-4 border-t border-borda pt-5">
           <div><h2 className="font-semibold">Controle de estoque</h2><p className="mt-1 text-xs text-suave">Unidades, volume e saldo do produto.</p></div>
           {f.eh_kit ? <div className="rounded-lg border border-borda bg-superficie px-4 py-3 text-suave">O saldo deste kit é calculado pelos componentes. Faça as entradas nos produtos simples, na tela Estoque.</div> : <>
@@ -326,7 +340,7 @@ function Formulario({ dados, existente }: { dados: DadosCadastro; existente: boo
                   {f.unidade_estoque === "ml" && <td className="px-3 py-2"><Input id={`v-volume-${i}`} aria-label={`Volume da variação ${i + 1} (ml)`} type="number" min={1} max={1000000} value={v.volume_unidade} onChange={(e) => alterarVariacao(v.id, { volume_unidade: Number(e.target.value) })} /></td>}
                   {f.unidade_estoque !== "ml" && <td className="px-3 py-2"><Input aria-label={`Unidades por pacote da variação ${i + 1}`} type="number" min={1} max={1000000} step={1} value={v.unidades_pacote} onChange={(e) => alterarVariacao(v.id, { unidades_pacote: Number(e.target.value) })} /></td>}
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-suave">{v.estoque} <span className="text-[11px]">{f.unidade_estoque ?? "un"}</span></td>
-                  <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Visível: ${v.nome || `variação ${i + 1}`}`} checked={v.ativo} onChange={(ativo) => alterarVariacao(v.id, { ativo })} /></td>
+                  <td className="px-3 py-2"><SeletorVisibilidade valor={modoVisibilidade(v)} rotulo={`Visibilidade: ${v.nome || `variação ${i + 1}`}`} onChange={(visibilidade) => alterarVariacao(v.id, { visibilidade, ativo: visibilidade !== "oculto" })} /></td>
                   <td className="px-3 py-2"><OpcaoCadastro centralizada rotulo={`Disponível: ${v.nome || `variação ${i + 1}`}`} checked={v.disponivel} onChange={(disponivel) => alterarVariacao(v.id, { disponivel })} /></td>
                   <td className="px-2 py-2"><Button type="button" size="icone-sm" variant="fantasma" disabled={v.existente && !v.vinculadoAgora} title={v.vinculadoAgora ? "Retirar da grade sem excluir o produto" : v.existente ? "Desative a visibilidade para retirar esta opção da loja" : "Remover variação"} aria-label={`Remover variação ${i + 1}`} onClick={() => setVariacoes((vs) => vs.filter((x) => x.id !== v.id))}><Trash2 /></Button></td>
                 </tr>)}</tbody>

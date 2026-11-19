@@ -95,6 +95,8 @@ export interface Produto {
   destaque: boolean;
   disponivel: boolean;
   ativo: boolean;
+  visibilidade?: "automatico" | "visivel" | "oculto";
+  consumo_proprio?: boolean;
   ordem: number;
   controla_estoque: boolean;
   estoque: number;

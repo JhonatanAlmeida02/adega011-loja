@@ -1,4 +1,5 @@
 import type { Categoria, Produto } from "./tipos";
+import { produtoVisivel } from "./visibilidade";
 
 /** Subcategoria dentro da seção (nome null = produtos da própria categoria principal). */
 export interface GrupoSecao {
@@ -17,7 +18,7 @@ export interface Secao {
 }
 
 export function montarSecoes(categorias: Categoria[], produtos: Produto[]): Secao[] {
-  const visiveis = produtos.filter((p) => p.ativo).sort((a, b) => a.ordem - b.ordem);
+  const visiveis = produtos.filter(produtoVisivel).sort((a, b) => a.ordem - b.ordem);
   const ids = new Set(categorias.map((c) => c.id));
   const ehSub = (c: Categoria) => !!c.pai_id && c.pai_id !== c.id && ids.has(c.pai_id);
   const ativas = categorias.filter((c) => c.ativa).sort((a, b) => a.ordem - b.ordem);
