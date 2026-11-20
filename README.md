@@ -461,6 +461,10 @@ A leitura usa a API do Figma pela Edge Function `catalogo-figma` (publicada com 
 
 Em **Finanças → Contas e extrato**, uma conta é a **padrão para vendas** (Pix e cartão, do PDV e do site, entram nela) e outra pode ser a **padrão do caixa**: as vendas pagas **em dinheiro** (no PDV e na entrega) entram nela, como a gaveta. Sem conta do caixa marcada, tudo vai para a padrão. Trocar só muda as próximas vendas.
 
+No PDV (**Movimentar**), a gaveta é essa conta do caixa:
+- **Sangria** sai dela: sem destino vira saída (ex.: pagou o gelo); com uma conta escolhida vira transferência (ex.: depósito no banco).
+- **Reforço** entra nela: escolha de qual conta vem o dinheiro (transferência; já vem a primeira conta do tipo caixa) ou "Dinheiro de fora" (entrada).
+
 ## Maquininhas e taxa do Pix
 
 Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a taxa do **débito** e a do **crédito** (ex.: Stone 1,37% / 2,99%) e a taxa do Pix. Marque uma como **Padrão no PDV** e uma como **Padrão no site**.

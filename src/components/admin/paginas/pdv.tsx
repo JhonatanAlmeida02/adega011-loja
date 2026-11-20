@@ -716,28 +716,54 @@ function ConteudoOpcoes({
 
 /* ------------------------------------------------------------------ */
 
+type ContasGaveta = { gaveta: { id: string; nome: string } | null; contas: { id: string; nome: string; tipo: string }[] };
+
+/** Sangria e reforço: também lançam no financeiro (a gaveta é a conta padrão do caixa). */
 function MovimentoCaixa({ onFeito }: { onFeito: () => void }) {
   const [tipo, setTipo] = useState<"sangria" | "suprimento">("sangria");
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [contas, setContas] = useState<ContasGaveta | null>(null);
+  // "" = sangria sem destino (saída) / reforço de fora (entrada)
+  const [conta, setConta] = useState<{ sangria: string; suprimento: string } | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => {
+    let ativo = true;
+    supabaseNavegador().rpc("contas_reforco_caixa").then(({ data, error }) => {
+      if (!ativo || error || !data) return;
+      const c = data as ContasGaveta;
+      setContas(c);
+      // Reforço: já vem a primeira conta de dinheiro (tipo caixa) que não é a gaveta
+      setConta({ sangria: "", suprimento: c.contas.find((x) => x.tipo === "caixa")?.id ?? c.contas[0]?.id ?? "" });
+    });
+    return () => { ativo = false; };
+  }, []);
+  const escolhida = conta?.[tipo] ?? "";
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (enviando) return;
     const c = paraCentavos(valor);
     if (!c) return toast.error("Informe o valor.");
-    const { error } = await supabaseNavegador().rpc("movimentar_caixa", { p_tipo: tipo, p_valor: c, p_descricao: descricao || null });
-    if (error) return toast.error(error.message);
-    toast.success(`${tipo === "sangria" ? "Sangria" : "Suprimento"} de ${formatarPreco(c)} registrada`);
-    onFeito();
+    setEnviando(true);
+    try {
+      const { error } = await supabaseNavegador().rpc("movimentar_caixa", { p_tipo: tipo, p_valor: c, p_descricao: descricao || null, p_conta: escolhida || null });
+      if (error) return toast.error(error.message);
+      toast.success(`${tipo === "sangria" ? "Sangria" : "Reforço"} de ${formatarPreco(c)} registrado`);
+      onFeito();
+    } finally {
+      setEnviando(false);
+    }
   };
+  const gaveta = contas?.gaveta?.nome;
   return (
     <form onSubmit={enviar} className="space-y-5 px-5 pt-4 pb-6 pr-16 md:px-6 md:pt-6">
       <SheetTitle className="titulo text-3xl">Movimentar caixa</SheetTitle>
-      <SheetDescription className="text-suave">Sangria tira dinheiro da gaveta; suprimento coloca.</SheetDescription>
+      <SheetDescription className="text-suave">Sangria tira dinheiro da gaveta; reforço coloca.</SheetDescription>
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de movimento">
         {(
           [
             ["sangria", "Sangria", ArrowUpFromLine],
-            ["suprimento", "Suprimento", ArrowDownToLine],
+            ["suprimento", "Reforço", ArrowDownToLine],
           ] as const
         ).map(([id, rotulo, Icone]) => (
           <button
@@ -758,11 +784,25 @@ function MovimentoCaixa({ onFeito }: { onFeito: () => void }) {
       <Campo label="Valor (R$)" htmlFor="mv-valor">
         <Input id="mv-valor" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value.replace(/[^\d,.]/g, ""))} className="font-mono" autoFocus />
       </Campo>
+      {contas && conta && (
+        <Campo label={tipo === "sangria" ? "Para onde vai o dinheiro" : "De onde vem o dinheiro"} htmlFor="mv-conta"
+          ajuda={gaveta
+            ? tipo === "sangria"
+              ? `Sai de ${gaveta}. ${escolhida ? "Vira transferência para a conta escolhida." : "Fica como saída (ex.: pagou algo com o dinheiro da gaveta)."}`
+              : `Entra em ${gaveta}. ${escolhida ? "Sai da conta escolhida (transferência)." : "Conta como entrada nova no financeiro."}`
+            : "Sem conta padrão no financeiro: o movimento fica só no caixa."}>
+          <Select id="mv-conta" value={escolhida} onChange={(e) => setConta({ ...conta, [tipo]: e.target.value })}>
+            {tipo === "suprimento" && contas.contas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+            <option value="">{tipo === "sangria" ? "Gasto / retirada (só sai da gaveta)" : "Dinheiro de fora (entrada nova)"}</option>
+            {tipo === "sangria" && contas.contas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+          </Select>
+        </Campo>
+      )}
       <Campo label="Motivo (opcional)" htmlFor="mv-desc">
-        <Input id="mv-desc" placeholder="Ex.: pagamento do gelo" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={120} />
+        <Input id="mv-desc" placeholder={tipo === "sangria" ? "Ex.: pagamento do gelo, depósito no banco" : "Ex.: troco extra"} value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={120} />
       </Campo>
-      <Button type="submit" size="lg" className="w-full">
-        Registrar
+      <Button type="submit" size="lg" className="w-full" disabled={enviando}>
+        {enviando ? "Registrando…" : "Registrar"}
       </Button>
     </form>
   );
@@ -831,7 +871,7 @@ function FecharCaixa({ caixa, onFechado }: { caixa: ResumoCaixa; onFechado: () =
           <dd className="font-mono">{formatarPreco(porPagamento.find((p) => p.id === "dinheiro")!.total)}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt>Suprimentos</dt>
+          <dt>Reforços</dt>
           <dd className="font-mono">+ {formatarPreco(r.suprimentos)}</dd>
         </div>
         <div className="flex justify-between py-2">
