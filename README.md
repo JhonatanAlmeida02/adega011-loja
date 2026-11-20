@@ -457,6 +457,10 @@ Em **Catálogo → Exportar catálogo** o painel monta um catálogo com os produ
 
 A leitura usa a API do Figma pela Edge Function `catalogo-figma` (publicada com `verify_jwt = false`; só admin, conferido no banco). Ela precisa do segredo **`FIGMA_TOKEN`** em Supabase → Edge Functions → Secrets: no Figma, *Settings → Security → Personal access tokens*, com permissão de leitura de arquivos (*File content: read*). Logo e fundo trocados no Figma são copiados para o Storage (`produtos/catalogo/`).
 
+## Contas: padrão para vendas e padrão do caixa
+
+Em **Finanças → Contas e extrato**, uma conta é a **padrão para vendas** (Pix e cartão, do PDV e do site, entram nela) e outra pode ser a **padrão do caixa**: as vendas pagas **em dinheiro** (no PDV e na entrega) entram nela, como a gaveta. Sem conta do caixa marcada, tudo vai para a padrão. Trocar só muda as próximas vendas.
+
 ## Maquininhas e taxa do Pix
 
 Em **Loja → Configurações → Maquininhas e taxas** cadastre cada maquininha com a taxa do **débito** e a do **crédito** (ex.: Stone 1,37% / 2,99%) e a taxa do Pix. Marque uma como **Padrão no PDV** e uma como **Padrão no site**.

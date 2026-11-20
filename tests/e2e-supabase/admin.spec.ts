@@ -1172,3 +1172,48 @@ test("catálogo: descrição opcional, exportar folha para o Figma, reimportar o
   await expect(folha.getByRole("region", { name: "Cervejas" }).getByRole("heading", { level: 3 })).toHaveCSS("background-color", "rgb(23, 23, 23)");
   await page.context().close();
 });
+
+test("financeiro: conta padrão do caixa recebe as vendas em dinheiro do PDV", async ({ browser }) => {
+  const sufixo = Date.now().toString(36).slice(-4).toUpperCase();
+  const gaveta = `Gaveta ${sufixo}`;
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.goto("/admin/financeiro");
+  await page.getByRole("button", { name: "Nova conta" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("Nome da conta / local").fill(gaveta);
+  await form.getByLabel("Tipo").selectOption("caixa");
+  await form.getByRole("checkbox", { name: /Padrão do caixa/ }).check();
+  await form.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Financeiro atualizado")).toBeVisible();
+  const linha = page.getByRole("row").filter({ hasText: gaveta });
+  await expect(linha).toContainText("Padrão do caixa · dinheiro");
+  await expect(linha).toContainText("R$ 0,00");
+  await expect(page.getByText(`as pagas em dinheiro, em ${gaveta}`)).toBeVisible();
+
+  // Venda em dinheiro no PDV → entra na conta do caixa
+  await page.goto("/admin/pdv");
+  await page.getByLabel("Troco inicial (R$)").fill("0");
+  await page.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(page.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+  await page.getByRole("button", { name: "Vender IPA 473 ml" }).click();
+  const venda = page.getByRole("complementary", { name: "Venda atual" });
+  await venda.getByRole("button", { name: "Ir para pagamento", exact: true }).click();
+  await venda.getByRole("button", { name: "Finalizar · R$ 14,90" }).click();
+  await page.getByRole("dialog", { name: /Venda #/ }).getByRole("button", { name: "Nova venda" }).click();
+  await page.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = page.getByRole("dialog", { name: "Fechar caixa" });
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("14,90");
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+  await expect(page.getByText(/Caixa fechado/).first()).toBeVisible();
+
+  await page.goto("/admin/financeiro");
+  await expect(page.getByRole("row").filter({ hasText: gaveta })).toContainText("R$ 14,90");
+
+  // Desmarca para não mudar o destino nos outros testes
+  await page.getByRole("row").filter({ hasText: gaveta }).getByRole("button", { name: "Editar" }).click();
+  await page.getByRole("dialog").getByRole("checkbox", { name: /Padrão do caixa/ }).uncheck();
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("row").filter({ hasText: gaveta })).not.toContainText("Padrão do caixa");
+  await page.context().close();
+});
