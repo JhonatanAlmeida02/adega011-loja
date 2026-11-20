@@ -1217,3 +1217,68 @@ test("financeiro: conta padrão do caixa recebe as vendas em dinheiro do PDV", a
   await expect(page.getByRole("row").filter({ hasText: gaveta })).not.toContainText("Padrão do caixa");
   await page.context().close();
 });
+
+test("caixa: sangria sai da conta do caixa e o reforço vem da conta escolhida", async ({ browser }) => {
+  const sufixo = Date.now().toString(36).slice(-4).toUpperCase();
+  const gaveta = `Gaveta ${sufixo}`;
+  const reserva = `Reserva ${sufixo}`;
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.goto("/admin/financeiro");
+  for (const [nome, caixa, saldo] of [[gaveta, true, "100"], [reserva, false, "50"]] as const) {
+    await page.getByRole("button", { name: "Nova conta" }).click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("Nome da conta / local").fill(nome);
+    await form.getByLabel("Tipo").selectOption("caixa");
+    await form.getByLabel("Saldo que já existe nesta conta (R$)").fill(saldo);
+    if (caixa) await form.getByRole("checkbox", { name: /Padrão do caixa/ }).check();
+    await form.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByRole("row").filter({ hasText: nome })).toBeVisible();
+  }
+
+  await page.goto("/admin/pdv");
+  await page.getByLabel("Troco inicial (R$)").fill("0");
+  await page.getByRole("button", { name: "Abrir caixa" }).click();
+  await expect(page.getByText("Caixa aberto. Boas vendas!")).toBeVisible();
+
+  // Sangria: sai da gaveta
+  await page.getByRole("button", { name: "Movimentar" }).click();
+  let mov = page.getByRole("dialog", { name: "Movimentar caixa" });
+  await mov.getByLabel("Valor (R$)").fill("30");
+  await expect(mov.getByLabel("Para onde vai o dinheiro")).toHaveValue("");
+  await expect(mov.getByText(`Sai de ${gaveta}.`)).toBeVisible();
+  await mov.getByRole("button", { name: "Registrar" }).click();
+  await expect(page.getByText("Sangria de R$ 30,00 registrado")).toBeVisible();
+
+  // Reforço: escolhe a reserva
+  await page.getByRole("button", { name: "Movimentar" }).click();
+  mov = page.getByRole("dialog", { name: "Movimentar caixa" });
+  await mov.getByRole("radio", { name: "Reforço" }).click();
+  await mov.getByLabel("Valor (R$)").fill("20");
+  await mov.getByLabel("De onde vem o dinheiro").selectOption({ label: reserva });
+  await expect(mov.getByText(`Entra em ${gaveta}.`)).toBeVisible();
+  await mov.getByRole("button", { name: "Registrar" }).click();
+  await expect(page.getByText("Reforço de R$ 20,00 registrado")).toBeVisible();
+
+  await page.getByRole("button", { name: "Fechar caixa" }).click();
+  const fechar = page.getByRole("dialog", { name: "Fechar caixa" });
+  await fechar.getByLabel("Dinheiro contado na gaveta (R$)").fill("0");
+  await fechar.getByRole("button", { name: "Fechar caixa" }).click();
+  await expect(page.getByText(/Caixa fechado/).first()).toBeVisible();
+
+  // Financeiro: gaveta 100 − 30 + 20 = 90; reserva 50 − 20 = 30
+  await page.goto("/admin/financeiro");
+  await expect(page.getByRole("row").filter({ hasText: gaveta })).toContainText("R$ 90,00");
+  await expect(page.getByRole("row").filter({ hasText: reserva })).toContainText("R$ 30,00");
+  await page.getByRole("button", { name: "Movimentações" }).click();
+  await expect(page.getByText(`Reforço do caixa (de ${reserva})`)).toBeVisible();
+  await expect(page.getByText("Sangria do caixa").first()).toBeVisible();
+  await page.getByRole("button", { name: "Contas e saldos" }).click();
+
+  // Tira a marcação para não mexer nos outros testes
+  await page.getByRole("row").filter({ hasText: gaveta }).getByRole("button", { name: "Editar" }).click();
+  await page.getByRole("dialog").getByRole("checkbox", { name: /Padrão do caixa/ }).uncheck();
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("row").filter({ hasText: gaveta })).not.toContainText("Padrão do caixa");
+  await page.context().close();
+});
