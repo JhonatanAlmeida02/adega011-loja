@@ -3,6 +3,8 @@ import type { ItemPedido, StatusPedido, FormaPagamento } from "./tipos";
 export interface ContaFinanceira {
   id: string; nome: string; tipo: "caixa" | "banco" | "carteira" | "outro";
   padrao: boolean; ativa: boolean; saldo: number; criado_em: string;
+  /** Vendas pagas em dinheiro (PDV e entrega) entram nesta conta. */
+  padrao_caixa?: boolean;
 }
 export interface LancamentoFinanceiro {
   id: string; tipo: string; origem_id: string | null; destino_id: string | null;
