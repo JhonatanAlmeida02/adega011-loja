@@ -25,7 +25,7 @@ const fmtData = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo"
 const rodapeTexto = () => `Preços e disponibilidade de ${fmtData.format(new Date())}, sujeitos a alteração. Venda proibida para menores de 18 anos. Beba com moderação.`;
 
 type TemaSalvo = { usar_figma: boolean; tema: unknown; figma_link: string | null };
-type Importado = { tema: TemaCatalogo; link: string; encontradas: string[]; faltando: string[] };
+type Importado = { tema: TemaCatalogo; link: string; encontradas: string[]; faltando: string[]; decoracoes: number };
 
 /** Imagem (foto ou logo) como data:image/jpeg reduzida, para embutir no SVG do Figma. */
 async function imagemEmbutida(url: string, tamanho: number, tipo: "image/jpeg" | "image/png"): Promise<string | null> {
@@ -169,8 +169,13 @@ export function PaginaCatalogoExportar() {
       await Promise.all(fotos.map(async (url) => { const d = await imagemEmbutida(url, 360, "image/jpeg"); if (d) imagens.set(url, d); }));
     }
     const logo = await imagemEmbutida(tema.logo ?? LOGO_PADRAO, 256, "image/png");
+    // Elementos adicionados antes no Figma voltam para a folha, para continuar editando
+    const decoracoes = (await Promise.all(tema.decoracoes.map(async (d) => {
+      const href = await imagemEmbutida(d.imagem, 1600, "image/png");
+      return href ? [{ ...d, href }] : [];
+    }))).flat();
     const svg = gerarFolhaSvg(catalogo, tema, {
-      nome, subtitulo, contato, rodape: rodapeTexto(), mostrarPrecos, mostrarFotos, mostrarDescricao, imagens, logo,
+      nome, subtitulo, contato, rodape: rodapeTexto(), mostrarPrecos, mostrarFotos, mostrarDescricao, imagens, logo, decoracoes,
     });
     baixar(svg, "image/svg+xml", `modelo-catalogo-${nomeArquivo(nome)}.svg`);
     toast.success("Modelo baixado: arraste o arquivo para o Figma");
@@ -227,8 +232,19 @@ export function PaginaCatalogoExportar() {
         </p>
       </div>
 
-      <div ref={folha} className="area-catalogo overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5 print:rounded-none print:shadow-none print:ring-0" data-testid="folha-catalogo"
+      <div ref={folha} className="area-catalogo relative isolate overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5 print:rounded-none print:shadow-none print:ring-0" data-testid="folha-catalogo"
         style={{ backgroundColor: tema.fundo, backgroundImage: tema.fundoImagem ? `url("${tema.fundoImagem}")` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
+        {tema.decoracoes.length > 0 && (
+          // Elementos adicionados no Figma: posição em % da folha A4; no PDF repetem em toda página (globals.css)
+          <div aria-hidden className="decoracoes-catalogo pointer-events-none absolute inset-x-0 top-0 z-0 aspect-[794/1123]">
+            {tema.decoracoes.map((d, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={`${d.imagem}-${i}`} src={d.imagem} alt="" className="decoracao-catalogo absolute max-w-none"
+                style={{ left: `${d.x}%`, top: `${d.y}%`, width: `${d.largura}%`, height: `${d.altura}%`,
+                  "--x": d.x, "--y": d.y, "--l": d.largura, "--a": d.altura } as React.CSSProperties} />
+            ))}
+          </div>
+        )}
         <FolhaCatalogo catalogo={catalogo} tema={tema} nome={nome} subtitulo={subtitulo} contato={contato} endereco={config.endereco}
           mostrarPrecos={mostrarPrecos} mostrarFotos={mostrarFotos} mostrarDescricao={mostrarDescricao} />
       </div>
@@ -281,10 +297,17 @@ function DesignFigma({ temaSalvo, importado, onImportado, onSalvo, onExportar, p
         const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
         return void setErro(corpo?.erro ?? "Não foi possível ler o Figma agora.");
       }
-      const r = data as { tema: Record<string, unknown>; imagens: { logo?: string; fundo?: string }; encontradas: string[]; faltando: string[] };
+      type Deco = { caminho: string; x: number; y: number; largura: number; altura: number };
+      const r = data as {
+        tema: Record<string, unknown>; imagens: { logo?: string; fundo?: string; decoracoes?: Deco[] };
+        encontradas: string[]; faltando: string[];
+      };
       const publica = (caminho?: string) => (caminho ? sb.storage.from(BUCKET_FOTOS).getPublicUrl(caminho).data.publicUrl : undefined);
-      const tema = normalizarTema({ ...r.tema, logo: publica(r.imagens.logo), fundoImagem: publica(r.imagens.fundo) });
-      onImportado({ tema, link: link.trim(), encontradas: r.encontradas, faltando: r.faltando });
+      const tema = normalizarTema({
+        ...r.tema, logo: publica(r.imagens.logo), fundoImagem: publica(r.imagens.fundo),
+        decoracoes: (r.imagens.decoracoes ?? []).map(({ caminho, ...d }) => ({ ...d, imagem: publica(caminho) })),
+      });
+      onImportado({ tema, link: link.trim(), encontradas: r.encontradas, faltando: r.faltando, decoracoes: tema.decoracoes.length });
       toast.success("Design lido do Figma. Confira a prévia e salve.");
     } finally {
       setOcupado(null);
@@ -350,6 +373,7 @@ function DesignFigma({ temaSalvo, importado, onImportado, onSalvo, onExportar, p
           <p className="mt-1 text-suave">
             Li {importado.encontradas.length} de {importado.encontradas.length + importado.faltando.length} camadas
             {importado.faltando.length ? ` (sem: ${importado.faltando.join(", ")}; essas ficam como no padrão)` : ""}.
+            {importado.decoracoes > 0 && ` E ${importado.decoracoes === 1 ? "1 elemento novo" : `${importado.decoracoes} elementos novos`} (logo, marca d’água, figuras…), que ${importado.decoracoes === 1 ? "aparece" : "aparecem"} em todas as páginas.`}
           </p>
           <div className="mt-2 flex gap-2">
             <Button size="sm" onClick={() => void salvar(true, importado)} disabled={!!ocupado}>{ocupado === "salvar" ? "Salvando…" : "Salvar e usar este design"}</Button>
@@ -368,7 +392,7 @@ function FolhaCatalogo({ catalogo, tema, nome, subtitulo, contato, endereco, mos
   // Data do rodapé só no navegador (evita diferença com o servidor)
   const rodape = useSyncExternalStore(semInscricao, rodapeTexto, () => "");
   return (
-    <div className="p-6 sm:p-8 print:p-0">
+    <div className="relative z-10 p-6 sm:p-8 print:p-0">
       <header className="mb-6 flex items-center gap-4 pb-4" style={{ borderBottom: `4px solid ${tema.destaque}` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={tema.logo ?? LOGO_PADRAO} alt="" className="size-16 shrink-0 object-contain" />

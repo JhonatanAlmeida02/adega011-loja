@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     }
 
     // Logo e fundo trocados no Figma: baixa e guarda no Storage
-    const imagens: Record<string, string> = {};
+    const imagens: Record<string, unknown> = {};
     const refs = Object.entries(extraido.imagens).filter(([, ref]) => ref) as [string, string][];
     if (refs.length && !FAKE) {
       urlsImagens = (await figma(`/files/${link.arquivo}/images`, token))?.meta?.images ?? {};
@@ -116,7 +116,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    return resposta(200, { tema: extraido.tema, imagens, encontradas: extraido.encontradas, faltando: extraido.faltando });
+    // Elementos novos da folha: o Figma desenha cada um em PNG (fundo transparente)
+    if (extraido.decoracoes.length && !FAKE) {
+      const ids = extraido.decoracoes.map((d) => d.id).join(",");
+      const png = (await figma(`/images/${link.arquivo}?ids=${encodeURIComponent(ids)}&format=png&scale=2`, token))?.images ?? {};
+      const decoracoes = [];
+      for (const d of extraido.decoracoes) {
+        if (!png[d.id]) continue;
+        decoracoes.push({ caminho: await guardarImagem(png[d.id]), x: d.x, y: d.y, largura: d.largura, altura: d.altura });
+      }
+      imagens.decoracoes = decoracoes;
+    }
+
+    return resposta(200, {
+      tema: extraido.tema, imagens, encontradas: extraido.encontradas, faltando: extraido.faltando,
+      decoracoes: extraido.decoracoes.length,
+    });
   } catch (e) {
     console.error("[catalogo-figma]", e);
     return resposta(502, { erro: e instanceof Error ? e.message : "Não foi possível ler o Figma agora." });

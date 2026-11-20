@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CAMADAS as CAMADAS_FUNCAO, extrairTema, lerLinkFigma, type NoFigma } from "../../supabase/functions/catalogo-figma/extrair";
+import { CAMADAS as CAMADAS_FUNCAO, decoracoesDaFolha, extrairTema, lerLinkFigma, type NoFigma } from "../../supabase/functions/catalogo-figma/extrair";
 import { CAMADAS, linksFontes, normalizarTema, TEMA_PADRAO } from "../../src/lib/catalogo-tema";
 import { escaparXml, gerarFolhaSvg, quebrarTexto } from "../../src/lib/catalogo-svg";
 import type { SecaoCatalogo } from "../../src/lib/catalogo-exportar";
@@ -100,4 +100,39 @@ test("folha para o Figma: uma página, camadas com nome, texto escapado e quebra
   assert.ok(!semDescricao.includes('id="Descrição"') && !semDescricao.includes('id="Preço"'));
   assert.deepEqual(quebrarTexto("Cerveja Pilsen Lata 350 ml gelada", 12, 2), ["Cerveja", "Pilsen Lata…"]);
   assert.equal(escaparXml(`"a'<`), "&quot;a&apos;&lt;");
+});
+
+test("elementos novos na folha viram decorações com posição em % (o resto do modelo não)", () => {
+  const caixa = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+  const documento: NoFigma = { name: "Page", type: "CANVAS", children: [
+    { id: "1:1", name: "modelo-catalogo-adega011 1", type: "FRAME", absoluteBoundingBox: caixa(1000, 500, 794, 1123), children: [
+      { id: "1:2", name: "Fundo da página", type: "VECTOR", absoluteBoundingBox: caixa(1000, 500, 794, 1123), fills: solido(1, 1, 1) },
+      { id: "1:3", name: "Título", type: "TEXT", absoluteBoundingBox: caixa(1038, 538, 120, 40) },
+      { id: "1:4", name: "Categoria: Copões", type: "GROUP", absoluteBoundingBox: caixa(1038, 638, 718, 31) },
+      { id: "1:5", name: "Cartão", type: "GROUP", absoluteBoundingBox: caixa(1038, 677, 173, 200) },
+      // O logo grande que o cliente colou no canto (passa da borda: é cortado)
+      { id: "1:9", name: "logo-selo 1", type: "RECTANGLE", absoluteBoundingBox: caixa(1397, 943, 500, 500), fills: [{ type: "IMAGE", imageRef: "x" }] },
+      { id: "1:10", name: "Faixa escondida", type: "RECTANGLE", visible: false, absoluteBoundingBox: caixa(1000, 500, 10, 10) },
+      { id: "1:11", name: "Decoração 1", type: "RECTANGLE", absoluteBoundingBox: caixa(1000, 500, 794, 100) },
+    ] },
+  ] };
+  assert.deepEqual(decoracoesDaFolha(documento), [
+    { id: "1:9", x: 50, y: 39.45, largura: 62.97, altura: 44.52 },
+    { id: "1:11", x: 0, y: 0, largura: 100, altura: 8.9 },
+  ]);
+  assert.equal(extrairTema(documento).decoracoes.length, 2);
+  // Sem a camada "Fundo da página" não dá para saber onde é a folha
+  assert.deepEqual(decoracoesDaFolha({ name: "x", children: [{ id: "2:1", name: "Logo grande", absoluteBoundingBox: caixa(0, 0, 1, 1) }] }), []);
+
+  const tema = normalizarTema({ decoracoes: [
+    { imagem: "https://abc.supabase.co/storage/v1/object/public/produtos/catalogo/a1.png", x: 50, y: 39.45, largura: 62.97, altura: 44.52 },
+    { imagem: "https://evil.example/a.png", x: 0, y: 0, largura: 10, altura: 10 },
+    { imagem: "https://abc.supabase.co/storage/v1/object/public/produtos/catalogo/b2.png", x: "0", y: 0, largura: 10, altura: 10 },
+  ] });
+  assert.deepEqual(tema.decoracoes, [{ imagem: "https://abc.supabase.co/storage/v1/object/public/produtos/catalogo/a1.png", x: 50, y: 39.45, largura: 62.97, altura: 44.52 }]);
+
+  // Reexportar devolve a decoração para a folha, para continuar editando no Figma
+  const svg = gerarFolhaSvg([], TEMA_PADRAO, { nome: "A", subtitulo: "", contato: [], rodape: "", mostrarPrecos: true, mostrarFotos: true,
+    mostrarDescricao: true, imagens: new Map(), logo: null, decoracoes: [{ href: "data:image/png;base64,AA==", x: 50, y: 50, largura: 10, altura: 10 }] });
+  assert.ok(svg.includes('<image id="Decoração 1" x="397" y="561.5" width="79.4" height="112.3"'));
 });

@@ -27,8 +27,11 @@ export const CAMADAS = {
 
 type Cor = { r: number; g: number; b: number; a?: number };
 type Pintura = { type: string; visible?: boolean; color?: Cor; imageRef?: string };
+type Caixa = { x: number; y: number; width: number; height: number };
 export interface NoFigma {
+  id?: string;
   name?: string;
+  absoluteBoundingBox?: Caixa | null;
   type?: string;
   visible?: boolean;
   fills?: Pintura[];
@@ -78,11 +81,16 @@ function estiloTexto(no: NoFigma | undefined) {
   return e;
 }
 
+/** Elemento que o cliente adicionou na folha: vira imagem na mesma posição (em % da folha). */
+export interface Decoracao { id: string; x: number; y: number; largura: number; altura: number }
+
 export interface Extraido {
   /** Tema parcial (o painel completa o que faltar com o padrão e valida). */
   tema: Record<string, unknown>;
   /** imageRef das imagens trocadas no Figma. */
   imagens: { logo?: string; fundo?: string };
+  /** Elementos novos da folha (logo grande, marca d'água, faixas…), na ordem de baixo para cima. */
+  decoracoes: Decoracao[];
   encontradas: string[];
   faltando: string[];
 }
@@ -137,9 +145,50 @@ export function extrairTema(raiz: NoFigma): Extraido {
   return {
     tema,
     imagens,
+    decoracoes: decoracoesDaFolha(raiz),
     encontradas: todas.filter((n) => pegar(n)),
     faltando: todas.filter((n) => !pegar(n)),
   };
+}
+
+const CONHECIDAS = new Set(Object.values(CAMADAS).map(normalizarNome));
+const pct = (v: number) => Math.round(v * 100) / 100;
+export const MAX_DECORACOES = 8;
+
+/**
+ * Tudo o que está na folha (ao lado da camada "Fundo da página") e não faz parte do
+ * modelo: logo grande, marca d'água, faixas, figuras, textos novos. A posição e o
+ * tamanho vão em % da folha, para repetir igual em todas as páginas.
+ */
+export function decoracoesDaFolha(raiz: NoFigma): Decoracao[] {
+  // Acha a folha: o nó que tem "Fundo da página" como filho direto
+  const alvo = normalizarNome(CAMADAS.fundo);
+  let folha: NoFigma | null = null;
+  const pilha: NoFigma[] = [raiz];
+  while (pilha.length && !folha) {
+    const no = pilha.shift()!;
+    if (no.children?.some((f) => f.name && normalizarNome(f.name) === alvo)) folha = no;
+    else if (no.children) pilha.push(...no.children);
+  }
+  const fundo = folha?.children?.find((f) => f.name && normalizarNome(f.name) === alvo);
+  const pagina = fundo?.absoluteBoundingBox;
+  if (!folha || !pagina || pagina.width <= 0 || pagina.height <= 0) return [];
+  const decoracoes: Decoracao[] = [];
+  for (const no of folha.children ?? []) {
+    if (no === fundo || no.visible === false || !no.id || !no.absoluteBoundingBox) continue;
+    const nome = normalizarNome(no.name ?? "");
+    if (CONHECIDAS.has(nome) || nome.startsWith("categoria:")) continue;
+    const c = no.absoluteBoundingBox;
+    if (c.width <= 0 || c.height <= 0) continue;
+    decoracoes.push({
+      id: no.id,
+      x: pct(((c.x - pagina.x) / pagina.width) * 100),
+      y: pct(((c.y - pagina.y) / pagina.height) * 100),
+      largura: pct((c.width / pagina.width) * 100),
+      altura: pct((c.height / pagina.height) * 100),
+    });
+  }
+  return decoracoes.slice(-MAX_DECORACOES);
 }
 
 /** Chave do arquivo e id da folha a partir do link do Figma. */

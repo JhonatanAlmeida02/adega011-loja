@@ -8,6 +8,9 @@ import type { CSSProperties } from "react";
 
 export interface EstiloTexto { cor: string; fonte: string; peso: number; tamanho: number }
 
+/** Elemento adicionado no Figma (logo grande, marca d'água…): imagem na mesma posição em todas as páginas, em % da folha A4. */
+export interface Decoracao { imagem: string; x: number; y: number; largura: number; altura: number }
+
 export interface TemaCatalogo {
   fundo: string;
   /** Imagem de fundo da página (Storage). */
@@ -26,6 +29,7 @@ export interface TemaCatalogo {
   preco: EstiloTexto;
   variacoes: EstiloTexto;
   rodape: EstiloTexto;
+  decoracoes: Decoracao[];
 }
 
 export const TEMA_PADRAO: TemaCatalogo = {
@@ -44,6 +48,7 @@ export const TEMA_PADRAO: TemaCatalogo = {
   preco: { cor: "#e0406f", fonte: "DM Sans", peso: 900, tamanho: 16 },
   variacoes: { cor: "#404040", fonte: "DM Sans", peso: 400, tamanho: 11 },
   rodape: { cor: "#737373", fonte: "DM Sans", peso: 400, tamanho: 11 },
+  decoracoes: [],
 };
 
 const TEXTOS = ["titulo", "subtitulo", "contato", "categoria", "subcategoria", "nome", "descricao", "preco", "variacoes", "rodape"] as const;
@@ -69,6 +74,20 @@ function texto(v: unknown, padrao: EstiloTexto): EstiloTexto {
   };
 }
 
+const porcento = (v: unknown, min: number, max: number) =>
+  typeof v === "number" && Number.isFinite(v) && v >= min && v <= max ? Math.round(v * 100) / 100 : null;
+
+function decoracoes(v: unknown): Decoracao[] {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 8).flatMap((d) => {
+    const o = (d && typeof d === "object" ? d : {}) as Record<string, unknown>;
+    const img = imagem(o.imagem);
+    const x = porcento(o.x, -100, 200), y = porcento(o.y, -100, 200);
+    const largura = porcento(o.largura, 0.1, 300), altura = porcento(o.altura, 0.1, 300);
+    return img && x !== null && y !== null && largura !== null && altura !== null ? [{ imagem: img, x, y, largura, altura }] : [];
+  });
+}
+
 /** Aceita qualquer coisa e devolve um tema válido (o que faltar vem do padrão). */
 export function normalizarTema(entrada: unknown): TemaCatalogo {
   const o = (entrada && typeof entrada === "object" ? entrada : {}) as Record<string, unknown>;
@@ -87,6 +106,7 @@ export function normalizarTema(entrada: unknown): TemaCatalogo {
     },
   } as TemaCatalogo;
   for (const k of TEXTOS) (tema as unknown as Record<string, EstiloTexto>)[k] = texto(o[k], p[k]);
+  tema.decoracoes = decoracoes(o.decoracoes);
   tema.categoria = { ...tema.categoria, fundo: cor(cat.fundo, p.categoria.fundo) };
   tema.subcategoria = { ...tema.subcategoria, marca: cor(sub.marca, p.subcategoria.marca) };
   return tema;
