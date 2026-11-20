@@ -451,7 +451,7 @@ Em **Catálogo → Exportar catálogo** o painel monta um catálogo com os produ
 ### Design pelo Figma
 
 1. **Exportar para o Figma (1 folha):** baixa um SVG com a primeira folha A4 do catálogo, com as camadas nomeadas ("Título", "Faixa da categoria", "Fundo do cartão", "Preço", "Logo"…). Arraste o arquivo para o Figma.
-2. No Figma, mude cores, fontes, tamanhos e cantos; troque a imagem da camada "Logo" ou ponha uma imagem na "Fundo da página". **Não renomeie as camadas.**
+2. No Figma, mude cores, fontes, tamanhos e cantos; troque a imagem da camada "Logo" ou ponha uma imagem na "Fundo da página". **Não renomeie as camadas.** Pode também **adicionar elementos novos** dentro da folha (logo grande, marca d'água, faixas, figuras, textos): cada um vira uma "decoração" e aparece na mesma posição em todas as páginas (o que passa da borda é cortado, como no Figma).
 3. **Reimportar:** botão direito na folha → Copiar link, cole no painel e clique em Importar. A prévia mostra o design; **Salvar e usar este design** aplica a todas as páginas.
 4. **Design padrão / Design do Figma** troca entre os dois a qualquer momento.
 

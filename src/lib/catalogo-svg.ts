@@ -27,6 +27,8 @@ export interface OpcoesSvg {
   imagens: Map<string, string>;
   /** Logo embutido (data:...). */
   logo: string | null;
+  /** Elementos adicionados antes no Figma (embutidos), em % da folha. */
+  decoracoes?: { href: string; x: number; y: number; largura: number; altura: number }[];
 }
 
 export function escaparXml(texto: string): string {
@@ -105,6 +107,9 @@ export function gerarFolhaSvg(catalogo: SecaoCatalogo[], tema: TemaCatalogo, o: 
 
   // Fundo e cabeçalho
   corpo.push(`<rect id="${id(CAMADAS.fundo)}" x="0" y="0" width="${LARGURA}" height="${ALTURA}" fill="${tema.fundo}"/>`);
+  (o.decoracoes ?? []).forEach((d, i) => {
+    corpo.push(`<image id="Decoração ${i + 1}" x="${(d.x * LARGURA) / 100}" y="${(d.y * ALTURA) / 100}" width="${(d.largura * LARGURA) / 100}" height="${(d.altura * ALTURA) / 100}" preserveAspectRatio="none" href="${d.href}"/>`);
+  });
   if (o.logo) corpo.push(`<image id="${id(CAMADAS.logo)}" x="${MARGEM}" y="${MARGEM}" width="64" height="64" preserveAspectRatio="xMidYMid meet" href="${o.logo}"/>`);
   const xTitulo = MARGEM + (o.logo ? 78 : 0);
   corpo.push(textoSvg(CAMADAS.titulo, xTitulo, MARGEM + tema.titulo.tamanho, o.nome.toUpperCase(), tema.titulo));

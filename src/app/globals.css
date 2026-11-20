@@ -303,6 +303,22 @@ body {
   html.imprimir-catalogo [data-sonner-toaster] {
     display: none !important;
   }
+  /* Decorações do Figma: uma camada fixa do tamanho da página (repete em todas e corta
+     o que passa da borda, como a folha no Figma); posição em % da folha A4 menos a margem */
+  html.imprimir-catalogo .decoracoes-catalogo {
+    position: fixed !important;
+    inset: 0 !important;
+    aspect-ratio: auto !important;
+    overflow: hidden !important;
+    z-index: 0;
+  }
+  html.imprimir-catalogo .decoracao-catalogo {
+    position: absolute !important;
+    left: calc(var(--x) * 2.1mm - 10mm) !important;
+    top: calc(var(--y) * 2.97mm - 10mm) !important;
+    width: calc(var(--l) * 2.1mm) !important;
+    height: calc(var(--a) * 2.97mm) !important;
+  }
 }
 
 /* Compact product registration. Storefront and PDV retain their own density. */
