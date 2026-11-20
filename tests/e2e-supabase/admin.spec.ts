@@ -1282,3 +1282,34 @@ test("caixa: sangria sai da conta do caixa e o reforço vem da conta escolhida",
   await expect(page.getByRole("row").filter({ hasText: gaveta })).not.toContainText("Padrão do caixa");
   await page.context().close();
 });
+
+test("catálogo: reordenar as categorias só no catálogo (fica salvo) e voltar à ordem da loja", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await entrar(page);
+  await page.goto("/admin/exportar-catalogo");
+  const lista = page.getByRole("list", { name: "Ordem das categorias no catálogo" });
+  const folha = page.getByTestId("folha-catalogo");
+  const nomes = async () => (await lista.getByRole("listitem").allTextContents()).map((t) => t.replace(/^\d+/, "").trim());
+  await expect(lista.getByRole("listitem").nth(1)).toBeVisible();
+  const antes = await nomes();
+  expect(antes.length).toBeGreaterThan(1);
+  await expect(lista.getByRole("button", { name: `Subir ${antes[0]}` })).toBeDisabled();
+  await lista.getByRole("button", { name: `Descer ${antes[0]}` }).click();
+  await expect.poll(nomes).toEqual([antes[1], antes[0], ...antes.slice(2)]);
+  await expect(folha.getByRole("region").first()).toHaveAccessibleName(antes[1]);
+
+  // Fica salvo
+  await page.reload();
+  await expect.poll(nomes).toEqual([antes[1], antes[0], ...antes.slice(2)]);
+  // A loja não muda
+  const loja = await (await browser.newContext()).newPage();
+  await abrirLoja(loja);
+  await expect(loja.getByRole("navigation", { name: "Categorias" }).getByRole("button").first()).toHaveText(antes[0]);
+  await loja.context().close();
+
+  await page.getByRole("button", { name: "Ordem da loja" }).click();
+  await expect.poll(nomes).toEqual(antes);
+  await page.reload();
+  await expect.poll(nomes).toEqual(antes);
+  await page.context().close();
+});

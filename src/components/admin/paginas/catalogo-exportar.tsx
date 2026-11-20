@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Download, FileSpreadsheet, Printer, Upload } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, FileSpreadsheet, Printer, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useConfiguracoes } from "@/lib/admin/config";
 import { montarSecoes } from "@/lib/catalogo-secoes";
-import { contarItens, montarCatalogo, planilhaCatalogo, precosIguais, type ItemCatalogo, type SecaoCatalogo } from "@/lib/catalogo-exportar";
+import { contarItens, montarCatalogo, ordenarSecoes, planilhaCatalogo, precosIguais, type ItemCatalogo, type SecaoCatalogo } from "@/lib/catalogo-exportar";
 import { gerarFolhaSvg } from "@/lib/catalogo-svg";
 import { estiloTexto, familiaCss, linksFontes, normalizarTema, TEMA_PADRAO, type TemaCatalogo } from "@/lib/catalogo-tema";
 import { BUCKET_FOTOS } from "@/lib/supabase/config";
@@ -24,7 +24,7 @@ const semInscricao = () => () => {};
 const fmtData = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
 const rodapeTexto = () => `Preços e disponibilidade de ${fmtData.format(new Date())}, sujeitos a alteração. Venda proibida para menores de 18 anos. Beba com moderação.`;
 
-type TemaSalvo = { usar_figma: boolean; tema: unknown; figma_link: string | null };
+type TemaSalvo = { usar_figma: boolean; tema: unknown; figma_link: string | null; ordem_categorias?: string[] | null };
 type Importado = { tema: TemaCatalogo; link: string; encontradas: string[]; faltando: string[]; decoracoes: number };
 
 /** Imagem (foto ou logo) como data:image/jpeg reduzida, para embutir no SVG do Figma. */
@@ -67,6 +67,10 @@ export function PaginaCatalogoExportar() {
   const [mostrarPrecos, setMostrarPrecos] = useState(true);
   const [mostrarFotos, setMostrarFotos] = useState(true);
   const [mostrarDescricao, setMostrarDescricao] = useState(true);
+  // Cada sabor/cor no seu cartão (Baly Melancia, Baly Maçã Verde…); desligado, agrupa no mesmo cartão
+  const [separarVariacoes, setSepararVariacoes] = useState(true);
+  // Ordem das categorias só do catálogo (salva no banco); null = ordem da loja
+  const [ordem, setOrdem] = useState<string[] | null>(null);
   const [titulo, setTitulo] = useState<string | null>(null);
   const [subtitulo, setSubtitulo] = useState("Catálogo de produtos");
   const [imprimindo, setImprimindo] = useState(false);
@@ -82,12 +86,13 @@ export function PaginaCatalogoExportar() {
       sb.from("categorias").select("id,nome,slug,ordem,ativa,pai_id").order("ordem"),
       sb.rpc("saldos_venda"),
       sb.from("produto_importacao").select("produto_id,codigo"),
-      sb.from("catalogo_tema").select("usar_figma,tema,figma_link").eq("id", 1).maybeSingle<TemaSalvo>(),
+      sb.from("catalogo_tema").select("usar_figma,tema,figma_link,ordem_categorias").eq("id", 1).maybeSingle<TemaSalvo>(),
     ]).then(([p, c, s, i, t]) => {
       if (!ativo) return;
       const erro = p.error ?? c.error ?? s.error;
       if (erro) return void toast.error(`Não foi possível carregar os produtos: ${erro.message}`);
       setTemaSalvo(t.data ?? { usar_figma: false, tema: null, figma_link: null });
+      setOrdem(t.data?.ordem_categorias ?? null);
       setDados({
         produtos: aplicarSaldos((p.data ?? []) as unknown as Produto[], (s.data ?? []) as { produto_id: string; saldo: number }[]),
         categorias: (c.data ?? []) as Categoria[],
@@ -106,7 +111,9 @@ export function PaginaCatalogoExportar() {
   }, []);
 
   const secoes = useMemo(() => (dados ? montarSecoes(dados.categorias, dados.produtos) : []), [dados]);
-  const catalogo = useMemo(() => montarCatalogo(secoes, { secoes: escolhidas, soDisponiveis }), [secoes, escolhidas, soDisponiveis]);
+  const secoesOrdenadas = useMemo(() => ordenarSecoes(secoes, ordem), [secoes, ordem]);
+  const catalogo = useMemo(() => montarCatalogo(secoes, { secoes: escolhidas, soDisponiveis, separarVariacoes, ordem }),
+    [secoes, escolhidas, soDisponiveis, separarVariacoes, ordem]);
   const total = contarItens(catalogo);
   const temaFigma = useMemo(() => (temaSalvo?.tema ? normalizarTema(temaSalvo.tema) : null), [temaSalvo]);
   const tema = importado?.tema ?? (temaSalvo?.usar_figma && temaFigma ? temaFigma : TEMA_PADRAO);
@@ -131,6 +138,20 @@ export function PaginaCatalogoExportar() {
   const tel = config.whatsapp.replace(/^55/, "");
   const site = typeof window === "undefined" ? "" : window.location.host;
   const contato = [tel && `WhatsApp: ${mascararTelefone(tel)}`, config.instagram && `Instagram: @${config.instagram}`, site && `Peça pelo site: ${site}`].filter(Boolean) as string[];
+
+  const salvarOrdem = (nova: string[] | null) => {
+    setOrdem(nova);
+    void supabaseNavegador().rpc("salvar_ordem_catalogo", { p_ordem: nova }).then(({ error }) => {
+      if (error) toast.error(`Não foi possível salvar a ordem: ${error.message}`);
+    });
+  };
+  const mover = (indice: number, passo: -1 | 1) => {
+    const ids = secoesOrdenadas.map((s) => s.id);
+    const alvo = indice + passo;
+    if (alvo < 0 || alvo >= ids.length) return;
+    [ids[indice], ids[alvo]] = [ids[alvo], ids[indice]];
+    salvarOrdem(ids);
+  };
 
   const alternarSecao = (id: string, marcar: boolean) => {
     const atual = new Set(escolhidas ?? secoes.map((s) => s.id));
@@ -203,28 +224,39 @@ export function PaginaCatalogoExportar() {
               <LinhaInterruptor rotulo="Mostrar preços" checked={mostrarPrecos} onChange={setMostrarPrecos} />
               <LinhaInterruptor rotulo="Mostrar fotos" checked={mostrarFotos} onChange={setMostrarFotos} />
               <LinhaInterruptor rotulo="Mostrar descrição" checked={mostrarDescricao} onChange={setMostrarDescricao} />
+              <LinhaInterruptor rotulo="Variações separadas" descricao="Cada sabor ou cor no seu cartão (ex.: Baly Melancia, Baly Maçã Verde)" checked={separarVariacoes} onChange={setSepararVariacoes} />
             </div>
           </div>
           <fieldset>
-            <legend className="mb-2 flex w-full items-center justify-between text-sm font-bold">
-              Categorias
-              <button type="button" className="cursor-pointer text-xs font-medium text-rosa-texto hover:underline"
-                onClick={() => setEscolhidas(escolhidas ? null : new Set())}>{escolhidas ? "Marcar todas" : "Desmarcar todas"}</button>
+            <legend className="mb-2 flex w-full flex-wrap items-center justify-between gap-2 text-sm font-bold">
+              <span>Categorias <span className="text-xs font-normal text-suave">· use ▲ ▼ para mudar a ordem no catálogo</span></span>
+              <span className="flex gap-3">
+                {ordem && <button type="button" className="cursor-pointer text-xs font-medium text-rosa-texto hover:underline" onClick={() => salvarOrdem(null)}>Ordem da loja</button>}
+                <button type="button" className="cursor-pointer text-xs font-medium text-rosa-texto hover:underline"
+                  onClick={() => setEscolhidas(escolhidas ? null : new Set())}>{escolhidas ? "Marcar todas" : "Desmarcar todas"}</button>
+              </span>
             </legend>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {secoes.map((s) => (
-                <label key={s.id} className="flex min-h-9 cursor-pointer items-center gap-2 text-sm">
-                  <input type="checkbox" className="size-4 accent-rosa" checked={!escolhidas || escolhidas.has(s.id)} onChange={(e) => alternarSecao(s.id, e.target.checked)} />
-                  {s.nome}
-                </label>
+            <ol aria-label="Ordem das categorias no catálogo" className="max-h-80 divide-y divide-borda overflow-y-auto rounded-lg border border-borda">
+              {secoesOrdenadas.map((s, i) => (
+                <li key={s.id} className="flex items-center gap-2 px-2">
+                  <label className="flex min-h-9 flex-1 cursor-pointer items-center gap-2 text-sm">
+                    <input type="checkbox" aria-label={s.nome} className="size-4 accent-rosa" checked={!escolhidas || escolhidas.has(s.id)} onChange={(e) => alternarSecao(s.id, e.target.checked)} />
+                    <span aria-hidden className="w-5 text-right font-mono text-xs text-suave">{i + 1}</span>
+                    {s.nome}
+                  </label>
+                  <button type="button" aria-label={`Subir ${s.nome}`} title="Subir" disabled={i === 0} onClick={() => mover(i, -1)}
+                    className="grid size-8 cursor-pointer place-items-center rounded-md text-suave hover:bg-superficie-3 hover:text-texto disabled:cursor-default disabled:opacity-30"><ChevronUp className="size-4" /></button>
+                  <button type="button" aria-label={`Descer ${s.nome}`} title="Descer" disabled={i === secoesOrdenadas.length - 1} onClick={() => mover(i, 1)}
+                    className="grid size-8 cursor-pointer place-items-center rounded-md text-suave hover:bg-superficie-3 hover:text-texto disabled:cursor-default disabled:opacity-30"><ChevronDown className="size-4" /></button>
+                </li>
               ))}
-            </div>
+            </ol>
             <p className="mt-3 text-xs text-suave" role="status">{total} {total === 1 ? "produto" : "produtos"} no catálogo.</p>
           </fieldset>
         </Cartao>
 
         <DesignFigma temaSalvo={temaSalvo} importado={importado} onImportado={setImportado}
-          onSalvo={(t) => { setTemaSalvo(t); setImportado(null); }} onExportar={exportarFigma} podeExportar={total > 0} />
+          onSalvo={(t) => { setTemaSalvo((atual) => ({ ...atual, ...t })); setImportado(null); }} onExportar={exportarFigma} podeExportar={total > 0} />
 
         <p className="mb-2 text-xs text-suave">
           Prévia (é assim que sai no PDF){importado ? " · mostrando o design importado, ainda não salvo" : tema === TEMA_PADRAO ? " · design padrão" : " · design do Figma"}.
