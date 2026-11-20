@@ -446,7 +446,9 @@ Em **Catálogo → Exportar catálogo** o painel monta um catálogo com os produ
 
 - **Salvar PDF / imprimir:** abre a impressão do navegador em folha A4 (escolha "Salvar como PDF"). Sai sempre em fundo branco, mesmo no tema escuro.
 - **Baixar planilha:** arquivo CSV que abre no Excel (uma linha por SKU: categoria, produto, variação, SKU, preço, disponível, descrição).
-- Opções: título e subtítulo, categorias, só o que está disponível agora, mostrar preços, fotos e descrição. Variações (sabores, cores) aparecem juntas no mesmo item.
+- Opções: título e subtítulo, categorias, só o que está disponível agora, mostrar preços, fotos e descrição.
+- **Variações separadas** (ligado por padrão): cada sabor ou cor no seu cartão (ex.: Baly Melancia, Baly Maçã Verde). Desligado, as variações ficam juntas no mesmo item.
+- **Ordem das categorias**: ▲ ▼ na lista de categorias mudam a ordem só no catálogo (fica salva; a loja não muda). "Ordem da loja" volta ao normal.
 
 ### Design pelo Figma
 
