@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Download, FileUp, Save, Search } from "lucide-react";
+import { ArrowLeft, Download, FileUp, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabaseNavegador } from "@/lib/supabase/navegador";
 import { revalidarLoja } from "@/app/admin/acoes";
@@ -21,6 +21,29 @@ const data = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", {
 const SITUACOES: Record<StatusEntrada, string> = { pendente: "Pendente de conferência", lancada: "Estoque lançado", cancelada: "Cancelada" };
 const TAMANHO_PAGINA = 30;
 
+/** Exclui de vez uma ordem pendente ou cancelada (a lançada fica: já movimentou o estoque). */
+async function excluirOrdem(o: Pick<OrdemEntrada, "id" | "versao" | "numero">): Promise<boolean> {
+  const { error } = await supabaseNavegador().rpc("excluir_ordem_entrada", { p_id: o.id, p_versao: o.versao });
+  if (error) { toast.error(error.message); return false; }
+  toast.success(`Ordem OE ${o.numero} excluída`);
+  return true;
+}
+
+function BotaoExcluirOrdem({ ordem, onExcluida, texto = false }: { ordem: OrdemEntrada; onExcluida: () => void; texto?: boolean }) {
+  return (
+    <Confirmar
+      titulo={`Excluir a ordem OE ${ordem.numero}?`}
+      descricao={`A NF ${ordem.nota_numero}/${ordem.serie} (${ordem.fornecedor_nome}) e os itens conferidos saem da lista. O estoque não muda. Depois, o mesmo XML pode ser importado de novo.`}
+      rotuloConfirmar="Excluir ordem"
+      onConfirmar={async () => { if (await excluirOrdem(ordem)) onExcluida(); }}
+    >
+      {texto
+        ? <Button size="sm" variant="fantasma" className="text-perigo"><Trash2 />Excluir ordem</Button>
+        : <Button size="icone-sm" variant="fantasma" aria-label={`Excluir a ordem OE ${ordem.numero}`} title="Excluir ordem"><Trash2 /></Button>}
+    </Confirmar>
+  );
+}
+
 export function ListaOrdensEntrada() {
   const router = useRouter();
   const [ordens, setOrdens] = useState<OrdemEntrada[]>([]);
@@ -29,6 +52,7 @@ export function ListaOrdensEntrada() {
   const [status, setStatus] = useState("todos");
   const [pagina, setPagina] = useState(0);
   const [total, setTotal] = useState(0);
+  const [versao, setVersao] = useState(0);
   const [importando, setImportando] = useState(false);
   const trava = useRef(false);
   const arquivo = useRef<HTMLInputElement>(null);
@@ -44,7 +68,7 @@ export function ListaOrdensEntrada() {
       setCarregando(false);
     });
     return () => { ativo = false; };
-  }, [status, pagina]);
+  }, [status, pagina, versao]);
 
   const importar = async (f?: File) => {
     if (!f || trava.current) return;
@@ -78,7 +102,10 @@ export function ListaOrdensEntrada() {
             <td className="px-3 py-2"><span className="font-medium">OE {o.numero}</span><span className="block text-xs text-suave">NF {o.nota_numero}/{o.serie}</span></td>
             <td className="max-w-64 px-3 py-2">{o.fornecedor_nome}</td><td className="px-3 py-2 text-xs text-suave">{data(o.criado_em)}</td>
             <td className="px-3 py-2 tabular-nums">{dinheiro(o.total_nota)}</td><td className="px-3 py-2 text-xs">{SITUACOES[o.status]}</td>
-            <td className="px-3 py-2"><Button asChild size="sm" variant="suave"><Link href={`/admin/ordens-entrada/${o.id}`}>{o.status === "pendente" ? "Conferir" : "Consultar"}</Link></Button></td>
+            <td className="px-3 py-2"><div className="flex items-center justify-end gap-1">
+              <Button asChild size="sm" variant="suave"><Link href={`/admin/ordens-entrada/${o.id}`}>{o.status === "pendente" ? "Conferir" : "Consultar"}</Link></Button>
+              {o.status !== "lancada" ? <BotaoExcluirOrdem ordem={o} onExcluida={() => setVersao((v) => v + 1)} /> : <span className="size-8" aria-hidden />}
+            </div></td>
           </tr>)}</tbody>
         </table>
         {!ordens.length && <p className="p-8 text-center text-sm text-suave">Nenhuma ordem encontrada. Importe o XML para começar.</p>}
@@ -93,6 +120,7 @@ export function ListaOrdensEntrada() {
 }
 
 export function ConferenciaEntrada({ id }: { id: string }) {
+  const router = useRouter();
   const [ordem, setOrdem] = useState<OrdemEntrada | null>(null);
   const [itens, setItens] = useState<ItemEntrada[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -178,9 +206,13 @@ export function ConferenciaEntrada({ id }: { id: string }) {
     <div className="space-y-2">{itens.map((item) => <LinhaEntrada key={item.id} item={item} produto={mapa.get(item.produto_id ?? "")} produtos={produtos} codigos={codigos} bloqueada={bloqueada || salvando} onChange={(campos) => editar(item.id, campos)} />)}</div>
     <label className="mt-4 block text-xs text-suave" htmlFor="entrada-observacoes">Observações da conferência</label>
     <Textarea id="entrada-observacoes" maxLength={1000} disabled={bloqueada || salvando} value={ordem.observacoes} onChange={(e) => { setOrdem({ ...ordem, observacoes: e.target.value }); setSujo(true); }} className="mt-1 min-h-16" />
-    {bloqueada ? <p className="mt-4 text-sm text-suave">{ordem.status === "lancada" ? `Lançada em ${data(ordem.lancado_em)}. Consulte as movimentações no Estoque.` : "Ordem cancelada, sem movimentação de estoque."}</p> : <div className="sticky bottom-20 z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-borda bg-superficie p-3 md:bottom-3">
+    {bloqueada ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-suave">{ordem.status === "lancada" ? `Lançada em ${data(ordem.lancado_em)}. Consulte as movimentações no Estoque.` : "Ordem cancelada, sem movimentação de estoque."}</p>
+      {ordem.status === "cancelada" && <BotaoExcluirOrdem ordem={ordem} texto onExcluida={() => router.push("/admin/ordens-entrada")} />}
+    </div> : <div className="sticky bottom-20 z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-borda bg-superficie p-3 md:bottom-3">
       <p role="status" className="text-xs text-suave">{sujo ? "Alterações não salvas · " : ""}{pendencias.length ? `${pendencias.length} itens precisam de conferência.` : "Todos os itens conferidos."}</p>
       <div className="flex flex-wrap gap-2">
+        <BotaoExcluirOrdem ordem={ordem} texto onExcluida={() => { setSujo(false); router.push("/admin/ordens-entrada"); }} />
         <Confirmar titulo="Cancelar esta ordem?" descricao="A ordem será mantida para consulta, sem lançar estoque." rotuloConfirmar="Cancelar ordem" onConfirmar={async () => {
           if (trava.current) return; trava.current = true; setSalvando(true);
           try { const { error } = await supabaseNavegador().rpc("cancelar_ordem_entrada", { p_id: id, p_versao: ordem.versao }); if (error) throw new Error(error.message); const r = await carregar(); setOrdem(r.ordem); setItens(r.itens); setSujo(false); }

@@ -1313,3 +1313,42 @@ test("catálogo: reordenar as categorias só no catálogo (fica salvo) e voltar 
   await expect.poll(nomes).toEqual(antes);
   await page.context().close();
 });
+
+test("ordens de entrada: excluir pendente pela lista e cancelada por dentro; o XML pode ser importado de novo", async ({ page }) => {
+  const nf = String(Date.now()).slice(-8);
+  const chave = `352611123456780001995500100${nf}1234567`.slice(0, 44).padEnd(44, "0");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe Id="NFe${chave}" versao="4.00">
+<ide><mod>55</mod><nNF>${nf}</nNF><serie>1</serie><dhEmi>2026-11-25T10:00:00-03:00</dhEmi><tpNF>1</tpNF></ide>
+<emit><CNPJ>12345678000199</CNPJ><xNome>Fornecedor E2E</xNome></emit><dest><CNPJ>98765432000100</CNPJ></dest>
+<det nItem="1"><prod><cProd>E2E-1</cProd><xProd>Gelo E2E</xProd><uCom>UN</uCom><qCom>2.0000</qCom><vUnCom>3.00</vUnCom><vProd>6.00</vProd></prod></det>
+<total><ICMSTot><vNF>6.00</vNF></ICMSTot></total></infNFe></NFe>
+<protNFe><infProt><chNFe>${chave}</chNFe><cStat>100</cStat></infProt></protNFe></nfeProc>`;
+  const importar = async () => {
+    await page.goto("/admin/ordens-entrada");
+    await page.getByLabel("Arquivo XML da NF-e").setInputFiles({ name: "nota.xml", mimeType: "text/xml", buffer: Buffer.from(xml) });
+    await expect(page).toHaveURL(/\/admin\/ordens-entrada\/[0-9a-f-]{36}$/);
+    await expect(page.getByText(`${nf}/1`).first()).toBeVisible();
+  };
+  await entrar(page);
+
+  // Pendente: exclui pela lista
+  await importar();
+  await page.goto("/admin/ordens-entrada");
+  const linha = page.getByRole("row").filter({ hasText: `NF ${nf}/1` });
+  await expect(linha).toContainText("Pendente de conferência");
+  await linha.getByRole("button", { name: /Excluir a ordem OE/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Excluir ordem" }).click();
+  await expect(page.getByText(/Ordem OE \d+ excluída/)).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: `NF ${nf}/1` })).toHaveCount(0);
+
+  // Mesmo XML de novo → cancela → exclui por dentro da ordem
+  await importar();
+  await page.getByRole("button", { name: "Cancelar ordem" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancelar ordem" }).click();
+  await expect(page.getByText("Ordem cancelada, sem movimentação de estoque.")).toBeVisible();
+  await page.getByRole("button", { name: "Excluir ordem" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Excluir ordem" }).click();
+  await expect(page).toHaveURL(/\/admin\/ordens-entrada$/);
+  await expect(page.getByRole("row").filter({ hasText: `NF ${nf}/1` })).toHaveCount(0);
+});
